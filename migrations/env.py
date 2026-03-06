@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
 
 # CRITICAL: import all domain models so SQLModel.metadata is populated
-from src.models import AuditLog, InboundMessage, Job, Phone, RateLimit, Worker  # noqa: F401
+from src.models import (  # noqa: F401
+    AuditLog,
+    InboundMessage,
+    Job,
+    Phone,
+    RateLimit,
+    Worker,
+)
 
 target_metadata = SQLModel.metadata
 
@@ -17,10 +24,10 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations():
-    from src.config import settings
+    from src.config import get_settings
 
     config = context.config
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",

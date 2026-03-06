@@ -2,7 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-import inngest
 import inngest.fast_api
 import structlog
 from fastapi import FastAPI
@@ -17,32 +16,12 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
-from src.config import settings
-from src.database import AsyncSessionLocal, engine
+from src.config import get_settings
+from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
+from src.inngest_client import get_inngest_client, process_message
 from src.sms.exceptions import TwilioSignatureInvalid
 from src.sms.router import router as sms_router
-
-
-# ── Inngest client (module-level — imported by service.py to send events) ──────
-inngest_client = inngest.Inngest(
-    app_id="vici",
-    is_production=not settings.inngest_dev,
-)
-
-
-@inngest_client.create_function(
-    fn_id="process-message",
-    trigger=inngest.TriggerEvent(event="message.received"),
-)
-async def process_message(ctx: inngest.Context) -> str:
-    """Phase 1 stub. Full pipeline wired in Phase 4."""
-    logger = structlog.get_logger()
-    logger.info(
-        "message.received consumed",
-        message_sid=ctx.event.data.get("message_sid"),
-    )
-    return "ok"
 
 
 # ── structlog OTel processor ────────────────────────────────────────────────────
@@ -71,13 +50,14 @@ def _configure_structlog() -> None:
 
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
+    settings = get_settings()
     resource = Resource(attributes={"service.name": settings.otel_service_name})
     exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     otel_trace.set_tracer_provider(provider)
     FastAPIInstrumentor().instrument_app(app)
-    SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)
+    SQLAlchemyInstrumentor().instrument(engine=get_engine().sync_engine)
     return provider
 
 
@@ -89,30 +69,43 @@ async def lifespan(app: FastAPI):
     provider.force_flush()
 
 
-# ── FastAPI app ─────────────────────────────────────────────────────────────────
-app = FastAPI(lifespan=lifespan)
+def create_app() -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
 
-# Prometheus — expose /metrics endpoint
-Instrumentator().instrument(app).expose(app)
+    # Prometheus — expose /metrics endpoint
+    Instrumentator().instrument(app).expose(app)
 
-# Inngest — registers POST /api/inngest for Dev Server
-inngest.fast_api.serve(app, inngest_client, [process_message])
+    # Inngest — registers POST /api/inngest for Dev Server
+    inngest.fast_api.serve(app, get_inngest_client(), [process_message])
 
-# Exception handlers
-app.add_exception_handler(TwilioSignatureInvalid, twilio_signature_invalid_handler)
+    # Exception handlers
+    app.add_exception_handler(
+        TwilioSignatureInvalid,
+        twilio_signature_invalid_handler,
+    )
 
-# Routers
-app.include_router(sms_router)
+    # Routers
+    app.include_router(sms_router)
+
+    @app.get("/health")
+    async def health():
+        # Liveness: process is up.
+        return {"status": "ok"}
+
+    @app.get("/readyz")
+    async def readyz():
+        # Readiness: DB connectivity (used by orchestrators).
+        try:
+            async with get_sessionmaker()() as session:
+                await session.execute(text("SELECT 1"))
+            return {"status": "ok", "db": "connected"}
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "degraded", "db": "error"},
+            )
+
+    return app
 
 
-@app.get("/health")
-async def health():
-    try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-        return {"status": "ok", "db": "connected"}
-    except Exception:
-        return JSONResponse(
-            status_code=200,
-            content={"status": "degraded", "db": "error"},
-        )
+app = create_app()

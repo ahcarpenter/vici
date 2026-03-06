@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Local databases / artifacts
+*.db
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+.cursor/
+.claude/

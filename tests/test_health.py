@@ -1,4 +1,3 @@
-import pytest
 
 
 async def test_health_endpoint(client):

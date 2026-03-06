@@ -1,8 +1,10 @@
-import pytest
-from httpx import AsyncClient
 from unittest.mock import patch
+
+from httpx import AsyncClient
 from sqlmodel import select
-from src.sms.models import Phone, InboundMessage, RateLimit, AuditLog
+from twilio.request_validator import RequestValidator
+
+from src.sms.models import AuditLog, InboundMessage, Phone
 
 VALID_FORM = {
     "MessageSid": "SM_test_001",
@@ -15,7 +17,10 @@ HEADERS = {"X-Twilio-Signature": "valid_sig"}
 
 
 async def test_invalid_signature(client: AsyncClient):
-    with patch("twilio.request_validator.RequestValidator.validate", return_value=False):
+    with patch(
+        "twilio.request_validator.RequestValidator.validate",
+        return_value=False,
+    ):
         response = await client.post(
             "/webhook/sms",
             data=VALID_FORM,
@@ -31,7 +36,23 @@ async def test_valid_signature(client: AsyncClient, mock_twilio_validator):
     assert "<Response" in response.text
 
 
-async def test_idempotency(client: AsyncClient, mock_twilio_validator, async_session):
+async def test_valid_signature_real(client: AsyncClient):
+    token = "test_twilio_auth_token"
+    url = "http://localhost:8000/webhook/sms"
+    sig = RequestValidator(token).compute_signature(url, VALID_FORM)
+    response = await client.post(
+        "/webhook/sms",
+        data=VALID_FORM,
+        headers={"X-Twilio-Signature": sig},
+    )
+    assert response.status_code == 200
+
+
+async def test_idempotency(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
     form = {**VALID_FORM, "MessageSid": "SM_idem_001"}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
     response = await client.post("/webhook/sms", data=form, headers=HEADERS)
@@ -55,7 +76,11 @@ async def test_rate_limit(client: AsyncClient, mock_twilio_validator):
     assert "<Response" in response.text  # empty TwiML, not 429
 
 
-async def test_audit_row_created(client: AsyncClient, mock_twilio_validator, async_session):
+async def test_audit_row_created(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
     form = {**VALID_FORM, "MessageSid": "SM_audit_001"}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
     result = await async_session.execute(
@@ -66,7 +91,11 @@ async def test_audit_row_created(client: AsyncClient, mock_twilio_validator, asy
     assert row.event == "received"
 
 
-async def test_phone_auto_register(client: AsyncClient, mock_twilio_validator, async_session):
+async def test_phone_auto_register(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
     phone = "+15005550008"
     form = {**VALID_FORM, "MessageSid": "SM_phone_001", "From": phone}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
@@ -79,7 +108,11 @@ async def test_phone_auto_register(client: AsyncClient, mock_twilio_validator, a
     assert row is not None
 
 
-async def test_phone_created_at(client: AsyncClient, mock_twilio_validator, async_session):
+async def test_phone_created_at(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
     phone = "+15005550009"
     form = {**VALID_FORM, "MessageSid": "SM_phone_002", "From": phone}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
@@ -93,7 +126,11 @@ async def test_phone_created_at(client: AsyncClient, mock_twilio_validator, asyn
     assert row.created_at is not None
 
 
-async def test_inngest_event_emitted(client: AsyncClient, mock_twilio_validator, mock_inngest_client):
+async def test_inngest_event_emitted(
+    client: AsyncClient,
+    mock_twilio_validator,
+    mock_inngest_client,
+):
     form = {**VALID_FORM, "MessageSid": "SM_inngest_001"}
     response = await client.post("/webhook/sms", data=form, headers=HEADERS)
     assert response.status_code == 200

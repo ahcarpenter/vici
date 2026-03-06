@@ -1,14 +1,37 @@
+import os
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
-from unittest.mock import AsyncMock, patch
 
-from src.database import get_session
-from src.main import app
+from src.config import get_settings
+from src.database import get_engine, get_session
+from src.inngest_client import get_inngest_client
+from src.main import create_app
 
 DATABASE_URL_TEST = "sqlite+aiosqlite:///./test.db"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_env():
+    # Ensure cached settings see consistent values for the full test session.
+    os.environ.setdefault("DATABASE_URL", DATABASE_URL_TEST)
+    os.environ.setdefault("TWILIO_AUTH_TOKEN", "test_twilio_auth_token")
+    os.environ.setdefault("TWILIO_ACCOUNT_SID", "AC_test")
+    os.environ.setdefault("WEBHOOK_BASE_URL", "http://localhost:8000")
+
+    # Clear caches in case tests are re-run in-process.
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_inngest_client.cache_clear()
+
+
+@pytest.fixture(scope="session")
+def app():
+    return create_app()
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -31,30 +54,36 @@ async def async_session(test_engine):
 
 
 @pytest_asyncio.fixture
-async def client(async_session):
+async def client(async_session, app):
     async def override_get_session():
         yield async_session
 
     app.dependency_overrides[get_session] = override_get_session
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
         yield ac
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def mock_twilio_validator():
-    with patch("twilio.request_validator.RequestValidator.validate", return_value=True) as m:
+    with patch(
+        "twilio.request_validator.RequestValidator.validate",
+        return_value=True,
+    ) as m:
         yield m
 
 
 @pytest.fixture
 def mock_inngest_client():
-    with patch("src.main.inngest_client.send", new_callable=AsyncMock) as m:
+    with patch.object(get_inngest_client(), "send", new_callable=AsyncMock) as m:
         yield m
 
 
 @pytest.fixture(autouse=True)
 def _auto_mock_inngest_send():
     """Auto-mock inngest_client.send for all tests to prevent real HTTP calls."""
-    with patch("src.main.inngest_client.send", new_callable=AsyncMock):
+    with patch.object(get_inngest_client(), "send", new_callable=AsyncMock):
         yield

@@ -40,8 +40,18 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_inbound_message_message_sid"), "inbound_message", ["message_sid"], unique=True)
-    op.create_index(op.f("ix_inbound_message_phone_hash"), "inbound_message", ["phone_hash"], unique=False)
+    op.create_index(
+        op.f("ix_inbound_message_message_sid"),
+        "inbound_message",
+        ["message_sid"],
+        unique=True,
+    )
+    op.create_index(
+        op.f("ix_inbound_message_phone_hash"),
+        "inbound_message",
+        ["phone_hash"],
+        unique=False,
+    )
 
     op.create_table(
         "rate_limit",
@@ -50,9 +60,18 @@ def upgrade() -> None:
         sa.Column("window_start", sa.DateTime(), nullable=False),
         sa.Column("count", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("phone_hash", "window_start", name="uq_rate_limit_phone_window"),
+        sa.UniqueConstraint(
+            "phone_hash",
+            "window_start",
+            name="uq_rate_limit_phone_window",
+        ),
     )
-    op.create_index(op.f("ix_rate_limit_phone_hash"), "rate_limit", ["phone_hash"], unique=False)
+    op.create_index(
+        op.f("ix_rate_limit_phone_hash"),
+        "rate_limit",
+        ["phone_hash"],
+        unique=False,
+    )
 
     op.create_table(
         "audit_log",
@@ -63,7 +82,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_audit_log_message_sid"), "audit_log", ["message_sid"], unique=False)
+    op.create_index(
+        op.f("ix_audit_log_message_sid"),
+        "audit_log",
+        ["message_sid"],
+        unique=False,
+    )
 
     op.create_table(
         "job",
@@ -91,7 +115,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_worker_phone_hash"), "worker", ["phone_hash"], unique=False)
+    op.create_index(
+        op.f("ix_worker_phone_hash"),
+        "worker",
+        ["phone_hash"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:

@@ -1,11 +1,15 @@
 import hashlib
 import json
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime, timezone
+
+import inngest as inngest_module
+from opentelemetry.propagate import inject as otel_inject
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from src.sms.models import Phone, InboundMessage, RateLimit, AuditLog
+
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
+from src.sms.models import AuditLog, InboundMessage, RateLimit
 
 
 def hash_phone(e164_number: str) -> str:
@@ -23,8 +27,9 @@ async def check_idempotency(session: AsyncSession, message_sid: str) -> bool:
 
 def _current_window_start() -> datetime:
     """Truncate current UTC time to the 1-minute bucket."""
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0, tzinfo=None)
-    return now
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    # Store as naive UTC for consistency with existing schema.
+    return now.replace(tzinfo=None)
 
 
 async def enforce_rate_limit(session: AsyncSession, phone_hash: str) -> bool:
@@ -46,7 +51,6 @@ async def enforce_rate_limit(session: AsyncSession, phone_hash: str) -> bool:
         ),
         {"phone_hash": phone_hash, "window_start": window},
     )
-    await session.commit()
 
     # Read back the current count
     result = await session.execute(
@@ -71,9 +75,8 @@ async def register_phone(session: AsyncSession, phone_hash: str) -> None:
             ON CONFLICT (phone_hash) DO NOTHING
             """
         ),
-        {"phone_hash": phone_hash, "created_at": datetime.utcnow()},
+        {"phone_hash": phone_hash, "created_at": datetime.now(UTC)},
     )
-    await session.commit()
 
 
 async def write_audit_log(
@@ -85,7 +88,7 @@ async def write_audit_log(
     """Append an audit_log row for this message_sid."""
     row = AuditLog(message_sid=message_sid, event=event, detail=detail)
     session.add(row)
-    await session.commit()
+    await session.flush()
 
 
 async def write_inbound_message(
@@ -103,11 +106,7 @@ async def write_inbound_message(
         raw_sms=json.dumps(raw_sms),
     )
     session.add(row)
-    await session.commit()
-
-
-import inngest as inngest_module  # noqa: E402
-from opentelemetry.propagate import inject as otel_inject  # noqa: E402
+    await session.flush()
 
 
 async def emit_message_received_event(

@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: vici
       POSTGRES_USER: vici
-      POSTGRES_PASSWORD: vici
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vici"]
       interval: 5s
@@ -36,7 +36,7 @@ services:
     ports:
       - "8000:8000"
     command: >
-      sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uv run alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
 
   inngest:
     image: inngest/inngest:latest

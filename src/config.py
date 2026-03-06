@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,5 +15,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-
-settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    # Lazily constructed so importing modules doesn't require env vars.
+    return Settings()
