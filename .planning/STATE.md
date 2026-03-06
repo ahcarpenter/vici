@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-06T09:31:07.195Z"
-last_activity: 2026-03-05 — Roadmap created; 28 requirements mapped across 4 phases
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-06T09:36:37.703Z"
+last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 67
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 01-infrastructure-foundation P01 | 25 | 3 tasks | 30 files |
 | Phase 01-infrastructure-foundation P02 | 15 | 2 tasks | 5 files |
+| Phase 01-infrastructure-foundation P03 | 20 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 01-01]: SQLite+aiosqlite for test DB — no postgres dependency in unit tests
 - [Phase 01-02]: validate_twilio_request raises HTTPException(403) directly — simpler for dependency pattern
 - [Phase 01-02]: register_phone raw SQL includes created_at explicitly — SQLModel default_factory does not fire for raw SQL inserts
+- [Phase 01-03]: inngest_client uses is_production=not settings.inngest_dev — INNGEST_DEV=1 in .env enables dev mode without signing key
+- [Phase 01-03]: autouse _auto_mock_inngest_send fixture in conftest prevents real Inngest HTTP calls from corrupting async event loop in all tests
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T09:31:07.193Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-03-06T09:36:37.701Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

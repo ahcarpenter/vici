@@ -47,15 +47,15 @@
 ### Observability (OBS)
 
 - [ ] **OBS-01**: System instruments all GPT classify+extract calls with Braintrust LLM observability (input prompt, output, model, latency, token usage per call)
-- [ ] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics
-- [ ] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (spans exported via OTLP); trace context propagates from webhook → Inngest event → Inngest function execution
-- [ ] **OBS-04**: System emits structured JSON logs with per-request context (phone hash, message_id, trace_id) on every inbound message and outbound reply
+- [x] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics
+- [x] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (spans exported via OTLP); trace context propagates from webhook → Inngest event → Inngest function execution
+- [x] **OBS-04**: System emits structured JSON logs with per-request context (phone hash, message_id, trace_id) on every inbound message and outbound reply
 
 ### Async Processing (ASYNC)
 
-- [ ] **ASYNC-01**: Webhook route fires an Inngest event (`message.received`) immediately after validating the Twilio signature and MessageSid idempotency check, then returns HTTP 200 to Twilio — all GPT processing happens outside the Twilio response window
+- [x] **ASYNC-01**: Webhook route fires an Inngest event (`message.received`) immediately after validating the Twilio signature and MessageSid idempotency check, then returns HTTP 200 to Twilio — all GPT processing happens outside the Twilio response window
 - [ ] **ASYNC-02**: Inngest function `process-message` handles the full pipeline: GPT classify+extract → PostgreSQL storage → Pinecone embedding write → earnings math match → Twilio REST SMS reply
-- [ ] **ASYNC-03**: Inngest is configured for local development via the Inngest Dev Server (runs alongside Docker Compose); production functions deploy to Vercel automatically via the Inngest Vercel integration
+- [x] **ASYNC-03**: Inngest is configured for local development via the Inngest Dev Server (runs alongside Docker Compose); production functions deploy to Vercel automatically via the Inngest Vercel integration
 
 ### Deployment (DEP)
 
@@ -112,12 +112,12 @@
 | MATCH-02 | Phase 3 | Pending | Ranked SMS formatter (3-5 results, 160-char segments) |
 | MATCH-03 | Phase 3 | Pending | Empty match fallback reply |
 | OBS-01 | Phase 2 | Pending | Braintrust wraps GPT calls in ExtractionService |
-| OBS-02 | Phase 1 | Pending | Prometheus /metrics endpoint scaffolded with infrastructure |
-| OBS-03 | Phase 1 | Pending | OTel from day one; trace context propagates webhook → Inngest event → function |
-| OBS-04 | Phase 1 | Pending | structlog with per-request context (phone hash, message_id, trace_id) |
-| ASYNC-01 | Phase 1 | Pending | Inngest client + webhook event emit; returns 200 before any GPT work |
+| OBS-02 | Phase 1 | Complete | Prometheus /metrics endpoint scaffolded with infrastructure |
+| OBS-03 | Phase 1 | Complete | OTel from day one; trace context propagates webhook → Inngest event → function |
+| OBS-04 | Phase 1 | Complete | structlog with per-request context (phone hash, message_id, trace_id) |
+| ASYNC-01 | Phase 1 | Complete | Inngest client + webhook event emit; returns 200 before any GPT work |
 | ASYNC-02 | Phase 4 | Pending | Full process-message Inngest function wired end-to-end |
-| ASYNC-03 | Phase 1 | Pending | Inngest Dev Server in Docker Compose; Vercel integration configured in Phase 4 |
+| ASYNC-03 | Phase 1 | Complete | Inngest Dev Server in Docker Compose; Vercel integration configured in Phase 4 |
 | DEP-01 | Phase 1 | Complete | Docker Compose with PostgreSQL + Inngest Dev Server |
 | DEP-02 | Phase 1 | Complete | /health endpoint with infrastructure |
 | DEP-03 | Phase 4 | Pending | Vercel deployment config + Mangum adapter + /api/inngest registration |
