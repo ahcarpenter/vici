@@ -70,7 +70,7 @@ def _configure_structlog() -> None:
     )
 
 
-def _configure_otel(app: FastAPI) -> None:
+def _configure_otel(app: FastAPI) -> TracerProvider:
     resource = Resource(attributes={"service.name": settings.otel_service_name})
     exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
     provider = TracerProvider(resource=resource)
@@ -78,13 +78,15 @@ def _configure_otel(app: FastAPI) -> None:
     otel_trace.set_tracer_provider(provider)
     FastAPIInstrumentor().instrument_app(app)
     SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)
+    return provider
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _configure_structlog()
-    _configure_otel(app)
+    provider = _configure_otel(app)
     yield
+    provider.force_flush()
 
 
 # ── FastAPI app ─────────────────────────────────────────────────────────────────
