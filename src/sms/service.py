@@ -104,3 +104,33 @@ async def write_inbound_message(
     )
     session.add(row)
     await session.commit()
+
+
+import inngest as inngest_module  # noqa: E402
+from opentelemetry.propagate import inject as otel_inject  # noqa: E402
+
+
+async def emit_message_received_event(
+    client: inngest_module.Inngest,
+    message_sid: str,
+    from_number: str,
+    body: str,
+) -> None:
+    """
+    Fire-and-forget: emit message.received event to Inngest.
+    Injects W3C traceparent so the Inngest function can continue the trace.
+    """
+    carrier: dict = {}
+    otel_inject(carrier)  # {"traceparent": "00-<trace_id>-<span_id>-01"} or {}
+
+    await client.send(
+        inngest_module.Event(
+            name="message.received",
+            data={
+                "message_sid": message_sid,
+                "from_number": from_number,
+                "body": body,
+                "otel": carrier,
+            },
+        )
+    )

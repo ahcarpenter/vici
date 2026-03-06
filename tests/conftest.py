@@ -51,3 +51,10 @@ def mock_twilio_validator():
 def mock_inngest_client():
     with patch("src.main.inngest_client.send", new_callable=AsyncMock) as m:
         yield m
+
+
+@pytest.fixture(autouse=True)
+def _auto_mock_inngest_send():
+    """Auto-mock inngest_client.send for all tests to prevent real HTTP calls."""
+    with patch("src.main.inngest_client.send", new_callable=AsyncMock):
+        yield

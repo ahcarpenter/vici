@@ -41,5 +41,10 @@ async def receive_sms(
     )
     await sms_service.write_audit_log(session, message_sid, "received")
 
-    # Inngest event emission is added in Plan 03
+    # Emit Inngest event (lazy import avoids circular import at module load time)
+    from src.main import inngest_client  # noqa: PLC0415
+    await sms_service.emit_message_received_event(
+        inngest_client, message_sid, from_number, body
+    )
+
     return Response(content=EMPTY_TWIML, media_type="text/xml")
