@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The `/health` endpoint returns service status and the `/metrics` endpoint returns Prometheus-formatted counters and histograms
   4. Every inbound request produces a structured JSON log line containing phone hash, message_id, and trace_id; OTel spans appear in the collector from webhook receipt through Inngest event emission
   5. `docker compose up` starts PostgreSQL, applies all Alembic migrations, and runs the Inngest Dev Server alongside the API
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, Docker Compose (postgres:16 + Inngest Dev Server), Alembic migrations, async DB session
@@ -87,7 +87,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure Foundation | 0/3 | In progress | - |
+| 1. Infrastructure Foundation | 2/3 | In Progress|  |
 | 2. GPT Extraction Service | 0/2 | Not started | - |
 | 3. Earnings Math Matching | 0/1 | Not started | - |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | - |

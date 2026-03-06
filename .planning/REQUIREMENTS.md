@@ -10,16 +10,16 @@
 
 ### Security & Infrastructure (SEC)
 
-- [ ] **SEC-01**: System validates Twilio X-Twilio-Signature HMAC on every inbound webhook request and returns HTTP 403 on failure
-- [ ] **SEC-02**: System deduplicates inbound messages on MessageSid before any processing (unique constraint + idempotency check prevents duplicate job postings from Twilio retries)
-- [ ] **SEC-03**: System enforces per-phone-number rate limiting on inbound messages to prevent GPT/Twilio cost blowout from abuse or message loops
-- [ ] **SEC-04**: System stores the raw SMS body and raw GPT response in an audit table for every inbound message, regardless of classification outcome
+- [x] **SEC-01**: System validates Twilio X-Twilio-Signature HMAC on every inbound webhook request and returns HTTP 403 on failure
+- [x] **SEC-02**: System deduplicates inbound messages on MessageSid before any processing (unique constraint + idempotency check prevents duplicate job postings from Twilio retries)
+- [x] **SEC-03**: System enforces per-phone-number rate limiting on inbound messages to prevent GPT/Twilio cost blowout from abuse or message loops
+- [x] **SEC-04**: System stores the raw SMS body and raw GPT response in an audit table for every inbound message, regardless of classification outcome
 - [ ] **SEC-05**: System passes STOP and START keywords through to Twilio without processing (carrier-level compliance)
 
 ### Identity (IDN)
 
-- [ ] **IDN-01**: System auto-registers a phone number as a user identity on first inbound message using E.164-normalized number as the primary key (no signup, no auth)
-- [ ] **IDN-02**: System records created_at timestamp for each phone number identity to support number recycling detection
+- [x] **IDN-01**: System auto-registers a phone number as a user identity on first inbound message using E.164-normalized number as the primary key (no signup, no auth)
+- [x] **IDN-02**: System records created_at timestamp for each phone number identity to support number recycling detection
 
 ### Message Classification & Extraction (EXT)
 
@@ -93,13 +93,13 @@
 
 | REQ-ID | Phase | Status | Notes |
 |--------|-------|--------|-------|
-| SEC-01 | Phase 1 | Pending | Signature validation is a security gate; must be first |
-| SEC-02 | Phase 1 | Pending | Idempotency before any processing — cheap to add early, expensive to retrofit |
-| SEC-03 | Phase 1 | Pending | Rate limiting before GPT calls to prevent cost blowout |
-| SEC-04 | Phase 1 | Pending | Audit table in initial migration; raw GPT response column populated in Phase 2 |
+| SEC-01 | Phase 1 | Complete | Signature validation is a security gate; must be first |
+| SEC-02 | Phase 1 | Complete | Idempotency before any processing — cheap to add early, expensive to retrofit |
+| SEC-03 | Phase 1 | Complete | Rate limiting before GPT calls to prevent cost blowout |
+| SEC-04 | Phase 1 | Complete | Audit table in initial migration; raw GPT response column populated in Phase 2 |
 | SEC-05 | Phase 4 | Pending | STOP/START pass-through wired in Inngest orchestration function |
-| IDN-01 | Phase 1 | Pending | Phone identity auto-registration in initial schema |
-| IDN-02 | Phase 1 | Pending | created_at in initial schema for recycling detection |
+| IDN-01 | Phase 1 | Complete | Phone identity auto-registration in initial schema |
+| IDN-02 | Phase 1 | Complete | created_at in initial schema for recycling detection |
 | EXT-01 | Phase 2 | Pending | Core GPT classification call in ExtractionService |
 | EXT-02 | Phase 2 | Pending | JobExtraction Pydantic schema + structured output prompt |
 | EXT-03 | Phase 2 | Pending | WorkerExtraction Pydantic schema + structured output prompt |
