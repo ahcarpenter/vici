@@ -30,7 +30,7 @@
 
 ### Storage (STR)
 
-- [ ] **STR-01**: System stores extracted job postings as structured records in PostgreSQL, with a nullable embedding column reserved for future Pinecone-backed semantic matching
+- [ ] **STR-01**: System stores extracted job postings as structured records in PostgreSQL (job ID used as Pinecone vector key; no embedding column in PostgreSQL)
 - [ ] **STR-02**: System stores extracted worker goals as structured records in PostgreSQL
 - [ ] **STR-03**: System sends a confirmation SMS to the job poster summarizing the extracted fields (e.g., "Got it: $25/hr, 3 hrs, downtown — reply EDIT to correct")
 
@@ -59,7 +59,7 @@
 
 ### Deployment (DEP)
 
-- [ ] **DEP-01**: System runs locally via Docker Compose with a PostgreSQL service and Inngest Dev Server for local function execution
+- [ ] **DEP-01**: System runs locally via Docker Compose with a standard PostgreSQL 16 service and Inngest Dev Server for local function execution (no pgvector extension required)
 - [ ] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
 - [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (Mangum); Inngest functions register at `/api/inngest`; deployment config and environment variable documentation included
 
@@ -84,7 +84,7 @@
 - Multiple Twilio phone numbers or routing logic — single inbound number
 - Real-time push notifications — SMS reply is the only notification mechanism
 - Payment processing — rate/pay is informational only in v1
-- Semantic/pgvector matching — schema ready, feature deferred to v2
+- Semantic/Pinecone vector matching — Pinecone integration ships in v1 (embedding writes); vector search query deferred to v2
 - Redis — rate limiting uses PostgreSQL TTL counters to avoid infrastructure dependency at v1 scale
 
 ---

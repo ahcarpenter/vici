@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Infrastructure Foundation
-**Goal**: A deployable, secure API skeleton exists with full observability, database schema (including pgvector), async session management, Twilio signature validation, idempotency, rate limiting, and Inngest event emission — so every subsequent phase builds on a correct, tested foundation
+**Goal**: A deployable, secure API skeleton exists with full observability, database schema, async session management, Twilio signature validation, idempotency, rate limiting, and Inngest event emission — so every subsequent phase builds on a correct, tested foundation
 **Depends on**: Nothing (first phase)
 **Requirements**: SEC-01, SEC-02, SEC-03, SEC-04, IDN-01, IDN-02, OBS-02, OBS-03, OBS-04, ASYNC-01, ASYNC-03, DEP-01, DEP-02
 **Success Criteria** (what must be TRUE):
@@ -28,11 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Sending the same Twilio MessageSid twice results in only one database record; the second request is silently dropped before any processing
   3. The `/health` endpoint returns service status and the `/metrics` endpoint returns Prometheus-formatted counters and histograms
   4. Every inbound request produces a structured JSON log line containing phone hash, message_id, and trace_id; OTel spans appear in the collector from webhook receipt through Inngest event emission
-  5. `docker compose up` starts PostgreSQL, applies all Alembic migrations (including `CREATE EXTENSION vector` and HNSW index), and runs the Inngest Dev Server alongside the API
+  5. `docker compose up` starts PostgreSQL, applies all Alembic migrations, and runs the Inngest Dev Server alongside the API
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Project scaffold, Docker Compose, Alembic migrations, async DB session
+- [ ] 01-01: Project scaffold, Docker Compose (postgres:16 + Inngest Dev Server), Alembic migrations, async DB session
 - [ ] 01-02: Twilio signature validation, MessageSid idempotency, rate limiting, audit table, phone identity
 - [ ] 01-03: Observability stack (structlog, OTel, Prometheus), Inngest client + event emission, health endpoint
 
