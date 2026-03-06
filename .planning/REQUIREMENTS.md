@@ -48,23 +48,27 @@
 
 - [ ] **OBS-01**: System instruments all GPT classify+extract calls with Braintrust LLM observability (input prompt, output, model, latency, token usage per call)
 - [ ] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics
-- [ ] **OBS-03**: System instruments all inbound and outbound HTTP requests and database queries with OpenTelemetry traces (spans exported via OTLP); trace context propagates through background processing
+- [ ] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (spans exported via OTLP); trace context propagates from webhook → Inngest event → Inngest function execution
 - [ ] **OBS-04**: System emits structured JSON logs with per-request context (phone hash, message_id, trace_id) on every inbound message and outbound reply
+
+### Async Processing (ASYNC)
+
+- [ ] **ASYNC-01**: Webhook route fires an Inngest event (`message.received`) immediately after validating the Twilio signature and MessageSid idempotency check, then returns HTTP 200 to Twilio — all GPT processing happens outside the Twilio response window
+- [ ] **ASYNC-02**: Inngest function `process-message` handles the full pipeline: GPT classify+extract → PostgreSQL storage → Pinecone embedding write → earnings math match → Twilio REST SMS reply
+- [ ] **ASYNC-03**: Inngest is configured for local development via the Inngest Dev Server (runs alongside Docker Compose); production functions deploy to Vercel automatically via the Inngest Vercel integration
 
 ### Deployment (DEP)
 
-- [ ] **DEP-01**: System runs locally via Docker Compose with a PostgreSQL service (pgvector-enabled image for local parity even though Pinecone is used for vectors)
+- [ ] **DEP-01**: System runs locally via Docker Compose with a PostgreSQL service and Inngest Dev Server for local function execution
 - [ ] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
-- [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (e.g., Mangum); deployment config and environment variable documentation included
-
-> **Constraint note (DEP-03):** Vercel serverless functions terminate immediately after the HTTP response is sent. FastAPI's `BackgroundTasks` will not reliably complete GPT processing post-response on Vercel. Phase 4 planning must resolve this: options include (a) synchronous processing within the 15s Twilio window, (b) Vercel Edge Functions with longer timeout, or (c) a lightweight external task queue (e.g., Inngest). This decision affects Phase 4 architecture.
+- [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (Mangum); Inngest functions register at `/api/inngest`; deployment config and environment variable documentation included
 
 ---
 
 ## v2 Requirements (Deferred)
 
 - Semantic job matching via Pinecone vector search (embeddings written in v1, query logic deferred)
-- External task queue (Celery/ARQ/Dramatiq/Inngest) if Vercel background processing proves insufficient
+- Additional Inngest functions for scheduled jobs or multi-step workflows (v1 uses a single process-message function)
 - Web dashboard or admin UI
 - Multi-turn conversation state / dialog management
 - Field-level extraction confidence with clarification prompts
@@ -109,8 +113,11 @@
 | MATCH-03 | Phase 3 | Empty match fallback reply |
 | OBS-01 | Phase 2 | Braintrust wraps GPT calls in ExtractionService |
 | OBS-02 | Phase 1 | Prometheus /metrics endpoint scaffolded with infrastructure |
-| OBS-03 | Phase 1 | OTel instrumentation from day one; trace context in background tasks |
+| OBS-03 | Phase 1 | OTel instrumentation from day one; trace context propagates webhook → Inngest |
 | OBS-04 | Phase 1 | structlog with request context |
-| DEP-01 | Phase 1 | Docker Compose in initial setup |
+| ASYNC-01 | Phase 1 | Inngest client + webhook event emit; replaces BackgroundTasks pattern |
+| ASYNC-02 | Phase 4 | Full process-message Inngest function wired end-to-end |
+| ASYNC-03 | Phase 1 | Inngest Dev Server in Docker Compose; Vercel integration in Phase 4 |
+| DEP-01 | Phase 1 | Docker Compose with PostgreSQL + Inngest Dev Server |
 | DEP-02 | Phase 1 | /health endpoint with infrastructure |
-| DEP-03 | Phase 4 | Vercel deployment config + Mangum adapter; background task decision required |
+| DEP-03 | Phase 4 | Vercel deployment config + Mangum adapter + Inngest /api/inngest registration |
