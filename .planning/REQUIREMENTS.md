@@ -59,8 +59,8 @@
 
 ### Deployment (DEP)
 
-- [ ] **DEP-01**: System runs locally via Docker Compose with a standard PostgreSQL 16 service and Inngest Dev Server for local function execution (no pgvector extension required)
-- [ ] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
+- [x] **DEP-01**: System runs locally via Docker Compose with a standard PostgreSQL 16 service and Inngest Dev Server for local function execution (no pgvector extension required)
+- [x] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
 - [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (Mangum); Inngest functions register at `/api/inngest`; deployment config and environment variable documentation included
 
 ---
@@ -118,6 +118,6 @@
 | ASYNC-01 | Phase 1 | Pending | Inngest client + webhook event emit; returns 200 before any GPT work |
 | ASYNC-02 | Phase 4 | Pending | Full process-message Inngest function wired end-to-end |
 | ASYNC-03 | Phase 1 | Pending | Inngest Dev Server in Docker Compose; Vercel integration configured in Phase 4 |
-| DEP-01 | Phase 1 | Pending | Docker Compose with PostgreSQL + Inngest Dev Server |
-| DEP-02 | Phase 1 | Pending | /health endpoint with infrastructure |
+| DEP-01 | Phase 1 | Complete | Docker Compose with PostgreSQL + Inngest Dev Server |
+| DEP-02 | Phase 1 | Complete | /health endpoint with infrastructure |
 | DEP-03 | Phase 4 | Pending | Vercel deployment config + Mangum adapter + /api/inngest registration |

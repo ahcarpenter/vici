@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-06T04:27:16.293Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-06T07:17:20.334Z"
 last_activity: 2026-03-05 — Roadmap created; 28 requirements mapped across 4 phases
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-infrastructure-foundation P01 | 25 | 3 tasks | 30 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,10 @@ Recent decisions affecting current work:
 - [Roadmap]: Async processing via Inngest (not FastAPI BackgroundTasks) — webhook emits `message.received` event, returns 200 immediately; full pipeline runs in Inngest `process-message` function
 - [Roadmap]: STR-01/STR-02 schema created in Phase 1 migrations; repository writes assigned to Phase 2 (after extraction schemas exist)
 - [Phase 2]: Research flag set — GPT-5.2 model string and structured output discriminated union behavior require verification before Phase 2 planning begins
+- [Phase 01-01]: postgres:16 plain image (not pgvector) — Pinecone is the vector store
+- [Phase 01-01]: Async Alembic env.py using asyncio.run() — required for asyncpg driver
+- [Phase 01-01]: expire_on_commit=False on async_sessionmaker — async SQLAlchemy cannot lazy-load after commit
+- [Phase 01-01]: SQLite+aiosqlite for test DB — no postgres dependency in unit tests
 
 ### Pending Todos
 
@@ -72,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T04:27:16.291Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-infrastructure-foundation/01-CONTEXT.md
+Last session: 2026-03-06T07:17:20.332Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None

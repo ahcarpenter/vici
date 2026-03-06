@@ -12,7 +12,7 @@ Vici is built in four phases that follow a strict dependency order: infrastructu
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Infrastructure Foundation** - Async API skeleton, schema migrations, security gates, observability, and Inngest event wiring
+- [x] **Phase 1: Infrastructure Foundation** - Async API skeleton, schema migrations, security gates, observability, and Inngest event wiring (completed 2026-03-06)
 - [ ] **Phase 2: GPT Extraction Service** - Single-call GPT classify+extract pipeline with Pydantic schemas, Pinecone write, and storage
 - [ ] **Phase 3: Earnings Math Matching** - Deterministic SQL matching query, ranked SMS formatter, and empty-match fallback
 - [ ] **Phase 4: End-to-End Integration & Deployment** - Inngest orchestration function, outbound SMS replies, STOP/START compliance, and Vercel deployment
@@ -87,7 +87,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure Foundation | 0/3 | Not started | - |
+| 1. Infrastructure Foundation | 1/1 | Complete   | 2026-03-06 |
 | 2. GPT Extraction Service | 0/2 | Not started | - |
 | 3. Earnings Math Matching | 0/1 | Not started | - |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | - |
