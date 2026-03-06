@@ -91,33 +91,33 @@
 
 ## Requirement Traceability
 
-| REQ-ID | Phase | Notes |
-|--------|-------|-------|
-| SEC-01 | Phase 1 | Must be first; broken signature validation is silent in dev, fatal in prod |
-| SEC-02 | Phase 1 | Idempotency before any processing — cheap to add early, expensive to retrofit |
-| SEC-03 | Phase 1 | Before GPT calls to prevent cost blowout |
-| SEC-04 | Phase 1 | Audit table in initial migration |
-| SEC-05 | Phase 4 | Wired in orchestration layer |
-| IDN-01 | Phase 1 | Phone identity in initial schema |
-| IDN-02 | Phase 1 | created_at in initial schema |
-| EXT-01 | Phase 2 | Core GPT classification call |
-| EXT-02 | Phase 2 | Job posting Pydantic schema + prompt |
-| EXT-03 | Phase 2 | Worker goal Pydantic schema + prompt |
-| EXT-04 | Phase 2 | Unknown message fallback reply |
-| STR-01 | Phase 1 / Phase 2 | Schema in Phase 1; write in Phase 2 after extraction |
-| STR-02 | Phase 1 / Phase 2 | Schema in Phase 1; write in Phase 2 after extraction |
-| STR-03 | Phase 4 | Confirmation SMS in orchestration layer |
-| VEC-01 | Phase 2 | Pinecone client init + embedding write at job creation |
-| MATCH-01 | Phase 3 | Earnings math SQL query |
-| MATCH-02 | Phase 3 | SMS reply formatter |
-| MATCH-03 | Phase 3 | Empty match fallback reply |
-| OBS-01 | Phase 2 | Braintrust wraps GPT calls in ExtractionService |
-| OBS-02 | Phase 1 | Prometheus /metrics endpoint scaffolded with infrastructure |
-| OBS-03 | Phase 1 | OTel instrumentation from day one; trace context propagates webhook → Inngest |
-| OBS-04 | Phase 1 | structlog with request context |
-| ASYNC-01 | Phase 1 | Inngest client + webhook event emit; replaces BackgroundTasks pattern |
-| ASYNC-02 | Phase 4 | Full process-message Inngest function wired end-to-end |
-| ASYNC-03 | Phase 1 | Inngest Dev Server in Docker Compose; Vercel integration in Phase 4 |
-| DEP-01 | Phase 1 | Docker Compose with PostgreSQL + Inngest Dev Server |
-| DEP-02 | Phase 1 | /health endpoint with infrastructure |
-| DEP-03 | Phase 4 | Vercel deployment config + Mangum adapter + Inngest /api/inngest registration |
+| REQ-ID | Phase | Status | Notes |
+|--------|-------|--------|-------|
+| SEC-01 | Phase 1 | Pending | Signature validation is a security gate; must be first |
+| SEC-02 | Phase 1 | Pending | Idempotency before any processing — cheap to add early, expensive to retrofit |
+| SEC-03 | Phase 1 | Pending | Rate limiting before GPT calls to prevent cost blowout |
+| SEC-04 | Phase 1 | Pending | Audit table in initial migration; raw GPT response column populated in Phase 2 |
+| SEC-05 | Phase 4 | Pending | STOP/START pass-through wired in Inngest orchestration function |
+| IDN-01 | Phase 1 | Pending | Phone identity auto-registration in initial schema |
+| IDN-02 | Phase 1 | Pending | created_at in initial schema for recycling detection |
+| EXT-01 | Phase 2 | Pending | Core GPT classification call in ExtractionService |
+| EXT-02 | Phase 2 | Pending | JobExtraction Pydantic schema + structured output prompt |
+| EXT-03 | Phase 2 | Pending | WorkerExtraction Pydantic schema + structured output prompt |
+| EXT-04 | Phase 2 | Pending | UnknownMessage fallback — queues graceful reply |
+| STR-01 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
+| STR-02 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
+| STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest orchestration function |
+| VEC-01 | Phase 2 | Pending | Pinecone client init + embedding write at job creation in ExtractionService |
+| MATCH-01 | Phase 3 | Pending | Earnings math SQL query in JobRepository |
+| MATCH-02 | Phase 3 | Pending | Ranked SMS formatter (3-5 results, 160-char segments) |
+| MATCH-03 | Phase 3 | Pending | Empty match fallback reply |
+| OBS-01 | Phase 2 | Pending | Braintrust wraps GPT calls in ExtractionService |
+| OBS-02 | Phase 1 | Pending | Prometheus /metrics endpoint scaffolded with infrastructure |
+| OBS-03 | Phase 1 | Pending | OTel from day one; trace context propagates webhook → Inngest event → function |
+| OBS-04 | Phase 1 | Pending | structlog with per-request context (phone hash, message_id, trace_id) |
+| ASYNC-01 | Phase 1 | Pending | Inngest client + webhook event emit; returns 200 before any GPT work |
+| ASYNC-02 | Phase 4 | Pending | Full process-message Inngest function wired end-to-end |
+| ASYNC-03 | Phase 1 | Pending | Inngest Dev Server in Docker Compose; Vercel integration configured in Phase 4 |
+| DEP-01 | Phase 1 | Pending | Docker Compose with PostgreSQL + Inngest Dev Server |
+| DEP-02 | Phase 1 | Pending | /health endpoint with infrastructure |
+| DEP-03 | Phase 4 | Pending | Vercel deployment config + Mangum adapter + /api/inngest registration |
