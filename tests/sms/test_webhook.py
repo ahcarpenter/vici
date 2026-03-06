@@ -93,6 +93,13 @@ async def test_phone_created_at(client: AsyncClient, mock_twilio_validator, asyn
     assert row.created_at is not None
 
 
-async def test_inngest_event_emitted(client: AsyncClient, mock_twilio_validator):
-    # Plan 02: Inngest emission is added in Plan 03; this test is skipped here
-    pytest.skip("Inngest event emission implemented in Plan 03")
+async def test_inngest_event_emitted(client: AsyncClient, mock_twilio_validator, mock_inngest_client):
+    form = {**VALID_FORM, "MessageSid": "SM_inngest_001"}
+    response = await client.post("/webhook/sms", data=form, headers=HEADERS)
+    assert response.status_code == 200
+    mock_inngest_client.assert_called_once()
+    # Verify the event passed to send() has the right name and data
+    call_args = mock_inngest_client.call_args
+    event = call_args.args[0]  # first positional arg to send()
+    assert event.name == "message.received"
+    assert event.data["message_sid"] == "SM_inngest_001"
