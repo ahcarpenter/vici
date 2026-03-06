@@ -66,12 +66,12 @@ async def register_phone(session: AsyncSession, phone_hash: str) -> None:
     await session.execute(
         text(
             """
-            INSERT INTO phone (phone_hash)
-            VALUES (:phone_hash)
+            INSERT INTO phone (phone_hash, created_at)
+            VALUES (:phone_hash, :created_at)
             ON CONFLICT (phone_hash) DO NOTHING
             """
         ),
-        {"phone_hash": phone_hash},
+        {"phone_hash": phone_hash, "created_at": datetime.utcnow()},
     )
     await session.commit()
 
