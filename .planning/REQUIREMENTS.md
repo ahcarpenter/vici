@@ -55,14 +55,16 @@
 
 - [ ] **DEP-01**: System runs locally via Docker Compose with a PostgreSQL service (pgvector-enabled image for local parity even though Pinecone is used for vectors)
 - [ ] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
-- [ ] **DEP-03**: System is deployable to Railway; deployment config (railway.toml or Dockerfile), environment variable documentation, and PostgreSQL service wiring included
+- [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (e.g., Mangum); deployment config and environment variable documentation included
+
+> **Constraint note (DEP-03):** Vercel serverless functions terminate immediately after the HTTP response is sent. FastAPI's `BackgroundTasks` will not reliably complete GPT processing post-response on Vercel. Phase 4 planning must resolve this: options include (a) synchronous processing within the 15s Twilio window, (b) Vercel Edge Functions with longer timeout, or (c) a lightweight external task queue (e.g., Inngest). This decision affects Phase 4 architecture.
 
 ---
 
 ## v2 Requirements (Deferred)
 
 - Semantic job matching via Pinecone vector search (embeddings written in v1, query logic deferred)
-- External task queue (Celery/ARQ/Dramatiq) if Railway BackgroundTasks proves insufficient at scale
+- External task queue (Celery/ARQ/Dramatiq/Inngest) if Vercel background processing proves insufficient
 - Web dashboard or admin UI
 - Multi-turn conversation state / dialog management
 - Field-level extraction confidence with clarification prompts
@@ -111,4 +113,4 @@
 | OBS-04 | Phase 1 | structlog with request context |
 | DEP-01 | Phase 1 | Docker Compose in initial setup |
 | DEP-02 | Phase 1 | /health endpoint with infrastructure |
-| DEP-03 | Phase 4 | Railway deployment config; Docker Compose dev → Railway prod translation |
+| DEP-03 | Phase 4 | Vercel deployment config + Mangum adapter; background task decision required |
