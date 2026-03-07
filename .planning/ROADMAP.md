@@ -46,11 +46,11 @@ Plans:
   2. Given a worker goal SMS, the system returns a `WorkerExtraction` with target earnings amount and timeframe populated; the record is persisted in the `workers` table
   3. Given an ambiguous or unclassifiable SMS, the system returns `UnknownMessage` and queues a graceful "try again" SMS reply
   4. All GPT calls are visible in Braintrust with input prompt, output, model name, latency, and token usage recorded per call
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Pydantic extraction schemas, OpenAI async client, structured output prompt, tenacity retry wrapper, Braintrust instrumentation
-- [ ] 02-02: Job/worker PostgreSQL repository writes, Pinecone client + embedding write at job creation, unknown message fallback
+- [ ] 02-01-PLAN.md — Pydantic extraction schemas, ExtractionService with Braintrust-wrapped OpenAI client, static system prompt with few-shot examples, tenacity retry, test scaffold
+- [ ] 02-02-PLAN.md — Alembic migration (job columns + pinecone_sync_queue), job/worker repositories, Pinecone embedding write with fire-and-forget fallback, lifespan singleton, Inngest cron stub
 
 ### Phase 3: Earnings Math Matching
 **Goal**: A tested MatchService exists that accepts a worker goal record and returns a ranked list of jobs satisfying `rate × duration >= target_earnings`, sorted by soonest available then shortest duration, with SMS formatting and empty-match handling — ready to be called from the Inngest function in Phase 4
