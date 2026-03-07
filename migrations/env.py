@@ -7,11 +7,12 @@ from sqlmodel import SQLModel
 # CRITICAL: import all domain models so SQLModel.metadata is populated
 from src.models import (  # noqa: F401
     AuditLog,
-    InboundMessage,
     Job,
-    Phone,
+    Match,
+    Message,
     RateLimit,
-    Worker,
+    User,
+    WorkRequest,
 )
 
 target_metadata = SQLModel.metadata
