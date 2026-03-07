@@ -87,7 +87,7 @@ async def test_process_message_job():
         patch("src.inngest_client.TwilioClient") as mock_twilio,
     ):
         from src.inngest_client import process_message
-        result = await process_message(ctx)
+        result = await process_message._handler(ctx)
 
     assert result == "ok"
     mock_service.process.assert_called_once()
@@ -120,7 +120,7 @@ async def test_process_message_worker():
         patch("src.inngest_client.TwilioClient") as mock_twilio,
     ):
         from src.inngest_client import process_message
-        result = await process_message(ctx)
+        result = await process_message._handler(ctx)
 
     assert result == "ok"
     mock_service.process.assert_called_once()
@@ -155,7 +155,7 @@ async def test_process_message_unknown_sends_sms():
     ):
         mock_asyncio.to_thread = AsyncMock(return_value=MagicMock(sid="SMreply"))
         from src.inngest_client import process_message
-        result = await process_message(ctx)
+        result = await process_message._handler(ctx)
 
     assert result == "ok"
     mock_service.process.assert_called_once()
