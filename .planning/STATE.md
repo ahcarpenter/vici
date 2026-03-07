@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-07T16:44:35.344Z"
+stopped_at: Phase 1.1 context gathered
+last_updated: "2026-03-07T17:09:28.694Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 1
-  total_plans: 3
+  total_plans: 5
   completed_plans: 3
   percent: 67
 ---
@@ -73,6 +73,10 @@ Recent decisions affecting current work:
 - [Phase 01-03]: inngest_client uses is_production=not settings.inngest_dev — INNGEST_DEV=1 in .env enables dev mode without signing key
 - [Phase 01-03]: autouse _auto_mock_inngest_send fixture in conftest prevents real Inngest HTTP calls from corrupting async event loop in all tests
 
+### Roadmap Evolution
+
+- Phase 1.1 inserted after Phase 1: Apply revised 3NF schema and propagate throughout app (URGENT)
+
 ### Pending Todos
 
 None yet.
@@ -83,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T16:44:35.333Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-gpt-extraction-service/02-CONTEXT.md
+Last session: 2026-03-07T17:09:28.687Z
+Stopped at: Phase 1.1 context gathered
+Resume file: .planning/phases/01.1-apply-revised-3nf-schema-and-propagate-throughout-app/01.1-CONTEXT.md
