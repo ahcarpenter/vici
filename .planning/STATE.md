@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1.1 context gathered
-last_updated: "2026-03-07T17:09:28.694Z"
+stopped_at: Completed 01.1-01-PLAN.md
+last_updated: "2026-03-07T19:22:25.645Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
   percent: 67
 ---
 
@@ -53,6 +53,7 @@ Progress: [███████░░░] 67%
 | Phase 01-infrastructure-foundation P01 | 25 | 3 tasks | 30 files |
 | Phase 01-infrastructure-foundation P02 | 15 | 2 tasks | 5 files |
 | Phase 01-infrastructure-foundation P03 | 20 | 2 tasks | 7 files |
+| Phase 01.1-apply-revised-3nf-schema-and-propagate-throughout-app P01 | 20 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,7 @@ Recent decisions affecting current work:
 - [Phase 01-02]: register_phone raw SQL includes created_at explicitly — SQLModel default_factory does not fire for raw SQL inserts
 - [Phase 01-03]: inngest_client uses is_production=not settings.inngest_dev — INNGEST_DEV=1 in .env enables dev mode without signing key
 - [Phase 01-03]: autouse _auto_mock_inngest_send fixture in conftest prevents real Inngest HTTP calls from corrupting async event loop in all tests
+- [Phase 01.1]: User/Message/WorkRequest replace Phone/InboundMessage/Worker with integer FKs — eliminates phone_hash string pseudo-FKs
 
 ### Roadmap Evolution
 
@@ -87,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T17:09:28.687Z
-Stopped at: Phase 1.1 context gathered
-Resume file: .planning/phases/01.1-apply-revised-3nf-schema-and-propagate-throughout-app/01.1-CONTEXT.md
+Last session: 2026-03-07T19:22:25.641Z
+Stopped at: Completed 01.1-01-PLAN.md
+Resume file: None

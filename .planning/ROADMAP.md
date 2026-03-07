@@ -36,6 +36,16 @@ Plans:
 - [ ] 01-02-PLAN.md — Twilio signature validation, MessageSid idempotency, rate limiting, audit table, phone identity
 - [ ] 01-03-PLAN.md — Observability stack (structlog, OTel, Prometheus), Inngest client + event emission, health endpoint
 
+### Phase 01.1: Apply revised 3NF schema and propagate throughout app (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 1
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 01.1 to break down)
+
 ### Phase 2: GPT Extraction Service
 **Goal**: A tested ExtractionService exists that accepts raw SMS text and returns a validated `JobExtraction | WorkerExtraction | UnknownMessage` discriminated union, stores results in PostgreSQL, and writes job embeddings to Pinecone — so Phase 3 can query against real structured data
 **Depends on**: Phase 1
