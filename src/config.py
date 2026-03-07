@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
     otel_service_name: str = "vici"
 
+    # Phase 2 additions
+    openai_api_key: str = ""
+    pinecone_api_key: str = ""
+    pinecone_index_host: str = ""
+    braintrust_api_key: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 @lru_cache(maxsize=1)

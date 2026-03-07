@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from openai import RateLimitError
 
 from src.extraction.schemas import (
@@ -30,10 +30,12 @@ async def test_classify_job():
     expected = ExtractionResult(message_type="job_posting", job=job)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("braintrust.wrap_openai", return_value=mock_client):
+    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
         service = ExtractionService(MockSettings())
         service._client = mock_client
-        result = await service.process("Need a mover for Saturday downtown Chicago", "hash123")
+        result = await service.process(
+            "Need a mover for Saturday downtown Chicago", "hash123"
+        )
 
     assert result.message_type == "job_posting"
     assert result.job is not None
@@ -45,7 +47,7 @@ async def test_classify_worker():
     expected = ExtractionResult(message_type="worker_goal", worker=worker)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("braintrust.wrap_openai", return_value=mock_client):
+    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
         service = ExtractionService(MockSettings())
         service._client = mock_client
         result = await service.process("I need $200 today", "hash123")
@@ -57,11 +59,13 @@ async def test_classify_worker():
 
 @pytest.mark.asyncio
 async def test_classify_unknown():
-    unknown = UnknownMessage(reason="Message is a greeting with no job or goal information")
+    unknown = UnknownMessage(
+        reason="Message is a greeting with no job or goal information"
+    )
     expected = ExtractionResult(message_type="unknown", unknown=unknown)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("braintrust.wrap_openai", return_value=mock_client):
+    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
         service = ExtractionService(MockSettings())
         service._client = mock_client
         result = await service.process("Hello", "hash123")
@@ -74,9 +78,9 @@ async def test_classify_unknown():
 def test_braintrust_instrumentation():
     from openai import AsyncOpenAI
 
-    with patch("braintrust.wrap_openai") as mock_wrap:
+    with patch("src.extraction.service.wrap_openai") as mock_wrap:
         mock_wrap.return_value = AsyncMock()
-        service = ExtractionService(MockSettings())
+        ExtractionService(MockSettings())
         mock_wrap.assert_called_once()
         # Verify the argument is an AsyncOpenAI instance
         call_args = mock_wrap.call_args[0]
@@ -104,7 +108,9 @@ async def test_tenacity_retry_on_rate_limit():
     rate_limit_error = RateLimitError(
         message="Rate limit exceeded",
         response=MagicMock(status_code=429, headers={}),
-        body={"error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}},
+        body={
+            "error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}
+        },
     )
 
     mock_client = AsyncMock()
@@ -112,7 +118,7 @@ async def test_tenacity_retry_on_rate_limit():
         side_effect=[rate_limit_error, mock_completion]
     )
 
-    with patch("braintrust.wrap_openai", return_value=mock_client):
+    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
         service = ExtractionService(MockSettings())
         service._client = mock_client
         # Should not raise — tenacity retries transparently
