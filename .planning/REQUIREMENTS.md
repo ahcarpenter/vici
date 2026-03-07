@@ -23,10 +23,10 @@
 
 ### Message Classification & Extraction (EXT)
 
-- [ ] **EXT-01**: System classifies each inbound SMS as a job posting, worker earnings goal, or unknown using a single GPT call
-- [ ] **EXT-02**: System extracts the following fields from a job posting message: job description, ideal date/time, date/time flexibility, estimated duration (optional), location, and pay/rate
-- [ ] **EXT-03**: System extracts the following fields from a worker goal message: target earnings amount and target timeframe
-- [ ] **EXT-04**: System sends a graceful SMS reply to the sender when a message cannot be classified, prompting them to try again
+- [x] **EXT-01**: System classifies each inbound SMS as a job posting, worker earnings goal, or unknown using a single GPT call
+- [x] **EXT-02**: System extracts the following fields from a job posting message: job description, ideal date/time, date/time flexibility, estimated duration (optional), location, and pay/rate
+- [x] **EXT-03**: System extracts the following fields from a worker goal message: target earnings amount and target timeframe
+- [x] **EXT-04**: System sends a graceful SMS reply to the sender when a message cannot be classified, prompting them to try again
 
 ### Storage (STR)
 
@@ -46,7 +46,7 @@
 
 ### Observability (OBS)
 
-- [ ] **OBS-01**: System instruments all GPT classify+extract calls with Braintrust LLM observability (input prompt, output, model, latency, token usage per call)
+- [x] **OBS-01**: System instruments all GPT classify+extract calls with Braintrust LLM observability (input prompt, output, model, latency, token usage per call)
 - [x] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics
 - [x] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (spans exported via OTLP); trace context propagates from webhook → Inngest event → Inngest function execution
 - [x] **OBS-04**: System emits structured JSON logs with per-request context (phone hash, message_id, trace_id) on every inbound message and outbound reply
@@ -100,10 +100,10 @@
 | SEC-05 | Phase 4 | Pending | STOP/START pass-through wired in Inngest orchestration function |
 | IDN-01 | Phase 1 | Complete | Phone identity auto-registration in initial schema |
 | IDN-02 | Phase 1 | Complete | created_at in initial schema for recycling detection |
-| EXT-01 | Phase 2 | Pending | Core GPT classification call in ExtractionService |
-| EXT-02 | Phase 2 | Pending | JobExtraction Pydantic schema + structured output prompt |
-| EXT-03 | Phase 2 | Pending | WorkerExtraction Pydantic schema + structured output prompt |
-| EXT-04 | Phase 2 | Pending | UnknownMessage fallback — queues graceful reply |
+| EXT-01 | Phase 2 | Complete | Core GPT classification call in ExtractionService |
+| EXT-02 | Phase 2 | Complete | JobExtraction Pydantic schema + structured output prompt |
+| EXT-03 | Phase 2 | Complete | WorkerExtraction Pydantic schema + structured output prompt |
+| EXT-04 | Phase 2 | Complete | UnknownMessage fallback — queues graceful reply |
 | STR-01 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
 | STR-02 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
 | STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest orchestration function |
@@ -111,7 +111,7 @@
 | MATCH-01 | Phase 3 | Pending | Earnings math SQL query in JobRepository |
 | MATCH-02 | Phase 3 | Pending | Ranked SMS formatter (3-5 results, 160-char segments) |
 | MATCH-03 | Phase 3 | Pending | Empty match fallback reply |
-| OBS-01 | Phase 2 | Pending | Braintrust wraps GPT calls in ExtractionService |
+| OBS-01 | Phase 2 | Complete | Braintrust wraps GPT calls in ExtractionService |
 | OBS-02 | Phase 1 | Complete | Prometheus /metrics endpoint scaffolded with infrastructure |
 | OBS-03 | Phase 1 | Complete | OTel from day one; trace context propagates webhook → Inngest event → function |
 | OBS-04 | Phase 1 | Complete | structlog with per-request context (phone hash, message_id, trace_id) |
