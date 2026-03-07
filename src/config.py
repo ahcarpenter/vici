@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str
     twilio_auth_token: str
     twilio_account_sid: str
+    twilio_from_number: str = ""
     webhook_base_url: str = "http://localhost:8000"
     inngest_dev: bool = False
     inngest_base_url: str = "http://localhost:8288"
