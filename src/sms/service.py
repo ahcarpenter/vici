@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 import inngest as inngest_module
 from opentelemetry.propagate import inject as otel_inject
@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
-from src.sms.models import AuditLog, InboundMessage, RateLimit
+from src.sms.models import AuditLog, Message, RateLimit
+from src.users.models import User
 
 
 def hash_phone(e164_number: str) -> str:
@@ -20,42 +21,52 @@ def hash_phone(e164_number: str) -> str:
 async def check_idempotency(session: AsyncSession, message_sid: str) -> bool:
     """Return True if this MessageSid has already been processed."""
     result = await session.execute(
-        select(InboundMessage).where(InboundMessage.message_sid == message_sid)
+        select(Message).where(Message.message_sid == message_sid)
     )
     return result.first() is not None
 
 
-def _current_window_start() -> datetime:
-    """Truncate current UTC time to the 1-minute bucket."""
-    now = datetime.now(UTC).replace(second=0, microsecond=0)
-    # Store as naive UTC for consistency with existing schema.
-    return now.replace(tzinfo=None)
+async def get_or_create_user(session: AsyncSession, phone_hash: str) -> User:
+    """Upsert a user row by phone_hash. Returns the User ORM object."""
+    await session.execute(
+        text(
+            """
+            INSERT INTO "user" (phone_hash, created_at)
+            VALUES (:phone_hash, :created_at)
+            ON CONFLICT (phone_hash) DO NOTHING
+            """
+        ),
+        {"phone_hash": phone_hash, "created_at": datetime.now(UTC)},
+    )
+    result = await session.execute(
+        select(User).where(User.phone_hash == phone_hash)
+    )
+    return result.scalar_one()
 
 
-async def enforce_rate_limit(session: AsyncSession, phone_hash: str) -> bool:
+async def enforce_rate_limit(session: AsyncSession, user_id: int) -> bool:
     """
-    Upsert a count for (phone_hash, window_start). Returns True if the
+    Upsert a count for (user_id, window_start). Returns True if the
     count AFTER the upsert exceeds MAX_MESSAGES_PER_WINDOW (caller should
     return empty TwiML 200). Returns False if within the limit.
     """
-    window = _current_window_start()
+    window = datetime.now(UTC).replace(second=0, microsecond=0)
 
     await session.execute(
         text(
             """
-            INSERT INTO rate_limit (phone_hash, window_start, count)
-            VALUES (:phone_hash, :window_start, 1)
-            ON CONFLICT (phone_hash, window_start)
+            INSERT INTO rate_limit (user_id, window_start, count)
+            VALUES (:user_id, :window_start, 1)
+            ON CONFLICT ON CONSTRAINT uq_rate_limit_user_window
             DO UPDATE SET count = rate_limit.count + 1
             """
         ),
-        {"phone_hash": phone_hash, "window_start": window},
+        {"user_id": user_id, "window_start": window},
     )
 
-    # Read back the current count
     result = await session.execute(
         select(RateLimit).where(
-            RateLimit.phone_hash == phone_hash,
+            RateLimit.user_id == user_id,
             RateLimit.window_start == window,
         )
     )
@@ -65,18 +76,21 @@ async def enforce_rate_limit(session: AsyncSession, phone_hash: str) -> bool:
     return row.count > MAX_MESSAGES_PER_WINDOW
 
 
-async def register_phone(session: AsyncSession, phone_hash: str) -> None:
-    """Insert a new phone identity if it does not exist. Idempotent."""
-    await session.execute(
-        text(
-            """
-            INSERT INTO phone (phone_hash, created_at)
-            VALUES (:phone_hash, :created_at)
-            ON CONFLICT (phone_hash) DO NOTHING
-            """
-        ),
-        {"phone_hash": phone_hash, "created_at": datetime.now(UTC)},
+async def write_inbound_message(
+    session: AsyncSession,
+    message_sid: str,
+    user_id: int,
+    body: str,
+) -> Message:
+    """Persist the message record. Returns the Message object."""
+    row = Message(
+        message_sid=message_sid,
+        user_id=user_id,
+        body=body,
     )
+    session.add(row)
+    await session.flush()
+    return row
 
 
 async def write_audit_log(
@@ -84,26 +98,14 @@ async def write_audit_log(
     message_sid: str,
     event: str,
     detail: str | None = None,
+    message_id: int | None = None,
 ) -> None:
     """Append an audit_log row for this message_sid."""
-    row = AuditLog(message_sid=message_sid, event=event, detail=detail)
-    session.add(row)
-    await session.flush()
-
-
-async def write_inbound_message(
-    session: AsyncSession,
-    message_sid: str,
-    phone_hash: str,
-    body: str,
-    raw_sms: dict,
-) -> None:
-    """Persist the inbound_message record. raw_sms stored as JSON string."""
-    row = InboundMessage(
+    row = AuditLog(
         message_sid=message_sid,
-        phone_hash=phone_hash,
-        body=body,
-        raw_sms=json.dumps(raw_sms),
+        event=event,
+        detail=detail,
+        message_id=message_id,
     )
     session.add(row)
     await session.flush()
