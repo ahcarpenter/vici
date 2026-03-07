@@ -1,51 +1,62 @@
 from datetime import UTC, datetime
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
-class Phone(SQLModel, table=True):
-    __tablename__ = "phone"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    phone_hash: str = Field(unique=True, index=True)  # SHA-256 of E.164 number (IDN-01)
-    # IDN-02: recycling detection
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+class Message(SQLModel, table=True):
+    __tablename__ = "message"
 
-
-class InboundMessage(SQLModel, table=True):
-    __tablename__ = "inbound_message"
     id: Optional[int] = Field(default=None, primary_key=True)
-    message_sid: str = Field(
-        unique=True,
-        index=True,
-    )  # Twilio MessageSid; idempotency key (SEC-02)
-    phone_hash: str = Field(index=True)  # FK-like ref to phone.phone_hash
+    message_sid: str = Field(unique=True, index=True)
+    user_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer, sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+        )
+    )
     body: str
-    raw_sms: str  # Full raw form payload as JSON string (SEC-04)
-    raw_gpt_response: Optional[str] = None  # Populated in Phase 2 (SEC-04)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    message_type: Optional[str] = None
+    raw_gpt_response: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),
+    )
 
 
 class RateLimit(SQLModel, table=True):
     __tablename__ = "rate_limit"
     __table_args__ = (
-        UniqueConstraint(
-            "phone_hash",
-            "window_start",
-            name="uq_rate_limit_phone_window",
-        ),
+        UniqueConstraint("user_id", "window_start", name="uq_rate_limit_user_window"),
     )
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    phone_hash: str = Field(index=True)                  # SHA-256 of phone number
-    window_start: datetime                               # Truncated to 1-minute bucket
+    user_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer, sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+        )
+    )
+    window_start: datetime = Field(
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False)
+    )
     count: int = Field(default=1)
 
 
 class AuditLog(SQLModel, table=True):
     __tablename__ = "audit_log"
+
     id: Optional[int] = Field(default=None, primary_key=True)
     message_sid: str = Field(index=True)
-    event: str  # e.g. "received", "rate_limited", "duplicate"
+    message_id: Optional[int] = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.Integer, sa.ForeignKey("message.id", ondelete="SET NULL"), nullable=True
+        ),
+    )
+    event: str
     detail: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),
+    )
