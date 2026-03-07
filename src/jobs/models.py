@@ -32,12 +32,16 @@ class Job(SQLModel, table=True):
     )
     description: Optional[str] = None
     location: Optional[str] = None
-    pay_rate: float
+    pay_rate: Optional[float] = None
+    pay_type: str = Field(default="unknown")
     estimated_duration_hours: Optional[float] = None
+    raw_duration_text: Optional[str] = None
     ideal_datetime: Optional[datetime] = Field(
         default=None,
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
     )
+    raw_datetime_text: Optional[str] = None
+    inferred_timezone: Optional[str] = None
     datetime_flexible: Optional[bool] = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
