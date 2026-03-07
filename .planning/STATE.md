@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-07T20:10:57.472Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-07T20:19:25.614Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 67
 ---
 
@@ -56,6 +56,7 @@ Progress: [███████░░░] 67%
 | Phase 01.1-apply-revised-3nf-schema-and-propagate-throughout-app P01 | 20 | 3 tasks | 10 files |
 | Phase 01.1-apply-revised-3nf-schema-and-propagate-throughout-app P02 | 10 | 2 tasks | 4 files |
 | Phase 02-gpt-extraction-service P01 | 35 | 2 tasks | 12 files |
+| Phase 02-gpt-extraction-service P02 | 45 | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 01.1]: ON CONFLICT (user_id, created_at) column list syntax used for SQLite/PG compatibility in rate_limit upsert
 - [Phase 02-gpt-extraction-service]: patch target is src.extraction.service.wrap_openai (not braintrust.wrap_openai) because service.py uses a direct import
 - [Phase 02-gpt-extraction-service]: ExtractionService.process() keeps minimal signature (sms_text, phone_hash) — message_id and db_session added in Plan 02-02 when storage is wired
+- [Phase 02-gpt-extraction-service]: WorkRequestRepository (not WorkerRepository) — 3NF schema uses work_request table
+- [Phase 02-gpt-extraction-service]: ExtractionService.process() backward-compatible with session=None for existing tests
+- [Phase 02-gpt-extraction-service]: PineconeSyncQueue SQLModel in src/extraction/models.py registered via src/models.py
 
 ### Roadmap Evolution
 
@@ -94,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T20:10:57.469Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-07T20:19:25.611Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

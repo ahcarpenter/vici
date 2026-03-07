@@ -30,13 +30,13 @@
 
 ### Storage (STR)
 
-- [ ] **STR-01**: System stores extracted job postings as structured records in PostgreSQL (job ID used as Pinecone vector key; no embedding column in PostgreSQL)
-- [ ] **STR-02**: System stores extracted worker goals as structured records in PostgreSQL
+- [x] **STR-01**: System stores extracted job postings as structured records in PostgreSQL (job ID used as Pinecone vector key; no embedding column in PostgreSQL)
+- [x] **STR-02**: System stores extracted worker goals as structured records in PostgreSQL
 - [ ] **STR-03**: System sends a confirmation SMS to the job poster summarizing the extracted fields (e.g., "Got it: $25/hr, 3 hrs, downtown — reply EDIT to correct")
 
 ### Vector Search (VEC)
 
-- [ ] **VEC-01**: System integrates Pinecone as the vector store; job embeddings are written to Pinecone at job creation time (v1 stores embeddings; semantic matching query is deferred to v2)
+- [x] **VEC-01**: System integrates Pinecone as the vector store; job embeddings are written to Pinecone at job creation time (v1 stores embeddings; semantic matching query is deferred to v2)
 
 ### Job Matching (MATCH)
 
@@ -104,10 +104,10 @@
 | EXT-02 | Phase 2 | Complete | JobExtraction Pydantic schema + structured output prompt |
 | EXT-03 | Phase 2 | Complete | WorkerExtraction Pydantic schema + structured output prompt |
 | EXT-04 | Phase 2 | Complete | UnknownMessage fallback — queues graceful reply |
-| STR-01 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
-| STR-02 | Phase 2 | Pending | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
+| STR-01 | Phase 2 | Complete | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
+| STR-02 | Phase 2 | Complete | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
 | STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest orchestration function |
-| VEC-01 | Phase 2 | Pending | Pinecone client init + embedding write at job creation in ExtractionService |
+| VEC-01 | Phase 2 | Complete | Pinecone client init + embedding write at job creation in ExtractionService |
 | MATCH-01 | Phase 3 | Pending | Earnings math SQL query in JobRepository |
 | MATCH-02 | Phase 3 | Pending | Ranked SMS formatter (3-5 results, 160-char segments) |
 | MATCH-03 | Phase 3 | Pending | Empty match fallback reply |
