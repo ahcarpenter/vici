@@ -1,10 +1,12 @@
+import json
 from unittest.mock import patch
 
 from httpx import AsyncClient
 from sqlmodel import select
 from twilio.request_validator import RequestValidator
 
-from src.sms.models import AuditLog, InboundMessage, Phone
+from src.sms.models import AuditLog, Message
+from src.users.models import User
 
 VALID_FORM = {
     "MessageSid": "SM_test_001",
@@ -58,7 +60,7 @@ async def test_idempotency(
     response = await client.post("/webhook/sms", data=form, headers=HEADERS)
     assert response.status_code == 200
     result = await async_session.execute(
-        select(InboundMessage).where(InboundMessage.message_sid == "SM_idem_001")
+        select(Message).where(Message.message_sid == "SM_idem_001")
     )
     rows = result.all()
     assert len(rows) == 1  # only one row, not two
@@ -89,6 +91,10 @@ async def test_audit_row_created(
     row = result.scalar_one_or_none()
     assert row is not None
     assert row.event == "received"
+    # SEC-04: detail must contain raw Twilio payload as JSON
+    assert row.detail is not None
+    detail = json.loads(row.detail)
+    assert detail["MessageSid"] == "SM_audit_001"
 
 
 async def test_phone_auto_register(
@@ -102,10 +108,11 @@ async def test_phone_auto_register(
     from src.sms.service import hash_phone
     ph = hash_phone(phone)
     result = await async_session.execute(
-        select(Phone).where(Phone.phone_hash == ph)
+        select(User).where(User.phone_hash == ph)
     )
     row = result.scalar_one_or_none()
     assert row is not None
+    assert row.id is not None  # integer PK
 
 
 async def test_phone_created_at(
@@ -119,7 +126,7 @@ async def test_phone_created_at(
     from src.sms.service import hash_phone
     ph = hash_phone(phone)
     result = await async_session.execute(
-        select(Phone).where(Phone.phone_hash == ph)
+        select(User).where(User.phone_hash == ph)
     )
     row = result.scalar_one_or_none()
     assert row is not None
