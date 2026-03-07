@@ -1,3 +1,4 @@
+from src.extraction.models import PineconeSyncQueue  # noqa: F401
 from src.jobs.models import Job  # noqa: F401
 from src.matches.models import Match  # noqa: F401
 from src.sms.models import AuditLog, Message, RateLimit  # noqa: F401

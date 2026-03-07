@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+import src.models  # noqa: F401 — ensure all SQLModel tables registered before create_all
 from src.config import get_settings
 from src.database import get_engine, get_session
 from src.inngest_client import get_inngest_client

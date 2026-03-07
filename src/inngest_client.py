@@ -28,3 +28,14 @@ async def process_message(ctx: inngest.Context) -> str:
     )
     return "ok"
 
+
+@get_inngest_client().create_function(
+    fn_id="sync-pinecone-queue",
+    trigger=inngest.TriggerCron(cron="*/5 * * * *"),
+)
+async def sync_pinecone_queue(ctx: inngest.Context) -> str:
+    """Phase 2 stub. Sweeps pinecone_sync_queue for pending rows. Full retry logic deferred."""
+    logger = structlog.get_logger()
+    logger.info("sync-pinecone-queue: stub run")
+    return "ok"
+

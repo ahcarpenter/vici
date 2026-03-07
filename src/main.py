@@ -19,7 +19,8 @@ from sqlalchemy import text
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
-from src.inngest_client import get_inngest_client, process_message
+from src.extraction.service import ExtractionService
+from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.sms.exceptions import TwilioSignatureInvalid
 from src.sms.router import router as sms_router
 
@@ -65,6 +66,8 @@ def _configure_otel(app: FastAPI) -> TracerProvider:
 async def lifespan(app: FastAPI):
     _configure_structlog()
     provider = _configure_otel(app)
+    settings = get_settings()
+    app.state.extraction_service = ExtractionService(settings)
     yield
     provider.force_flush()
 
@@ -76,7 +79,9 @@ def create_app() -> FastAPI:
     Instrumentator().instrument(app).expose(app)
 
     # Inngest — registers POST /api/inngest for Dev Server
-    inngest.fast_api.serve(app, get_inngest_client(), [process_message])
+    inngest.fast_api.serve(
+        app, get_inngest_client(), [process_message, sync_pinecone_queue]
+    )
 
     # Exception handlers
     app.add_exception_handler(
