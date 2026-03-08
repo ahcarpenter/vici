@@ -19,10 +19,13 @@ HEADERS = {"X-Twilio-Signature": "valid_sig"}
 
 
 async def test_invalid_signature(client: AsyncClient):
-    with patch(
+    with patch("src.sms.dependencies.get_settings") as mock_settings, patch(
         "twilio.request_validator.RequestValidator.validate",
         return_value=False,
     ):
+        mock_settings.return_value.env = "production"
+        mock_settings.return_value.twilio_auth_token = "test_twilio_auth_token"
+        mock_settings.return_value.webhook_base_url = "http://localhost:8000"
         response = await client.post(
             "/webhook/sms",
             data=VALID_FORM,
