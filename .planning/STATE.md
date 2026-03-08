@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 
 Phase: Phase 3 — Earnings Math Matching (not yet started)
 Status: Ready to plan/execute Phase 3
-Last activity: 2026-03-08 - Completed quick task 1: ensure all env variables, or values associated with those use a reference in the .env file, and ripple out the relevant changes throughout the codebase where appropriate
+Last activity: 2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere
 
 Progress: [████████░░] 78% (7 of 9 phases complete, all 19 plans complete)
 
@@ -150,6 +150,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | ensure all env variables, or values associated with those use a reference in the .env file, and ripple out the relevant changes throughout the codebase where appropriate | 2026-03-08 | 3c04ff2 | [1-ensure-all-env-variables-or-values-assoc](./quick/1-ensure-all-env-variables-or-values-assoc/) |
+| 2 | make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere | 2026-03-08 | 6f9e3d6 | [2-make-sure-any-strings-with-url-s-that-co](./quick/2-make-sure-any-strings-with-url-s-that-co/) |
 
 ### Blockers/Concerns
 
