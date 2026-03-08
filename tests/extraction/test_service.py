@@ -86,16 +86,10 @@ async def test_classify_unknown():
 
 
 def test_braintrust_instrumentation():
-    """ExtractionService can be constructed with a pre-wrapped client."""
-    from openai import AsyncOpenAI
-
-    raw_client = AsyncOpenAI(api_key="test-key")
-    with patch("src.extraction.service.wrap_openai") as mock_wrap:
-        # Simulate: caller wraps before passing in
-        mock_wrap.return_value = AsyncMock()
-        wrapped = mock_wrap(raw_client)
-        service = ExtractionService(openai_client=wrapped, settings=MockSettings())
-        assert service._client is wrapped
+    """ExtractionService accepts a pre-wrapped client (wrapping happens in caller)."""
+    wrapped = AsyncMock()
+    service = ExtractionService(openai_client=wrapped, settings=MockSettings())
+    assert service._client is wrapped
 
 
 @pytest.mark.asyncio
