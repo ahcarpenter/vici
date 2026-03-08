@@ -1,10 +1,11 @@
 ---
 phase: 2
 slug: gpt-extraction-service
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-07
+audited: 2026-03-08
 ---
 
 # Phase 2 — Validation Strategy
@@ -38,15 +39,15 @@ created: 2026-03-07
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 2-01-01 | 01 | 0 | EXT-01 | unit | `pytest tests/extraction/test_service.py::test_classify_job -x` | ❌ W0 | ⬜ pending |
-| 2-01-02 | 01 | 0 | EXT-01 | unit | `pytest tests/extraction/test_service.py::test_classify_worker -x` | ❌ W0 | ⬜ pending |
-| 2-01-03 | 01 | 0 | EXT-04 | unit | `pytest tests/extraction/test_service.py::test_classify_unknown -x` | ❌ W0 | ⬜ pending |
-| 2-01-04 | 01 | 1 | EXT-02 | unit | `pytest tests/extraction/test_schemas.py::test_job_extraction_schema -x` | ❌ W0 | ⬜ pending |
-| 2-01-05 | 01 | 1 | EXT-03 | unit | `pytest tests/extraction/test_schemas.py::test_worker_extraction_schema -x` | ❌ W0 | ⬜ pending |
-| 2-01-06 | 01 | 1 | OBS-01 | unit | `pytest tests/extraction/test_service.py::test_braintrust_instrumentation -x` | ❌ W0 | ⬜ pending |
-| 2-02-01 | 02 | 0 | STR-01 | integration | `pytest tests/extraction/test_service.py::test_job_persistence -x` | ❌ W0 | ⬜ pending |
-| 2-02-02 | 02 | 0 | STR-02 | integration | `pytest tests/extraction/test_service.py::test_worker_persistence -x` | ❌ W0 | ⬜ pending |
-| 2-02-03 | 02 | 1 | VEC-01 | unit | `pytest tests/extraction/test_service.py::test_pinecone_upsert -x` | ❌ W0 | ⬜ pending |
+| 2-01-01 | 01 | 0 | EXT-01 | unit | `pytest tests/extraction/test_service.py::test_classify_job -x` | ✅ | ✅ green |
+| 2-01-02 | 01 | 0 | EXT-01 | unit | `pytest tests/extraction/test_service.py::test_classify_worker -x` | ✅ | ✅ green |
+| 2-01-03 | 01 | 0 | EXT-04 | unit | `pytest tests/extraction/test_service.py::test_classify_unknown -x` | ✅ | ✅ green |
+| 2-01-04 | 01 | 1 | EXT-02 | unit | `pytest tests/extraction/test_schemas.py::test_job_extraction_schema -x` | ✅ | ✅ green |
+| 2-01-05 | 01 | 1 | EXT-03 | unit | `pytest tests/extraction/test_schemas.py::test_worker_extraction_schema -x` | ✅ | ✅ green |
+| 2-01-06 | 01 | 1 | OBS-01 | unit | `pytest tests/extraction/test_service.py::test_braintrust_instrumentation -x` | ✅ | ✅ green |
+| 2-02-01 | 02 | 0 | STR-01 | integration | `pytest tests/extraction/test_persistence.py::test_job_persistence -x` | ✅ | ✅ green |
+| 2-02-02 | 02 | 0 | STR-02 | integration | `pytest tests/extraction/test_persistence.py::test_worker_persistence -x` | ✅ | ✅ green |
+| 2-02-03 | 02 | 1 | VEC-01 | unit | `pytest tests/extraction/test_persistence.py::test_pinecone_upsert -x` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -80,4 +81,4 @@ created: 2026-03-07
 - [ ] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ✅ Nyquist-compliant — 9/9 requirements covered, 29/29 tests passing (2026-03-08)
