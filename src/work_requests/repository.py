@@ -19,6 +19,5 @@ class WorkRequestRepository:
             created_at=datetime.now(UTC),
         )
         session.add(wr)
-        await session.commit()
-        await session.refresh(wr)
+        await session.flush()
         return wr

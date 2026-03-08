@@ -37,6 +37,5 @@ class JobRepository:
             created_at=datetime.now(UTC),
         )
         session.add(job)
-        await session.commit()
-        await session.refresh(job)
+        await session.flush()
         return job
