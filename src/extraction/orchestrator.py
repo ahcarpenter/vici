@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime
 
@@ -6,6 +7,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_sessionmaker
+from src.extraction.constants import UNKNOWN_REPLY_TEXT
 from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
 from src.jobs.repository import JobRepository
@@ -152,5 +154,15 @@ class PipelineOrchestrator:
                 {"mid": message_id},
             )
             await session.commit()
+
+            # Send Twilio unknown reply (synchronous client wrapped in thread)
+            settings = self._extraction_service._settings
+            await asyncio.to_thread(
+                self._twilio_client.messages.create,
+                to=from_number,
+                from_=settings.sms.from_number,
+                body=UNKNOWN_REPLY_TEXT,
+            )
+            log.info("unknown_reply_sent", message_sid=message_sid, to=from_number)
 
         return result

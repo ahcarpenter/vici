@@ -1,20 +1,20 @@
-import asyncio
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import inngest
 import structlog
 from sqlmodel import select
-from twilio.rest import Client as TwilioClient
 
 from src.config import get_settings
 from src.database import get_sessionmaker
-from src.extraction.constants import UNKNOWN_REPLY_TEXT
-from braintrust import wrap_openai
-from openai import AsyncOpenAI
-
-from src.extraction.service import ExtractionService
 from src.sms.models import Message
 from src.sms.service import hash_phone
+
+if TYPE_CHECKING:
+    from src.extraction.orchestrator import PipelineOrchestrator
+
+# Module-level orchestrator singleton set by lifespan in main.py
+_orchestrator: "PipelineOrchestrator | None" = None
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +32,7 @@ def get_inngest_client() -> inngest.Inngest:
     trigger=inngest.TriggerEvent(event="message.received"),
 )
 async def process_message(ctx: inngest.Context) -> str:
-    """Wire SMS body through ExtractionService; send reply if message cannot be classified."""
+    """Wire SMS body through PipelineOrchestrator; orchestrator handles all pipeline logic."""
     logger = structlog.get_logger()
     data = ctx.event.data
     message_sid: str = data.get("message_sid", "")
@@ -41,7 +41,6 @@ async def process_message(ctx: inngest.Context) -> str:
 
     logger.info("message.received consumed", message_sid=message_sid)
 
-    settings = get_settings()
     phone_hash = hash_phone(from_number)
 
     # Resolve message_id and user_id from the DB row written by the webhook handler
@@ -57,24 +56,16 @@ async def process_message(ctx: inngest.Context) -> str:
         message_id = message.id
         user_id = message.user_id
 
-        openai_client = wrap_openai(
-            AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
-        )
-        service = ExtractionService(openai_client=openai_client, settings=settings)
-        result = await service.process(
+        orchestrator = _orchestrator
+        await orchestrator.run(
+            session=session,
             sms_text=body,
             phone_hash=phone_hash,
+            message_id=message_id,
+            user_id=user_id,
+            message_sid=message_sid,
+            from_number=from_number,
         )
-
-    if result.message_type == "unknown":
-        twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
-        await asyncio.to_thread(
-            twilio_client.messages.create,
-            to=from_number,
-            from_=settings.sms.from_number,
-            body=UNKNOWN_REPLY_TEXT,
-        )
-        logger.info("unknown_reply_sent", message_sid=message_sid, to=from_number)
 
     return "ok"
 

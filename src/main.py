@@ -16,16 +16,23 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
+from braintrust import wrap_openai
+from openai import AsyncOpenAI
+from twilio.rest import Client as TwilioClient
+
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
-from braintrust import wrap_openai
-from openai import AsyncOpenAI
-
+from src.extraction.orchestrator import PipelineOrchestrator
+from src.extraction.pinecone_client import write_job_embedding
 from src.extraction.service import ExtractionService
 from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
+from src.jobs.repository import JobRepository
+from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import TwilioSignatureInvalid
+from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
+from src.work_requests.repository import WorkRequestRepository
 
 
 # ── structlog OTel processor ────────────────────────────────────────────────────
@@ -69,12 +76,31 @@ async def lifespan(app: FastAPI):
     _configure_structlog()
     provider = _configure_otel(app)
     settings = get_settings()
+
+    # Build DI graph
     openai_client = wrap_openai(
         AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
     )
-    app.state.extraction_service = ExtractionService(
-        openai_client=openai_client, settings=settings
+    extraction_service = ExtractionService(openai_client=openai_client, settings=settings)
+    pinecone_client = write_job_embedding
+    twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
+
+    orchestrator = PipelineOrchestrator(
+        extraction_service=extraction_service,
+        job_repo=JobRepository,
+        work_request_repo=WorkRequestRepository,
+        message_repo=MessageRepository,
+        audit_repo=AuditLogRepository,
+        pinecone_client=pinecone_client,
+        twilio_client=twilio_client,
     )
+
+    app.state.orchestrator = orchestrator
+
+    # Inject orchestrator into inngest_client module
+    import src.inngest_client as ic
+    ic._orchestrator = orchestrator
+
     yield
     provider.force_flush()
 
