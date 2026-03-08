@@ -10,9 +10,13 @@ from tenacity import (
     wait_random_exponential,
 )
 
+from opentelemetry import trace as otel_trace
+
 from src.extraction.constants import GPT_MODEL
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
+
+tracer = otel_trace.get_tracer(__name__)
 
 _bt_logger = init_logger(project="vici")  # module-level singleton
 
@@ -28,7 +32,11 @@ class ExtractionService:
     async def process(self, sms_text: str, phone_hash: str) -> ExtractionResult:
         """GPT classification only — no DB, no session param."""
         user_message = f"Today is {date.today().isoformat()}. Message: {sms_text}"
-        result = await self._call_with_retry(user_message)
+
+        with tracer.start_as_current_span("gpt.classify_and_extract") as span:
+            span.set_attribute("gen_ai.system", "openai")
+            span.set_attribute("gen_ai.request.model", self._settings.extraction.gpt_model)
+            result = await self._call_with_retry(user_message)
 
         log.info(
             "gpt_classified",

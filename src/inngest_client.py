@@ -3,12 +3,15 @@ from typing import TYPE_CHECKING
 
 import inngest
 import structlog
+from opentelemetry import trace as otel_trace
 from sqlmodel import select
 
 from src.config import get_settings
 from src.database import get_sessionmaker
 from src.sms.models import Message
 from src.sms.service import hash_phone
+
+tracer = otel_trace.get_tracer(__name__)
 
 if TYPE_CHECKING:
     from src.extraction.orchestrator import PipelineOrchestrator
@@ -43,29 +46,33 @@ async def process_message(ctx: inngest.Context) -> str:
 
     phone_hash = hash_phone(from_number)
 
-    # Resolve message_id and user_id from the DB row written by the webhook handler
-    async with get_sessionmaker()() as session:
-        row = await session.execute(
-            select(Message).where(Message.message_sid == message_sid)
-        )
-        message = row.scalar_one_or_none()
-        if message is None:
-            logger.error("process_message: message row not found", message_sid=message_sid)
-            return "ok"
+    with tracer.start_as_current_span("inngest.process_message") as span:
+        span.set_attribute("inngest.event", "message.received")
+        span.set_attribute("inngest.function", "process-message")
 
-        message_id = message.id
-        user_id = message.user_id
+        # Resolve message_id and user_id from the DB row written by the webhook handler
+        async with get_sessionmaker()() as session:
+            row = await session.execute(
+                select(Message).where(Message.message_sid == message_sid)
+            )
+            message = row.scalar_one_or_none()
+            if message is None:
+                logger.error("process_message: message row not found", message_sid=message_sid)
+                return "ok"
 
-        orchestrator = _orchestrator
-        await orchestrator.run(
-            session=session,
-            sms_text=body,
-            phone_hash=phone_hash,
-            message_id=message_id,
-            user_id=user_id,
-            message_sid=message_sid,
-            from_number=from_number,
-        )
+            message_id = message.id
+            user_id = message.user_id
+
+            orchestrator = _orchestrator
+            await orchestrator.run(
+                session=session,
+                sms_text=body,
+                phone_hash=phone_hash,
+                message_id=message_id,
+                user_id=user_id,
+                message_sid=message_sid,
+                from_number=from_number,
+            )
 
     return "ok"
 
