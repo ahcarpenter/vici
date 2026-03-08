@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
 from src.inngest_client import get_inngest_client
 from src.sms import service as sms_service
+from src.sms.audit_repository import AuditLogRepository
 from src.sms.dependencies import validate_twilio_request
+from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
+from src.sms.repository import MessageRepository
 
 router = APIRouter(prefix="/webhook", tags=["sms"])
 
@@ -28,23 +31,25 @@ async def receive_sms(
 
     async with session.begin():
         # Gate 2: idempotency (cheapest DB read — fires before user registration)
-        is_duplicate = await sms_service.check_idempotency(session, message_sid)
-        if is_duplicate:
-            await sms_service.write_audit_log(session, message_sid, "duplicate")
+        try:
+            await MessageRepository.check_idempotency(session, message_sid)
+        except DuplicateMessageSid:
+            await AuditLogRepository.write(session, message_sid, "duplicate")
             return Response(content=EMPTY_TWIML, media_type="text/xml")
 
         # Gate 3: get/create user (required before rate limit — rate limit needs user_id)
-        user = await sms_service.get_or_create_user(session, phone_hash)
+        user = await MessageRepository.get_or_create_user(session, phone_hash)
 
         # Gate 4: rate limit check
-        is_rate_limited = await sms_service.enforce_rate_limit(session, user.id)
-        if is_rate_limited:
-            await sms_service.write_audit_log(session, message_sid, "rate_limited")
+        try:
+            await MessageRepository.enforce_rate_limit(session, user.id)
+        except RateLimitExceeded:
+            await AuditLogRepository.write(session, message_sid, "rate_limited")
             return Response(content=EMPTY_TWIML, media_type="text/xml")
 
         # Gate 5: persist message + audit
-        message = await sms_service.write_inbound_message(session, message_sid, user.id, body)
-        await sms_service.write_audit_log(
+        message = await MessageRepository.create(session, message_sid, user.id, body)
+        await AuditLogRepository.write(
             session, message_sid, "received",
             detail=json.dumps(dict(form_data)), message_id=message.id
         )
