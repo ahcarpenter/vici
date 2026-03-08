@@ -1,0 +1,47 @@
+# Source: https://github.com/jaegertracing/jaeger/blob/main/cmd/jaeger/config-opensearch.yaml
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+  telemetry:
+    resource:
+      service.name: jaeger-collector
+    logs:
+      level: info
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_storage:
+    backends:
+      main_storage:
+        opensearch:
+          server_urls:
+            - http://opensearch:9200
+          indices:
+            index_prefix: "jaeger-main"
+            spans:
+              date_layout: "2006-01-02"
+              rollover_frequency: "day"
+              shards: 1
+              replicas: 0
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: main_storage
