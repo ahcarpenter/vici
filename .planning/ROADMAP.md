@@ -62,6 +62,19 @@ Plans:
 - [ ] 02-01-PLAN.md — Pydantic extraction schemas, ExtractionService with Braintrust-wrapped OpenAI client, static system prompt with few-shot examples, tenacity retry, test scaffold
 - [ ] 02-02-PLAN.md — Alembic migration (job columns + pinecone_sync_queue), job/worker repositories, Pinecone embedding write with fire-and-forget fallback, lifespan singleton, Inngest cron stub
 
+### Phase 02.5: Production hardening — staff-level readiness audit (INSERTED)
+
+**Goal:** Bring the app from dev-complete to production-ready on Render.com — multi-stage Dockerfile, Inngest retry/failure handling, sync_pinecone_queue real implementation, render.yaml Blueprint IaC, GitHub Actions CI, and test coverage audit
+**Requirements**: PROD-01, PROD-02, PROD-03, PROD-04, PROD-05, PROD-06, PROD-07, PROD-08
+**Depends on:** Phase 2
+**Plans:** 4 plans
+
+Plans:
+- [ ] 02.5-01-PLAN.md — Dockerfile multi-stage hardening, pipeline_failures_total counter, gauge updater silent-failure fix, Inngest retry + on_failure wiring
+- [ ] 02.5-02-PLAN.md — sync_pinecone_queue real sweep implementation, openai_client injection from lifespan, unit tests
+- [ ] 02.5-03-PLAN.md — render.yaml Blueprint, .env.example completeness audit, GitHub Actions CI pipeline
+- [ ] 02.5-04-PLAN.md — pytest-cov install, coverage report, missing tests for Wave 1 critical paths
+
 ### Phase 02.4: ensure prometheus instance is setup (INSERTED)
 
 **Goal:** Prometheus and Grafana added to Docker Compose with full auto-provisioning; custom GPT and queue-depth metrics instrumented in the application — zero manual setup after docker compose up
