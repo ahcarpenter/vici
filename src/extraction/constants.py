@@ -1,4 +1,4 @@
-GPT_MODEL = "gpt-5.2"
+GPT_MODEL = "gpt-5.3-chat-latest"
 UNKNOWN_REPLY_TEXT = (
     "Hi from Vici! We didn't understand your message. "
     "Text us a job (include pay, location, time) or your earnings goal "

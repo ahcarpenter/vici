@@ -20,7 +20,7 @@
 | PostgreSQL | 16 | Primary datastore | pgvector extension is available on PG 14+ but PG 16 has the best support with pgvector 0.7+; most managed providers (Supabase, Neon, Railway) default to PG 16. Confidence: HIGH |
 | pgvector | ^0.3 (Python), extension 0.7+ | Vector storage and similarity search | The `pgvector-python` package exposes `Vector` column type for SQLAlchemy 2.0 async; pgvector 0.7 added HNSW index support which outperforms IVFFlat for small-to-medium datasets. Schema includes embeddings now even though v1 matching is earnings math only. Confidence: MEDIUM (verify pgvector-python version) |
 | Alembic | ^1.13 | Database schema migrations | First-class SQLAlchemy integration; supports async engines via `run_sync` pattern; the only production-viable migration tool for SQLAlchemy projects. Confidence: HIGH |
-| openai | ^1.30 | OpenAI GPT API client | The v1.x SDK (released Nov 2023) is the modern interface: `client.chat.completions.create()` with `response_format={"type": "json_schema", ...}` enables structured outputs. GPT-5.2 is specified by the product owner; use the model string `"gpt-5.2"` in requests. Confidence: MEDIUM (verify latest 1.x pin; GPT-5.2 model string needs validation against OpenAI's naming) |
+| openai | ^1.30 | OpenAI GPT API client | The v1.x SDK (released Nov 2023) is the modern interface: `client.chat.completions.create()` with `response_format={"type": "json_schema", ...}` enables structured outputs. gpt-5.3-chat-latest is specified by the product owner; use the model string `"gpt-5.3-chat-latest"` in requests. Confidence: MEDIUM (verify latest 1.x pin; gpt-5.3-chat-latest model string needs validation against OpenAI's naming) |
 | twilio | ^9.0 | Twilio SMS SDK | Handles signature validation (`RequestValidator`) and outbound `client.messages.create()`. The Python helper library generates TwiML response XML which FastAPI returns as `Response(content=twiml, media_type="text/xml")`. Confidence: MEDIUM (verify 9.x is current series) |
 | uvicorn | ^0.30 | ASGI server | Production ASGI server for FastAPI; pair with `uvicorn[standard]` for `uvloop` (faster event loop) and `httptools` (faster HTTP parsing). Confidence: HIGH |
 
@@ -181,7 +181,7 @@ class JobPosting(BaseModel):
 
 client = AsyncOpenAI()
 response = await client.beta.chat.completions.parse(
-    model="gpt-5.2",
+    model="gpt-5.3-chat-latest",
     messages=[...],
     response_format=JobPosting,
 )
@@ -216,7 +216,7 @@ async def handle_sms(db: AsyncSession = Depends(get_db), ...):
 ## Sources
 
 - Training data (cutoff Aug 2025) — FastAPI, SQLAlchemy 2.0, asyncpg, Pydantic v2 patterns — HIGH confidence for established patterns
-- Training data — OpenAI SDK v1 structured outputs (`beta.chat.completions.parse`) — MEDIUM confidence (verify `gpt-5.2` model string against OpenAI's current model naming)
+- Training data — OpenAI SDK v1 structured outputs (`beta.chat.completions.parse`) — MEDIUM confidence (verify `gpt-5.3-chat-latest` model string against OpenAI's current model naming)
 - Training data — Twilio Python SDK 9.x, `RequestValidator`, TwiML patterns — MEDIUM confidence (verify 9.x is current major version)
 - Training data — pgvector-python 0.3+ SQLAlchemy 2.0 integration — MEDIUM confidence (verify version pin)
 - Training data — uv, ruff as 2025 Python toolchain standards — HIGH confidence

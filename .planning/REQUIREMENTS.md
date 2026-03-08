@@ -2,7 +2,8 @@
 
 **Milestone:** v1.0
 **Generated:** 2026-03-05
-**Status:** Active
+**Last updated:** 2026-03-08 (post Phase 02.5)
+**Status:** Active — Phases 01–02.5 complete; Phase 03 next
 
 ---
 
@@ -36,7 +37,7 @@
 
 ### Vector Search (VEC)
 
-- [x] **VEC-01**: System integrates Pinecone as the vector store; job embeddings are written to Pinecone at job creation time (v1 stores embeddings; semantic matching query is deferred to v2)
+- [x] **VEC-01**: System integrates Pinecone as the vector store; job embeddings are written to Pinecone at job creation time using `text-embedding-3-small` (1536 dims); failed writes are queued in `pinecone_sync_queue` and retried by a cron Inngest function
 
 ### Job Matching (MATCH)
 
@@ -47,21 +48,32 @@
 ### Observability (OBS)
 
 - [x] **OBS-01**: System instruments all GPT classify+extract calls with Braintrust LLM observability (input prompt, output, model, latency, token usage per call)
-- [x] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics
-- [x] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (spans exported via OTLP); trace context propagates from webhook → Inngest event → Inngest function execution
+- [x] **OBS-02**: System exposes a Prometheus-compatible `/metrics` endpoint with request count, latency histograms, error rates, and GPT call metrics; Prometheus + Grafana run in Docker Compose with auto-provisioning and a pre-built FastAPI dashboard
+- [x] **OBS-03**: System instruments all inbound and outbound HTTP requests, database queries, and Inngest function executions with OpenTelemetry traces (ALWAYS_ON sampler, OTLP gRPC export to Jaeger v2 collector backed by OpenSearch); manual spans added to Inngest function, GPT calls, Pinecone upserts, and Twilio SMS
 - [x] **OBS-04**: System emits structured JSON logs with per-request context (phone hash, message_id, trace_id) on every inbound message and outbound reply
 
 ### Async Processing (ASYNC)
 
 - [x] **ASYNC-01**: Webhook route fires an Inngest event (`message.received`) immediately after validating the Twilio signature and MessageSid idempotency check, then returns HTTP 200 to Twilio — all GPT processing happens outside the Twilio response window
-- [ ] **ASYNC-02**: Inngest function `process-message` handles the full pipeline: GPT classify+extract → PostgreSQL storage → Pinecone embedding write → earnings math match → Twilio REST SMS reply
-- [x] **ASYNC-03**: Inngest is configured for local development via the Inngest Dev Server (runs alongside Docker Compose); production functions deploy to Vercel automatically via the Inngest Vercel integration
+- [ ] **ASYNC-02**: Inngest function `process-message` handles the full pipeline: GPT classify+extract → PostgreSQL storage → Pinecone embedding write → earnings math match → Twilio REST SMS reply *(GPT + storage + Pinecone complete; matching + outbound SMS reply pending Phase 3/4)*
+- [x] **ASYNC-03**: Inngest is configured for local development via the Inngest Dev Server (runs in Docker Compose); production uses Inngest Cloud (INNGEST_SIGNING_KEY + INNGEST_EVENT_KEY)
 
 ### Deployment (DEP)
 
-- [x] **DEP-01**: System runs locally via Docker Compose with a standard PostgreSQL 16 service and Inngest Dev Server for local function execution (no pgvector extension required)
-- [x] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks
-- [ ] **DEP-03**: System is deployable to Vercel via ASGI adapter (Mangum); Inngest functions register at `/api/inngest`; deployment config and environment variable documentation included
+- [x] **DEP-01**: System runs locally via Docker Compose (8 services: postgres, opensearch, jaeger-collector, jaeger-query, app, inngest, prometheus, grafana)
+- [x] **DEP-02**: System exposes a `/health` endpoint returning service status, suitable for platform health checks (liveness only; no DB dependency)
+- [ ] **DEP-03**: System is deployable to Render.com via `render.yaml` Blueprint; web service + PostgreSQL provisioned via IaC; pre-deploy migration hook runs `alembic upgrade head` *(render.yaml exists and is complete; pending first production deploy validation)*
+
+### Production Hardening (PROD)
+
+- [x] **PROD-01**: Multi-stage Dockerfile — builder stage (uv sync, frozen deps) + runtime stage (non-root appuser, curl for HEALTHCHECK, no dev dependencies)
+- [x] **PROD-02**: Inngest `process-message` function configured with 3 retries and an `on_failure` handler that increments `pipeline_failures_total` Prometheus counter and logs permanent failures via structlog
+- [x] **PROD-03**: `sync-pinecone-queue` Inngest cron sweeps `pinecone_sync_queue` for pending rows (max 50/run), calls `write_job_embedding()`, marks rows success/failed with retry_count increment
+- [x] **PROD-04**: `render.yaml` Blueprint defines vici web service (Docker runtime, Oregon, starter plan) and vici-db PostgreSQL 16 (basic-256mb) with all required environment variable definitions
+- [x] **PROD-05**: GitHub Actions CI pipeline runs pytest with SQLite+aiosqlite on every push; pytest-cov reports coverage
+- [x] **PROD-06**: `.env.example` is complete and documents all required environment variables
+- [x] **PROD-07**: Gauge updater background task polls `pinecone_sync_queue` every 15 seconds; silent failures logged as warnings (does not crash app)
+- [x] **PROD-08**: Test coverage audit complete for Wave 1 critical paths (webhook → extraction → storage)
 
 ---
 
@@ -86,6 +98,7 @@
 - Payment processing — rate/pay is informational only in v1
 - Semantic/Pinecone vector matching — Pinecone integration ships in v1 (embedding writes); vector search query deferred to v2
 - Redis — rate limiting uses PostgreSQL TTL counters to avoid infrastructure dependency at v1 scale
+- pgvector — Pinecone is the vector store; postgres:16 plain image used
 
 ---
 
@@ -97,27 +110,35 @@
 | SEC-02 | Phase 1 | Complete | Idempotency before any processing — cheap to add early, expensive to retrofit |
 | SEC-03 | Phase 1 | Complete | Rate limiting before GPT calls to prevent cost blowout |
 | SEC-04 | Phase 1 | Complete | Audit table in initial migration; raw GPT response column populated in Phase 2 |
-| SEC-05 | Phase 4 | Pending | STOP/START pass-through wired in Inngest orchestration function |
+| SEC-05 | Phase 4 | Pending | STOP/START pass-through wired in Inngest process-message function |
 | IDN-01 | Phase 1 | Complete | Phone identity auto-registration in initial schema |
 | IDN-02 | Phase 1 | Complete | created_at in initial schema for recycling detection |
-| EXT-01 | Phase 2 | Complete | Core GPT classification call in ExtractionService |
+| EXT-01 | Phase 2 | Complete | gpt-5.3-chat-latest classify+extract via beta.chat.completions.parse in ExtractionService |
 | EXT-02 | Phase 2 | Complete | JobExtraction Pydantic schema + structured output prompt |
 | EXT-03 | Phase 2 | Complete | WorkerExtraction Pydantic schema + structured output prompt |
-| EXT-04 | Phase 2 | Complete | UnknownMessage fallback — queues graceful reply |
-| STR-01 | Phase 2 | Complete | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
-| STR-02 | Phase 2 | Complete | Schema column exists after Phase 1 migration; repository write happens in Phase 2 |
-| STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest orchestration function |
-| VEC-01 | Phase 2 | Complete | Pinecone client init + embedding write at job creation in ExtractionService |
+| EXT-04 | Phase 2 | Complete | UnknownMessage branch — Twilio reply sent in PipelineOrchestrator |
+| STR-01 | Phase 2 | Complete | JobRepository.create() flush; PipelineOrchestrator commits per branch |
+| STR-02 | Phase 2 | Complete | WorkRequestRepository.create() flush; PipelineOrchestrator commits per branch |
+| STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest process-message function |
+| VEC-01 | Phase 2 | Complete | write_job_embedding() in pinecone_client.py; failure fallback to pinecone_sync_queue |
 | MATCH-01 | Phase 3 | Pending | Earnings math SQL query in JobRepository |
 | MATCH-02 | Phase 3 | Pending | Ranked SMS formatter (3-5 results, 160-char segments) |
 | MATCH-03 | Phase 3 | Pending | Empty match fallback reply |
-| OBS-01 | Phase 2 | Complete | Braintrust wraps GPT calls in ExtractionService |
-| OBS-02 | Phase 1 | Complete | Prometheus /metrics endpoint scaffolded with infrastructure |
-| OBS-03 | Phase 1 | Complete | OTel from day one; trace context propagates webhook → Inngest event → function |
-| OBS-04 | Phase 1 | Complete | structlog with per-request context (phone hash, message_id, trace_id) |
-| ASYNC-01 | Phase 1 | Complete | Inngest client + webhook event emit; returns 200 before any GPT work |
-| ASYNC-02 | Phase 4 | Pending | Full process-message Inngest function wired end-to-end |
-| ASYNC-03 | Phase 1 | Complete | Inngest Dev Server in Docker Compose; Vercel integration configured in Phase 4 |
-| DEP-01 | Phase 1 | Complete | Docker Compose with PostgreSQL + Inngest Dev Server |
-| DEP-02 | Phase 1 | Complete | /health endpoint with infrastructure |
-| DEP-03 | Phase 4 | Pending | Vercel deployment config + Mangum adapter + /api/inngest registration |
+| OBS-01 | Phase 2 | Complete | Braintrust wraps GPT calls in ExtractionService; token metrics recorded |
+| OBS-02 | Phase 1/02.4 | Complete | Prometheus /metrics endpoint + Grafana auto-provisioning in Docker Compose |
+| OBS-03 | Phase 1/02.3 | Complete | OTel ALWAYS_ON; Jaeger v2 + OpenSearch; manual spans in all 4 pipeline steps |
+| OBS-04 | Phase 1 | Complete | structlog JSON with per-request context (phone hash, message_id, trace_id) |
+| ASYNC-01 | Phase 1 | Complete | Inngest event emit; returns 200 before any GPT work |
+| ASYNC-02 | Phase 4 | Partial | GPT + storage + Pinecone complete; matching + SMS reply pending |
+| ASYNC-03 | Phase 1 | Complete | Inngest Dev Server in Docker Compose; Inngest Cloud config documented |
+| DEP-01 | Phase 1 | Complete | Docker Compose with 8 services (postgres, opensearch, jaeger×2, app, inngest, prometheus, grafana) |
+| DEP-02 | Phase 1 | Complete | /health endpoint (liveness only, no DB dependency) |
+| DEP-03 | Phase 02.5 | Complete | render.yaml Blueprint shipped; production deploy pending first run |
+| PROD-01 | Phase 02.5 | Complete | Multi-stage Dockerfile |
+| PROD-02 | Phase 02.5 | Complete | Inngest retries + on_failure handler |
+| PROD-03 | Phase 02.5 | Complete | sync-pinecone-queue sweep implementation |
+| PROD-04 | Phase 02.5 | Complete | render.yaml Blueprint |
+| PROD-05 | Phase 02.5 | Complete | GitHub Actions CI |
+| PROD-06 | Phase 02.5 | Complete | .env.example audit |
+| PROD-07 | Phase 02.5 | Complete | Gauge updater background task |
+| PROD-08 | Phase 02.5 | Complete | Wave 1 coverage audit |

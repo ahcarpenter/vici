@@ -59,7 +59,7 @@ async def test_gpt_calls_total_increments_after_process():
 
     mock_client = MagicMock()
     mock_settings = MagicMock()
-    mock_settings.extraction.gpt_model = "gpt-4o"
+    mock_settings.extraction.gpt_model = "gpt-5.3-chat-latest"
 
     service = ExtractionService(openai_client=mock_client, settings=mock_settings)
     service._call_with_retry = AsyncMock(return_value=(mock_result, mock_usage))
@@ -86,7 +86,7 @@ async def test_gpt_call_duration_seconds_recorded_after_process():
 
     mock_client = MagicMock()
     mock_settings = MagicMock()
-    mock_settings.extraction.gpt_model = "gpt-4o"
+    mock_settings.extraction.gpt_model = "gpt-5.3-chat-latest"
 
     service = ExtractionService(openai_client=mock_client, settings=mock_settings)
     service._call_with_retry = AsyncMock(return_value=(mock_result, mock_usage))
@@ -124,7 +124,7 @@ async def test_gpt_token_counters_increment_after_process():
 
     mock_client = MagicMock()
     mock_settings = MagicMock()
-    mock_settings.extraction.gpt_model = "gpt-4o"
+    mock_settings.extraction.gpt_model = "gpt-5.3-chat-latest"
 
     service = ExtractionService(openai_client=mock_client, settings=mock_settings)
     service._call_with_retry = AsyncMock(return_value=(mock_result, mock_usage))

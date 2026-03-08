@@ -13,7 +13,7 @@ class SmsSettings(BaseModel):
 
 class ExtractionSettings(BaseModel):
     openai_api_key: str = ""
-    gpt_model: str = "gpt-4o"
+    gpt_model: str = "gpt-5.3-chat-latest"
 
 
 class PineconeSettings(BaseModel):

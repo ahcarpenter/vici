@@ -98,7 +98,7 @@ Each task was committed atomically:
 ## Files Created/Modified
 
 - `src/extraction/schemas.py` - ExtractionResult, JobExtraction, WorkerExtraction, UnknownMessage Pydantic models
-- `src/extraction/constants.py` - GPT_MODEL="gpt-5.2", UNKNOWN_REPLY_TEXT, EMBEDDING_MODEL, EMBEDDING_DIMS
+- `src/extraction/constants.py` - GPT_MODEL="gpt-5.3-chat-latest", UNKNOWN_REPLY_TEXT, EMBEDDING_MODEL, EMBEDDING_DIMS
 - `src/extraction/prompts.py` - SYSTEM_PROMPT with 5 few-shot examples
 - `src/extraction/service.py` - ExtractionService: wrap_openai init, tenacity retry, async process()
 - `src/config.py` - Phase 2 Settings fields (openai_api_key, pinecone_api_key, pinecone_index_host, braintrust_api_key)
@@ -148,7 +148,7 @@ Each task was committed atomically:
 
 External services require manual configuration:
 
-- `OPENAI_API_KEY` — platform.openai.com -> API Keys (needed for GPT-5.2 extraction calls)
+- `OPENAI_API_KEY` — platform.openai.com -> API Keys (needed for gpt-5.3-chat-latest extraction calls)
 - `BRAINTRUST_API_KEY` — braintrust.dev -> Settings -> API Keys (needed for LLM observability)
 
 Add these to `.env` before running the live pipeline. Tests mock both services and do not require real keys.

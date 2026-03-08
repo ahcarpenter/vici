@@ -32,8 +32,8 @@ def test_nested_settings_has_four_sub_models():
 
 
 def test_extraction_gpt_model_default():
-    """Settings.extraction.gpt_model should default to 'gpt-4o'."""
+    """Settings.extraction.gpt_model should default to 'gpt-5.3-chat-latest'."""
     from src.config import get_settings
 
     settings = get_settings()
-    assert settings.extraction.gpt_model == "gpt-4o"
+    assert settings.extraction.gpt_model == "gpt-5.3-chat-latest"

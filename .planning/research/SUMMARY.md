@@ -29,7 +29,7 @@ The stack is a standard Python async API stack with three external integrations:
 - **tenacity**: Retry logic for OpenAI calls — exponential backoff for rate limits and transient errors
 - **structlog**: Structured JSON logging — per-request context (phone, message_id) required for production observability
 
-**Version flags:** The `gpt-5.2` model string, openai SDK 1.30 pin, twilio SDK 9.x, and pgvector-python 0.3 should all be verified against current releases before `uv add` — web access was unavailable during research.
+**Version flags:** The `gpt-5.3-chat-latest` model string, openai SDK 1.30 pin, twilio SDK 9.x, and pgvector-python 0.3 should all be verified against current releases before `uv add` — web access was unavailable during research.
 
 ### Expected Features
 
@@ -101,7 +101,7 @@ Research strongly suggests a 4-phase build that follows the architecture's natur
 **Delivers:** `ExtractionService` with single GPT call returning validated `JobExtraction | WorkerExtraction | UnknownMessage` Pydantic discriminated union; prompt engineering for structured outputs; handling of null fields, ambiguous messages, and extraction failures; fallback SMS reply for unknown/unclassifiable messages.
 **Implements:** ExtractionService, Pydantic extraction schemas, OpenAI async client, tenacity retry wrapper
 **Avoids (critical):** Pitfalls 4 (GPT hallucination), 5 (missing classification checkpoint)
-**Research flag:** May benefit from `/gsd:research-phase` specifically for: GPT-5.2 structured output behavior (model string validation), optimal prompt structure for discriminated union extraction, token budget estimation.
+**Research flag:** May benefit from `/gsd:research-phase` specifically for: gpt-5.3-chat-latest structured output behavior (model string validation), optimal prompt structure for discriminated union extraction, token budget estimation.
 
 ### Phase 3: Earnings Math Matching
 
@@ -128,7 +128,7 @@ Research strongly suggests a 4-phase build that follows the architecture's natur
 ### Research Flags
 
 Phases likely needing `/gsd:research-phase` during planning:
-- **Phase 2 (GPT Extraction):** GPT-5.2 model string needs verification against OpenAI's current model naming; structured output behavior for discriminated union schemas should be validated; token budget for system prompt + schema + SMS body needs measurement before choosing sync vs. background approach.
+- **Phase 2 (GPT Extraction):** gpt-5.3-chat-latest model string needs verification against OpenAI's current model naming; structured output behavior for discriminated union schemas should be validated; token budget for system prompt + schema + SMS body needs measurement before choosing sync vs. background approach.
 
 Phases with standard patterns (can skip `/gsd:research-phase`):
 - **Phase 1 (Infrastructure):** FastAPI + SQLAlchemy 2.0 async + Alembic patterns are stable and extensively documented; Twilio signature validation is a well-known pattern.
@@ -140,15 +140,15 @@ Phases with standard patterns (can skip `/gsd:research-phase`):
 | Area | Confidence | Notes |
 |------|------------|-------|
 | Stack | MEDIUM | Core patterns (FastAPI, SQLAlchemy async, asyncpg) are HIGH confidence; version pins for openai SDK, twilio SDK, pgvector-python are MEDIUM — verify against PyPI before lockfile |
-| Features | MEDIUM | Twilio security/idempotency/phone-identity patterns are HIGH confidence; GPT-5.2 model specifics and SMS marketplace landscape are MEDIUM (training knowledge, no live competitor research) |
+| Features | MEDIUM | Twilio security/idempotency/phone-identity patterns are HIGH confidence; gpt-5.3-chat-latest model specifics and SMS marketplace landscape are MEDIUM (training knowledge, no live competitor research) |
 | Architecture | HIGH | All architectural patterns are stable, mature conventions for this stack combination; four-layer separation and background task pattern are well-established |
 | Pitfalls | HIGH | All 10 pitfalls are well-documented community patterns with official documentation backing; recovery cost assessments are based on standard refactoring estimates |
 
-**Overall confidence:** MEDIUM-HIGH — the architecture and pitfall mitigations are reliable. The main uncertainty is around specific version pins and GPT-5.2 model behavior, both of which are easily verified at implementation time.
+**Overall confidence:** MEDIUM-HIGH — the architecture and pitfall mitigations are reliable. The main uncertainty is around specific version pins and gpt-5.3-chat-latest model behavior, both of which are easily verified at implementation time.
 
 ### Gaps to Address
 
-- **GPT-5.2 model string:** The product owner specified `gpt-5.2`; this model name should be verified against OpenAI's current model catalog before Phase 2. If the string is incorrect, use the closest available GPT model with structured output support.
+- **gpt-5.3-chat-latest model string:** The product owner specified `gpt-5.3-chat-latest`; this model name should be verified against OpenAI's current model catalog before Phase 2. If the string is incorrect, use the closest available GPT model with structured output support.
 - **openai SDK 1.30 structured outputs:** `beta.chat.completions.parse()` is the recommended pattern for typed structured outputs; verify this endpoint is still in beta vs. stable in the current SDK version.
 - **Twilio SDK 9.x:** Verify 9.x is the current major version; the 8.x → 9.x upgrade dropped Python 3.7 support but the API is otherwise similar.
 - **pgvector-python 0.3:** Verify SQLAlchemy 2.0 `TypeDecorator` support is in this version; the HNSW index in the initial migration is the priority regardless of client version.
@@ -166,11 +166,11 @@ Phases with standard patterns (can skip `/gsd:research-phase`):
 
 ### Secondary (MEDIUM confidence)
 - Training knowledge of Twilio SMS marketplace patterns — feature landscape, idempotency requirements
-- Training knowledge of OpenAI structured outputs (gpt-5.2 specifics beyond Aug 2025 cutoff)
+- Training knowledge of OpenAI structured outputs (gpt-5.3-chat-latest specifics beyond Aug 2025 cutoff)
 - Adjacent gig marketplace feature analysis (Wonolo, Instawork, Snagajob) — inferential
 
 ### Tertiary (LOW confidence — validate during implementation)
-- GPT-5.2 model string — verify against OpenAI model catalog at implementation time
+- gpt-5.3-chat-latest model string — verify against OpenAI model catalog at implementation time
 - Twilio SDK 9.x as current major version — verify on PyPI
 - pgvector-python 0.3 SQLAlchemy 2.0 compatibility — verify on PyPI
 

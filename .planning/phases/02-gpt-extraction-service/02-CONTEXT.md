@@ -71,7 +71,7 @@ New table: `pinecone_sync_queue`
 ```
 src/extraction/
 ├── __init__.py
-├── constants.py       # GPT_MODEL = "gpt-5.2", UNKNOWN_REPLY_TEXT, embedding constants
+├── constants.py       # GPT_MODEL = "gpt-5.3-chat-latest", UNKNOWN_REPLY_TEXT, embedding constants
 ├── schemas.py         # ExtractionResult, JobExtraction, WorkerExtraction, UnknownMessage
 ├── service.py         # ExtractionService class
 ├── prompts.py         # SYSTEM_PROMPT string (static), few-shot examples inline

@@ -15,7 +15,7 @@ Features the system must have or the core loop breaks entirely.
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
 | Twilio X-Twilio-Signature validation | Every inbound Twilio webhook can be spoofed without this; Twilio docs require it as the baseline security layer | MEDIUM | Must validate HMAC-SHA1 of URL + sorted POST params against Auth Token. FastAPI complicates this because you need the raw body before it is parsed — use `Request.body()` with a custom dependency, not Pydantic directly. HIGH confidence (Twilio security model well-documented). |
-| Single-endpoint message classification (job post vs. worker goal) | The entire routing model depends on correctly labeling each inbound message before any downstream action | HIGH | GPT-5.2 does classification + extraction in one call per PROJECT.md. Prompt engineering for reliable JSON output is the hard part. Must handle ambiguous messages gracefully (ask for clarification). |
+| Single-endpoint message classification (job post vs. worker goal) | The entire routing model depends on correctly labeling each inbound message before any downstream action | HIGH | gpt-5.3-chat-latest does classification + extraction in one call per PROJECT.md. Prompt engineering for reliable JSON output is the hard part. Must handle ambiguous messages gracefully (ask for clarification). |
 | Structured data extraction from free-text SMS | Workers and job posters use natural language; the system must derive structured fields (rate, duration, location, timeframe) to do any matching | HIGH | LLM extraction — define strict output schema with Pydantic, instruct model to return null fields rather than hallucinate. Test with adversarial SMS samples. |
 | Phone number as identity (auto-registration) | No app install, no signup form — the first text from a number creates the record. Users expect frictionless entry | LOW | Extract `From` field from Twilio payload. Store phone numbers normalized to E.164 format (+1XXXXXXXXXX). First-seen creates user row; subsequent messages update last-seen timestamp. HIGH confidence (standard Twilio pattern). |
 | SMS confirmation reply to job poster | Job poster needs to know what the system recorded — errors in extraction should surface here so they can correct | LOW | TwiML `<Response><Message>` with extracted fields summarized in plain English. Must fit in 160 chars or clearly chain into multi-part SMS. |
@@ -198,7 +198,7 @@ These are operational realities that affect feature design, not features themsel
 | Idempotency on MessageSid | HIGH | Twilio's MessageSid uniqueness guarantee is a documented contract |
 | Rate limiting patterns | HIGH | Standard FastAPI + Redis/PostgreSQL pattern, well-established |
 | Phone-as-identity patterns | HIGH | Standard Twilio SMS pattern, widely implemented |
-| LLM extraction reliability/confidence | MEDIUM | GPT-5.2 specifics beyond training cutoff; general extraction patterns well-known |
+| LLM extraction reliability/confidence | MEDIUM | gpt-5.3-chat-latest specifics beyond training cutoff; general extraction patterns well-known |
 | SMS marketplace feature landscape | MEDIUM | Inferential from adjacent markets (Wonolo, Snagajob); no pure SMS-only competitors to benchmark |
 | Earnings math matching correctness | HIGH | Deterministic logic, no external dependencies |
 | Carrier filtering behavior | MEDIUM | Carrier policies vary and change; general patterns well-known |

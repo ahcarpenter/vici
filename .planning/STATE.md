@@ -3,72 +3,85 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.5-04-PLAN.md
-last_updated: "2026-03-08T12:40:27.124Z"
-last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
+stopped_at: Completed 02.5-04-PLAN.md — ready for Phase 3
+last_updated: "2026-03-08T13:00:00.000Z"
+last_activity: "2026-03-08 — Phase 02.5 complete: production hardening, render.yaml, CI, test coverage audit"
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 17
-  completed_plans: 17
-  percent: 67
+  completed_phases: 7
+  total_plans: 19
+  completed_plans: 19
+  percent: 78
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-05)
+See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
-**Current focus:** Phase 1 — Infrastructure Foundation
+**Current focus:** Phase 3 — Earnings Math Matching (next to execute)
 
 ## Current Position
 
-Phase: 1 of 2 (Infrastructure Foundation)
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented
+Phase: Phase 3 — Earnings Math Matching (not yet started)
+Status: Ready to plan/execute Phase 3
+Last activity: 2026-03-08 — Phase 02.5 complete: production hardening, render.yaml Blueprint, GitHub Actions CI, Wave 1 coverage audit
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78% (7 of 9 phases complete, all 19 plans complete)
 
-## Performance Metrics
+## What's Built
 
-**Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: -
+The app is production-ready from the infrastructure and domain-logic perspective. Everything through extraction and storage is implemented, tested, and hardened:
 
-**By Phase:**
+### Complete
+- ✅ Async FastAPI skeleton, 5-gate Twilio webhook security chain
+- ✅ 3NF schema (User / Message / Job / WorkRequest / RateLimit / AuditLog / PineconeSyncQueue)
+- ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
+- ✅ PipelineOrchestrator: full pipeline (GPT → storage → Pinecone), single commit per branch
+- ✅ Pinecone embedding write with `text-embedding-3-small`; failed writes queued + retried via Inngest cron
+- ✅ Full observability: structlog JSON, OTel → Jaeger v2 (OpenSearch), Prometheus → Grafana
+- ✅ Inngest: `process-message` (3 retries, on_failure handler), `sync-pinecone-queue` (cron sweep)
+- ✅ Multi-stage Dockerfile (non-root, HEALTHCHECK), render.yaml Blueprint, GitHub Actions CI
+- ✅ Unknown-message graceful SMS reply implemented in PipelineOrchestrator
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+### Not Started
+- ⏳ Phase 3: MatchService (earnings math SQL, ranked SMS formatter, empty-match fallback)
+- ⏳ Phase 4: Outbound SMS for job posters and workers, STOP/START pass-through, Render.com deploy
 
-**Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+## Architecture Snapshot
 
-*Updated after each plan completion*
-| Phase 01-infrastructure-foundation P01 | 25 | 3 tasks | 30 files |
-| Phase 01-infrastructure-foundation P02 | 15 | 2 tasks | 5 files |
-| Phase 01-infrastructure-foundation P03 | 20 | 2 tasks | 7 files |
-| Phase 01.1-apply-revised-3nf-schema-and-propagate-throughout-app P01 | 20 | 3 tasks | 10 files |
-| Phase 01.1-apply-revised-3nf-schema-and-propagate-throughout-app P02 | 10 | 2 tasks | 4 files |
-| Phase 02-gpt-extraction-service P01 | 35 | 2 tasks | 12 files |
-| Phase 02-gpt-extraction-service P02 | 45 | 2 tasks | 14 files |
-| Phase 02-gpt-extraction-service P03 | 15 | 2 tasks | 4 files |
-| Phase 02.1-refactor-persistence-layer-and-service-boundaries P01 | 332 | 3 tasks | 21 files |
-| Phase 02.1-refactor-persistence-layer-and-service-boundaries P02 | 233 | 2 tasks | 9 files |
-| Phase 02.1-refactor-persistence-layer-and-service-boundaries P03 | 25 | 2 tasks | 7 files |
-| Phase 02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup P01 | 20 | 2 tasks | 6 files |
-| Phase 02.3 P02 | 20 | 2 tasks | 7 files |
-| Phase 02.4-ensure-prometheus-instance-is-setup P01 | 15 | 3 tasks | 7 files |
-| Phase 02.4-ensure-prometheus-instance-is-setup P02 | 15 | 2 tasks | 5 files |
-| Phase 02.5-you-re-a-staff-level-engineer-be-sure-this-app-is-fully-productionalized P01 | 20 | 2 tasks | 5 files |
-| Phase 02.5 P03 | 10 | 2 tasks | 4 files |
-| Phase 02.5 P02 | 8 | 1 tasks | 3 files |
-| Phase 02.5 P04 | 10 | 2 tasks | 4 files |
+```
+src/
+├── main.py                    # FastAPI app + lifespan DI graph
+├── config.py                  # Nested Pydantic Settings (4 sub-models)
+├── database.py                # Async SQLAlchemy engine + sessionmaker
+├── models.py                  # Central SQLModel aggregator
+├── inngest_client.py          # process-message + sync-pinecone-queue Inngest functions
+├── metrics.py                 # Prometheus metric singletons
+├── exceptions.py              # Custom exceptions
+├── sms/                       # Webhook route, MessageRepository, AuditLogRepository
+├── extraction/                # ExtractionService (GPT-only), PipelineOrchestrator, schemas, Pinecone client
+├── jobs/                      # JobRepository, Job SQLModel
+├── work_requests/             # WorkRequestRepository, WorkRequest SQLModel
+├── users/                     # User SQLModel
+└── matches/                   # Match SQLModel (placeholder, Phase 3)
+```
+
+**DI Graph (lifespan):**
+```
+AsyncOpenAI → wrap_openai (Braintrust) → ExtractionService
+ExtractionService + repos + pinecone_client + TwilioClient → PipelineOrchestrator
+PipelineOrchestrator → inngest_client._orchestrator (module var)
+wrap_openai → inngest_client._openai_client (module var)
+```
+
+**Docker Compose (local dev, 8 services):**
+postgres | opensearch | jaeger-collector | jaeger-query | app | inngest | prometheus | grafana
+
+**Deployment (production):**
+Render.com — render.yaml Blueprint (web service + PostgreSQL 16 basic-256mb)
 
 ## Accumulated Context
 
@@ -77,9 +90,6 @@ Progress: [███████░░░] 67%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Roadmap]: Async processing via Inngest (not FastAPI BackgroundTasks) — webhook emits `message.received` event, returns 200 immediately; full pipeline runs in Inngest `process-message` function
-- [Roadmap]: STR-01/STR-02 schema created in Phase 1 migrations; repository writes assigned to Phase 2 (after extraction schemas exist)
-- [Phase 2]: Research flag set — GPT-5.2 model string and structured output discriminated union behavior require verification before Phase 2 planning begins
 - [Phase 01-01]: postgres:16 plain image (not pgvector) — Pinecone is the vector store
 - [Phase 01-01]: Async Alembic env.py using asyncio.run() — required for asyncpg driver
 - [Phase 01-01]: expire_on_commit=False on async_sessionmaker — async SQLAlchemy cannot lazy-load after commit
@@ -90,7 +100,7 @@ Recent decisions affecting current work:
 - [Phase 01-03]: autouse _auto_mock_inngest_send fixture in conftest prevents real Inngest HTTP calls from corrupting async event loop in all tests
 - [Phase 01.1]: User/Message/WorkRequest replace Phone/InboundMessage/Worker with integer FKs — eliminates phone_hash string pseudo-FKs
 - [Phase 01.1]: ON CONFLICT (user_id, created_at) column list syntax used for SQLite/PG compatibility in rate_limit upsert
-- [Phase 02-gpt-extraction-service]: patch target is src.extraction.service.wrap_openai (not braintrust.wrap_openai) because service.py uses a direct import
+- [Phase 02-gpt-extraction-service]: patch target is src.extraction.service.wrap_openai (not braintrust.wrap_openai) — service.py uses a direct import
 - [Phase 02-gpt-extraction-service]: ExtractionService.process() keeps minimal signature (sms_text, phone_hash) — message_id and db_session added in Plan 02-02 when storage is wired
 - [Phase 02-gpt-extraction-service]: WorkRequestRepository (not WorkerRepository) — 3NF schema uses work_request table
 - [Phase 02-gpt-extraction-service]: ExtractionService.process() backward-compatible with session=None for existing tests
@@ -108,12 +118,11 @@ Recent decisions affecting current work:
 - [Phase 02.3]: ALWAYS_ON sampler (not ParentBasedTraceIdRatio) — unambiguous, no parent-based override
 - [Phase 02.3]: opensearch replicas=0 for single-node local dev — replicas>0 causes yellow cluster health
 - [Phase 02.3]: GIT_SHA env var maps to git_sha flat field in Settings, wired to observability.service_version
-- [Phase 02.3]: Module-level tracer patched directly in test fixtures (not via set_tracer_provider) — provider override warning makes InMemorySpanExporter approach unreliable without direct attribute patching
+- [Phase 02.3]: Module-level tracer patched directly in test fixtures — provider override warning makes InMemorySpanExporter approach unreliable
 - [Phase 02.3]: Twilio span created in async context wrapping asyncio.to_thread — OTel context not propagated into threads
-- [Phase 02.3]: jaeger_query removed from collector extensions list — not a valid extension for the standalone collector component, caused startup failure
+- [Phase 02.3]: jaeger_query removed from collector extensions list — not a valid extension for standalone collector, caused startup failure
 - [Phase 02.4-01]: Metrics imported inside process() (not at module top of service.py) to avoid circular imports
 - [Phase 02.4-01]: _call_with_retry returns (result, usage) tuple — process() unpacks and records token metrics
-- [Phase 02.4-01]: inngest_queue_depth Gauge always reads 0 — stub placeholder, no background task needed
 - [Phase 02.4-02]: Dashboard datasource referenced by uid='prometheus' to ensure reliable resolution after provisioning
 - [Phase 02.4-02]: grafana_data is the first named Docker volume in this project; others use bind mounts
 - [Phase 02.5]: Lazy import of pipeline_failures_total inside _handle_process_message_failure — consistent with Phase 02.4 circular import avoidance pattern
@@ -125,23 +134,25 @@ Recent decisions affecting current work:
 
 ### Roadmap Evolution
 
-- Phase 1.1 inserted after Phase 1: Apply revised 3NF schema and propagate throughout app (URGENT)
+- Phase 1.1 inserted after Phase 1: Apply revised 3NF schema (URGENT)
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
-- Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 and optimize tracing setup (URGENT)
-- Phase 02.4 inserted after Phase 2: Ensure prometheus instance is setup (URGENT)
-- Phase 02.5 inserted after Phase 2: Remove audit_log table and redirect logs to stdout (URGENT)
-- Phase 02.5 (new) inserted after Phase 2: Productionalize app to staff engineer standards (INSERTED)
+- Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 (URGENT)
+- Phase 02.4 inserted after Phase 2: Ensure Prometheus is setup (URGENT)
+- Phase 02.2 removed: consolidated into Phase 02.4
+- Phase 02.5 inserted after Phase 02.4: Production hardening to staff engineer standards (INSERTED)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- [Phase 2]: GPT-5.2 model string is unverified. Run `/gsd:research-phase 2` before planning Phase 2 to confirm model name, structured output API endpoint (beta vs. stable), and token budget.
+- [Phase 3]: gpt-5.3-chat-latest model string should be verified against OpenAI model catalog before Phase 3 planning (can run `/gsd:research-phase 3` to confirm)
+- [Phase 4]: Render.com production deploy has not been executed yet — first deploy validation is part of Phase 4
 
 ## Session Continuity
 
-Last session: 2026-03-08T12:27:20.261Z
+Last session: 2026-03-08
 Stopped at: Completed 02.5-04-PLAN.md
 Resume file: None
+Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`

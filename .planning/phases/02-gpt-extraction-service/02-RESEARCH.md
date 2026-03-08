@@ -25,7 +25,7 @@
 
 ## Summary
 
-Phase 2 builds the core extraction pipeline: a single OpenAI call that simultaneously classifies and extracts structured data from raw SMS text, persists results to PostgreSQL, and writes job embeddings to Pinecone. All five flagged unknowns are now resolved. The correct model string is `gpt-5.2` (confirmed live, 400K context window, $1.75/$14 per million tokens). Structured outputs support discriminated unions via a wrapper class pattern — the root object cannot be `anyOf` directly, but a wrapper with a `Literal` discriminator field on each branch resolves this. Braintrust instrumentation is a one-liner `wrap_openai(AsyncOpenAI(...))`. Pinecone provides a first-class async API via `PineconeAsyncio` / `IndexAsyncio` context managers. Tenacity retry uses `retry_if_exception_type(RateLimitError)` with `wait_random_exponential`.
+Phase 2 builds the core extraction pipeline: a single OpenAI call that simultaneously classifies and extracts structured data from raw SMS text, persists results to PostgreSQL, and writes job embeddings to Pinecone. All five flagged unknowns are now resolved. The correct model string is `gpt-5.3-chat-latest` (confirmed live, 400K context window, $1.75/$14 per million tokens). Structured outputs support discriminated unions via a wrapper class pattern — the root object cannot be `anyOf` directly, but a wrapper with a `Literal` discriminator field on each branch resolves this. Braintrust instrumentation is a one-liner `wrap_openai(AsyncOpenAI(...))`. Pinecone provides a first-class async API via `PineconeAsyncio` / `IndexAsyncio` context managers. Tenacity retry uses `retry_if_exception_type(RateLimitError)` with `wait_random_exponential`.
 
 **Primary recommendation:** Implement a single `ExtractionService.process(sms_text, phone_hash)` async method that runs the full pipeline — classify+extract in one GPT call, branch on result type, write to DB, optionally write to Pinecone. Keep the service pure (no FastAPI dependencies) so it is unit-testable with mocked OpenAI and Pinecone clients.
 
@@ -33,14 +33,14 @@ Phase 2 builds the core extraction pipeline: a single OpenAI call that simultane
 
 ## Key Unknown Resolutions
 
-### Unknown 1: GPT-5.2 Model String
+### Unknown 1: gpt-5.3-chat-latest Model String
 
-**CONFIRMED.** The exact API model string is `gpt-5.2`.
+**CONFIRMED.** The exact API model string is `gpt-5.3-chat-latest`.
 
 - Context window: 400,000 tokens
 - Knowledge cutoff: Aug 2025
 - Pricing: $1.75 input / $14 output per million tokens
-- Date-stamped snapshot format exists (e.g. `gpt-5.2-2025-XX-XX`) but the plain `gpt-5.2` alias tracks latest stable snapshot
+- Date-stamped snapshot format exists (e.g. `gpt-5.3-chat-latest-2025-XX-XX`) but the plain `gpt-5.3-chat-latest` alias tracks latest stable snapshot
 - Confidence: HIGH — multiple current sources including OpenAI model catalog, OpenRouter, and search results dated March 2026
 
 ### Unknown 2: Structured Output API for Discriminated Union Schemas
@@ -141,7 +141,7 @@ Confidence: HIGH — verified against OpenAI Cookbook and Instructor library doc
 ### Core
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| openai | >=1.0 | GPT-5.2 API client + embeddings | Official async SDK; `wrap_openai` compatible |
+| openai | >=1.0 | gpt-5.3-chat-latest API client + embeddings | Official async SDK; `wrap_openai` compatible |
 | pinecone[asyncio] | >=3.0 | Vector store upsert for job embeddings | Native async context managers; first-party |
 | braintrust | latest | LLM observability (OBS-01) | Single `wrap_openai` call; zero-overhead for traces |
 | tenacity | >=8.0 | Retry with exponential backoff | OpenAI Cookbook-recommended; `wait_random_exponential` |
@@ -256,7 +256,7 @@ class ExtractionService:
     )
     async def _call_with_retry(self, sms_text: str) -> ExtractionResult:
         completion = await self._client.beta.chat.completions.parse(
-            model="gpt-5.2",
+            model="gpt-5.3-chat-latest",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": sms_text},
@@ -396,7 +396,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ra
 )
 async def _call_openai(client, messages, response_format):
     completion = await client.beta.chat.completions.parse(
-        model="gpt-5.2",
+        model="gpt-5.3-chat-latest",
         messages=messages,
         response_format=response_format,
     )
@@ -532,8 +532,8 @@ def make_mock_openai_client(parsed_result: ExtractionResult):
 ## Sources
 
 ### Primary (HIGH confidence)
-- OpenAI model catalog search (March 2026) — `gpt-5.2` model string confirmed
-- [OpenRouter GPT-5.2 entry](https://openrouter.ai/openai/gpt-5.2) — context window (400K) and pricing ($1.75/$14)
+- OpenAI model catalog search (March 2026) — `gpt-5.3-chat-latest` model string confirmed
+- [OpenRouter gpt-5.3-chat-latest entry](https://openrouter.ai/openai/gpt-5.3-chat-latest) — context window (400K) and pricing ($1.75/$14)
 - [Pinecone Async SDK docs](https://sdk.pinecone.io/python/asyncio.html) — `PineconeAsyncio` / `IndexAsyncio` pattern
 - [Braintrust OpenAI provider docs](https://www.braintrust.dev/docs/providers/openai) — `wrap_openai(AsyncOpenAI(...))` pattern
 - [OpenAI Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs/) — `client.beta.chat.completions.parse` + Pydantic
@@ -553,7 +553,7 @@ def make_mock_openai_client(parsed_result: ExtractionResult):
 - Standard stack: HIGH — all libraries confirmed via official docs and search with current (March 2026) sources
 - Architecture: HIGH — wrapper-class discriminated union pattern verified against OpenAI API constraints
 - Pitfalls: HIGH — `anyOf` root rejection confirmed via official community/docs; others derived from verified constraints
-- Model string: HIGH — `gpt-5.2` confirmed via multiple current sources
+- Model string: HIGH — `gpt-5.3-chat-latest` confirmed via multiple current sources
 
 **Research date:** 2026-03-07
 **Valid until:** 2026-04-07 (stable APIs; OpenAI model catalog changes faster — re-verify if project pauses > 30 days)
