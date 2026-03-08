@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.1-02-PLAN.md
-last_updated: "2026-03-08T06:33:48.985Z"
+stopped_at: Completed 02.1-03-PLAN.md
+last_updated: "2026-03-08T06:39:32.295Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 67
 ---
 
@@ -60,6 +60,7 @@ Progress: [███████░░░] 67%
 | Phase 02-gpt-extraction-service P03 | 15 | 2 tasks | 4 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P01 | 332 | 3 tasks | 21 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P02 | 233 | 2 tasks | 9 files |
+| Phase 02.1-refactor-persistence-layer-and-service-boundaries P03 | 25 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Recent decisions affecting current work:
 - [Phase 02.1-02]: ExtractionService receives pre-built openai_client — caller wraps with braintrust.wrap_openai before injection
 - [Phase 02.1-02]: PipelineOrchestrator.run() issues single session.commit() per branch; Pinecone fires after commit to avoid rollback coupling
 - [Phase 02.1-02]: Pinecone failure enqueued in separate session so main transaction is not affected
+- [Phase 02.1-03]: _orchestrator module-level var in inngest_client.py set by lifespan — cleanest circular import avoidance pattern
+- [Phase 02.1-03]: Twilio unknown reply moved from inngest_client.py to PipelineOrchestrator.run() unknown branch — orchestrator owns all pipeline logic
 
 ### Roadmap Evolution
 
@@ -110,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T06:33:48.982Z
-Stopped at: Completed 02.1-02-PLAN.md
+Last session: 2026-03-08T06:39:26.596Z
+Stopped at: Completed 02.1-03-PLAN.md
 Resume file: None

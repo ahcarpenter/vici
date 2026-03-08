@@ -67,7 +67,7 @@ Plans:
 **Goal:** Clean architecture refactor addressing 30 staff-engineer audit findings — split ExtractionService into GPT-only service + PipelineOrchestrator, add MessageRepository/AuditLogRepository, normalize repositories to flush-only, group Settings into 4 nested Pydantic models, convert boolean returns to exceptions, and wire a full DI graph through FastAPI lifespan
 **Requirements**: layering/DI, persistence/repositories, transactions/flush, config/settings, exception-handling, test-restructuring
 **Depends on:** Phase 2
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 02.1-01-PLAN.md — Config nesting (4 sub-models), MessageRepository, AuditLogRepository, exception-based SMS router, Wave 0 test scaffold
@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 3/3 | Complete   | 2026-03-06 |
 | 2. GPT Extraction Service | 0/2 | Not started | - |
-| 02.1. Refactor persistence layer | 2/3 | In Progress|  |
+| 02.1. Refactor persistence layer | 3/3 | Complete   | 2026-03-08 |
 | 3. Earnings Math Matching | 0/1 | Not started | - |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | - |
