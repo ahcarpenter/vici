@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 3/3 | Complete   | 2026-03-06 |
 | 2. GPT Extraction Service | 0/2 | Not started | - |
-| 02.1. Refactor persistence layer | 3/3 | Complete   | 2026-03-08 |
+| 02.1. Refactor persistence layer | 3/3 | Complete    | 2026-03-08 |
 | 3. Earnings Math Matching | 0/1 | Not started | - |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | - |
