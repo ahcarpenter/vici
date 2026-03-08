@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 02.4 context gathered
-last_updated: "2026-03-08T08:37:07.276Z"
+stopped_at: Completed 02.4-01-PLAN.md
+last_updated: "2026-03-08T08:58:44.268Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 9
   completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 15
+  completed_plans: 14
   percent: 67
 ---
 
@@ -63,6 +63,7 @@ Progress: [███████░░░] 67%
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P03 | 25 | 2 tasks | 7 files |
 | Phase 02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup P01 | 20 | 2 tasks | 6 files |
 | Phase 02.3 P02 | 20 | 2 tasks | 7 files |
+| Phase 02.4-ensure-prometheus-instance-is-setup P01 | 15 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Recent decisions affecting current work:
 - [Phase 02.3]: Module-level tracer patched directly in test fixtures (not via set_tracer_provider) — provider override warning makes InMemorySpanExporter approach unreliable without direct attribute patching
 - [Phase 02.3]: Twilio span created in async context wrapping asyncio.to_thread — OTel context not propagated into threads
 - [Phase 02.3]: jaeger_query removed from collector extensions list — not a valid extension for the standalone collector component, caused startup failure
+- [Phase 02.4-01]: Metrics imported inside process() (not at module top of service.py) to avoid circular imports
+- [Phase 02.4-01]: _call_with_retry returns (result, usage) tuple — process() unpacks and records token metrics
+- [Phase 02.4-01]: inngest_queue_depth Gauge always reads 0 — stub placeholder, no background task needed
 
 ### Roadmap Evolution
 
@@ -123,6 +127,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T08:16:09.038Z
-Stopped at: Phase 02.4 context gathered
-Resume file: .planning/phases/02.4-ensure-prometheus-instance-is-setup/02.4-CONTEXT.md
+Last session: 2026-03-08T08:58:44.265Z
+Stopped at: Completed 02.4-01-PLAN.md
+Resume file: None
