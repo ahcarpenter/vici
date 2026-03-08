@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 02.5 context gathered
-last_updated: "2026-03-08T11:57:51.878Z"
+stopped_at: Completed 02.5-01-PLAN.md
+last_updated: "2026-03-08T12:18:32.324Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 19
+  completed_plans: 16
   percent: 67
 ---
 
@@ -65,6 +65,7 @@ Progress: [███████░░░] 67%
 | Phase 02.3 P02 | 20 | 2 tasks | 7 files |
 | Phase 02.4-ensure-prometheus-instance-is-setup P01 | 15 | 3 tasks | 7 files |
 | Phase 02.4-ensure-prometheus-instance-is-setup P02 | 15 | 2 tasks | 5 files |
+| Phase 02.5-you-re-a-staff-level-engineer-be-sure-this-app-is-fully-productionalized P01 | 20 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,8 @@ Recent decisions affecting current work:
 - [Phase 02.4-01]: inngest_queue_depth Gauge always reads 0 — stub placeholder, no background task needed
 - [Phase 02.4-02]: Dashboard datasource referenced by uid='prometheus' to ensure reliable resolution after provisioning
 - [Phase 02.4-02]: grafana_data is the first named Docker volume in this project; others use bind mounts
+- [Phase 02.5]: Lazy import of pipeline_failures_total inside _handle_process_message_failure — consistent with Phase 02.4 circular import avoidance pattern
+- [Phase 02.5]: HEALTHCHECK probes /health (liveness) not /readyz — health probe must not depend on DB connectivity
 
 ### Roadmap Evolution
 
@@ -132,6 +135,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T11:57:51.875Z
-Stopped at: Phase 02.5 context gathered
-Resume file: .planning/phases/02.5-you-re-a-staff-level-engineer-be-sure-this-app-is-fully-productionalized/02.5-CONTEXT.md
+Last session: 2026-03-08T12:18:32.322Z
+Stopped at: Completed 02.5-01-PLAN.md
+Resume file: None
