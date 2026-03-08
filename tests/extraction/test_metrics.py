@@ -146,3 +146,18 @@ def test_pinecone_gauge_settable():
     pinecone_sync_queue_depth.set(7)
     samples = list(pinecone_sync_queue_depth.collect())[0].samples
     assert any(s.value == 7 for s in samples)
+
+
+# ── Task 4: pipeline_failures_total tests (plan 02.5-04) ────────────────────
+
+
+def test_pipeline_failures_total_is_counter():
+    from prometheus_client import Counter
+    from src.metrics import pipeline_failures_total
+    assert isinstance(pipeline_failures_total, Counter)
+
+
+def test_pipeline_failures_total_has_function_label():
+    from src.metrics import pipeline_failures_total
+    # Calling with label should not raise
+    pipeline_failures_total.labels(function="process-message").inc()

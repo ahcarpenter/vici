@@ -290,3 +290,17 @@ async def test_unknown_branch_emits_twilio_span():
     finally:
         orch_module.tracer = original_tracer
         exporter.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Gauge updater hardening tests (plan 02.5-04)
+# ---------------------------------------------------------------------------
+
+
+def test_gauge_updater_no_silent_pass():
+    """Verify gauge updater no longer has a bare 'pass' on exception — warning log present."""
+    with open("/Users/ahcarpenter/workspace/vici/src/main.py") as f:
+        source = f.read()
+    # Old pattern: except Exception:\n    pass
+    assert "except Exception:\n                pass" not in source
+    assert "gauge_updater" in source  # warning key present

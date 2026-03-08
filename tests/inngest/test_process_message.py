@@ -175,3 +175,24 @@ async def test_message_not_found():
 
     assert result == "ok"
     mock_orchestrator.run.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# on_failure handler tests (plan 02.5-04)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_on_failure_increments_counter():
+    """_handle_process_message_failure increments pipeline_failures_total counter."""
+    from src.inngest_client import _handle_process_message_failure
+    from src.metrics import pipeline_failures_total
+
+    ctx = MagicMock()
+    ctx.event.data = {"message_sid": "SM123"}
+    ctx.attempt = 3
+
+    before = pipeline_failures_total.labels(function="process-message")._value.get()
+    await _handle_process_message_failure(ctx)
+    after = pipeline_failures_total.labels(function="process-message")._value.get()
+    assert after == before + 1
