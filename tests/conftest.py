@@ -12,8 +12,11 @@ import src.models  # noqa: F401 — ensure all SQLModel tables registered before
 from src.config import get_settings
 from src.database import get_engine, get_session
 from src.inngest_client import get_inngest_client
+from src.jobs.models import Job
 from src.main import create_app
+from src.sms.models import Message
 from src.users.models import User
+from src.work_requests.models import WorkRequest
 
 DATABASE_URL_TEST = "sqlite+aiosqlite:///:memory:"
 
@@ -105,5 +108,68 @@ async def make_user(async_session):
         async_session.add(user)
         await async_session.flush()
         return user
+
+    return _factory
+
+
+@pytest_asyncio.fixture
+async def make_message(async_session, make_user):
+    async def _factory(**kwargs) -> Message:
+        user = kwargs.pop("user", None)
+        if user is None:
+            user = await make_user()
+        message = Message(
+            message_sid=kwargs.get("message_sid", "test-sid-" + str(id(kwargs))),
+            user_id=kwargs.get("user_id", user.id),
+            body=kwargs.get("body", "test body"),
+        )
+        async_session.add(message)
+        await async_session.flush()
+        return message
+
+    return _factory
+
+
+@pytest_asyncio.fixture
+async def make_job(async_session, make_user, make_message):
+    async def _factory(**kwargs) -> Job:
+        user = kwargs.pop("user", None)
+        if user is None:
+            user = await make_user()
+        message = kwargs.pop("message", None)
+        if message is None:
+            message = await make_message(user=user)
+        job = Job(
+            user_id=kwargs.get("user_id", user.id),
+            message_id=kwargs.get("message_id", message.id),
+            description=kwargs.get("description", "Test job description"),
+            pay_rate=kwargs.get("pay_rate", 25.0),
+            pay_type=kwargs.get("pay_type", "hourly"),
+        )
+        async_session.add(job)
+        await async_session.flush()
+        return job
+
+    return _factory
+
+
+@pytest_asyncio.fixture
+async def make_work_request(async_session, make_user, make_message):
+    async def _factory(**kwargs) -> WorkRequest:
+        user = kwargs.pop("user", None)
+        if user is None:
+            user = await make_user()
+        message = kwargs.pop("message", None)
+        if message is None:
+            message = await make_message(user=user)
+        work_request = WorkRequest(
+            user_id=kwargs.get("user_id", user.id),
+            message_id=kwargs.get("message_id", message.id),
+            target_earnings=kwargs.get("target_earnings", 500.0),
+            target_timeframe=kwargs.get("target_timeframe", "this week"),
+        )
+        async_session.add(work_request)
+        await async_session.flush()
+        return work_request
 
     return _factory
