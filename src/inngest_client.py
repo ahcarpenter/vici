@@ -4,10 +4,12 @@ from typing import TYPE_CHECKING
 import inngest
 import structlog
 from opentelemetry import trace as otel_trace
+from sqlalchemy import text
 from sqlmodel import select
 
 from src.config import get_settings
 from src.database import get_sessionmaker
+from src.extraction.pinecone_client import write_job_embedding
 from src.sms.models import Message
 from src.sms.service import hash_phone
 
@@ -16,8 +18,9 @@ tracer = otel_trace.get_tracer(__name__)
 if TYPE_CHECKING:
     from src.extraction.orchestrator import PipelineOrchestrator
 
-# Module-level orchestrator singleton set by lifespan in main.py
+# Module-level singletons set by lifespan in main.py
 _orchestrator: "PipelineOrchestrator | None" = None
+_openai_client = None
 
 
 @lru_cache(maxsize=1)
@@ -96,7 +99,45 @@ async def process_message(ctx: inngest.Context) -> str:
     trigger=inngest.TriggerCron(cron="*/5 * * * *"),
 )
 async def sync_pinecone_queue(ctx: inngest.Context) -> str:
-    """Phase 2 stub. Sweeps pinecone_sync_queue for pending rows. Full retry logic deferred."""
+    """Sweeps pinecone_sync_queue for pending rows and upserts to Pinecone."""
     logger = structlog.get_logger()
-    logger.info("sync-pinecone-queue: stub run")
+    logger.info("sync-pinecone-queue: starting sweep")
+
+    async with get_sessionmaker()() as session:
+        result = await session.execute(
+            text("SELECT id, job_id, description, phone_hash FROM pinecone_sync_queue WHERE status = 'pending' LIMIT 50")
+        )
+        rows = result.mappings().all()
+
+    logger.info("sync-pinecone-queue: rows fetched", count=len(rows))
+
+    for row in rows:
+        try:
+            await write_job_embedding(
+                job_id=row["job_id"],
+                description=row["description"],
+                phone_hash=row["phone_hash"],
+                openai_client=_openai_client,
+                settings=get_settings(),
+            )
+            async with get_sessionmaker()() as session:
+                await session.execute(
+                    text("UPDATE pinecone_sync_queue SET status='success' WHERE id=:id"),
+                    {"id": row["id"]},
+                )
+                await session.commit()
+        except Exception as exc:
+            logger.warning(
+                "sync-pinecone-queue: upsert failed",
+                job_id=row["job_id"],
+                error=str(exc),
+            )
+            async with get_sessionmaker()() as session:
+                await session.execute(
+                    text("UPDATE pinecone_sync_queue SET status='failed', retry_count=retry_count+1 WHERE id=:id"),
+                    {"id": row["id"]},
+                )
+                await session.commit()
+
+    logger.info("sync-pinecone-queue: sweep complete", processed=len(rows))
     return "ok"

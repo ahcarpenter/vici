@@ -103,9 +103,10 @@ async def lifespan(app: FastAPI):
 
     app.state.orchestrator = orchestrator
 
-    # Inject orchestrator into inngest_client module
+    # Inject orchestrator and openai_client into inngest_client module
     import src.inngest_client as ic
     ic._orchestrator = orchestrator
+    ic._openai_client = openai_client
 
     # Background gauge updater — polls pinecone_sync_queue every 15s
     from src.metrics import pinecone_sync_queue_depth
