@@ -39,3 +39,9 @@ inngest_queue_depth = Gauge(
     "Stub gauge — Inngest dev server exposes no public metrics API",
 )
 # inngest_queue_depth always reads 0; placeholder for future instrumentation
+
+pipeline_failures_total = Counter(
+    "pipeline_failures_total",
+    "Total number of process-message Inngest function permanent failures",
+    ["function"],
+)

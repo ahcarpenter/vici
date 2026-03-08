@@ -30,9 +30,23 @@ def get_inngest_client() -> inngest.Inngest:
     )
 
 
+async def _handle_process_message_failure(ctx: inngest.Context) -> None:
+    """Called by Inngest after retries are exhausted. Logs error and increments failure counter."""
+    logger = structlog.get_logger()
+    logger.error(
+        "process_message: permanent failure after retries exhausted",
+        message_sid=ctx.event.data.get("message_sid"),
+        attempt=ctx.attempt,
+    )
+    from src.metrics import pipeline_failures_total
+    pipeline_failures_total.labels(function="process-message").inc()
+
+
 @get_inngest_client().create_function(
     fn_id="process-message",
     trigger=inngest.TriggerEvent(event="message.received"),
+    retries=3,
+    on_failure=_handle_process_message_failure,
 )
 async def process_message(ctx: inngest.Context) -> str:
     """Wire SMS body through PipelineOrchestrator; orchestrator handles all pipeline logic."""

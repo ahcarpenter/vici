@@ -118,8 +118,11 @@ async def lifespan(app: FastAPI):
                         text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
-            except Exception:
-                pass  # non-fatal — metric will be stale until next cycle
+            except Exception as exc:
+                structlog.get_logger().warning(
+                    "gauge_updater: pinecone_sync_queue depth read failed — metric stale",
+                    error=str(exc),
+                )
             await asyncio.sleep(15)
 
     _gauge_task = asyncio.create_task(_update_gauges())
