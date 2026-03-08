@@ -4,6 +4,7 @@ Mocks at service/repo boundaries; verifies transaction discipline.
 Span tests added in plan 02.3-02 using InMemorySpanExporter.
 """
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -299,7 +300,7 @@ async def test_unknown_branch_emits_twilio_span():
 
 def test_gauge_updater_no_silent_pass():
     """Verify gauge updater no longer has a bare 'pass' on exception — warning log present."""
-    with open("/Users/ahcarpenter/workspace/vici/src/main.py") as f:
+    with open(Path(__file__).parent.parent / "src" / "main.py") as f:
         source = f.read()
     # Old pattern: except Exception:\n    pass
     assert "except Exception:\n                pass" not in source
