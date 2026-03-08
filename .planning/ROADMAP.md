@@ -69,13 +69,13 @@ Plans:
 
 ### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Write a complete README.md covering project purpose, local setup, environment variable reference, running tests, project structure, and deployment — so any developer can clone and run the stack without prior context
+**Requirements**: DOC-README
 **Depends on:** Phase 2
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 02.7 to break down)
+- [ ] 02.7-01-PLAN.md — Write complete README.md (project overview, local setup, env vars, tests, structure, deployment)
 
 ### Phase 02.6: Ensure research docs are current (INSERTED)
 
