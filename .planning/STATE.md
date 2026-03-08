@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 02.3 context gathered
-last_updated: "2026-03-08T07:40:29.975Z"
+stopped_at: Completed 02.3-01-PLAN.md
+last_updated: "2026-03-08T07:55:45.415Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 67
 ---
 
@@ -61,6 +61,7 @@ Progress: [███████░░░] 67%
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P01 | 332 | 3 tasks | 21 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P02 | 233 | 2 tasks | 9 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P03 | 25 | 2 tasks | 7 files |
+| Phase 02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup P01 | 20 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase 02.1-02]: Pinecone failure enqueued in separate session so main transaction is not affected
 - [Phase 02.1-03]: _orchestrator module-level var in inngest_client.py set by lifespan — cleanest circular import avoidance pattern
 - [Phase 02.1-03]: Twilio unknown reply moved from inngest_client.py to PipelineOrchestrator.run() unknown branch — orchestrator owns all pipeline logic
+- [Phase 02.3]: ALWAYS_ON sampler (not ParentBasedTraceIdRatio) — unambiguous, no parent-based override
+- [Phase 02.3]: opensearch replicas=0 for single-node local dev — replicas>0 causes yellow cluster health
+- [Phase 02.3]: GIT_SHA env var maps to git_sha flat field in Settings, wired to observability.service_version
 
 ### Roadmap Evolution
 
@@ -114,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T07:40:29.967Z
-Stopped at: Phase 02.3 context gathered
-Resume file: .planning/phases/02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup/02.3-CONTEXT.md
+Last session: 2026-03-08T07:55:45.413Z
+Stopped at: Completed 02.3-01-PLAN.md
+Resume file: None
