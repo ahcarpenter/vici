@@ -1,6 +1,6 @@
 # Source: https://github.com/jaegertracing/jaeger/blob/main/cmd/jaeger/config-opensearch.yaml
 service:
-  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  extensions: [jaeger_storage, healthcheckv2]
   pipelines:
     traces:
       receivers: [otlp]
