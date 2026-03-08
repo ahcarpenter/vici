@@ -41,6 +41,10 @@ services:
       - key: GIT_SHA
         generateValue: false
         value: ""
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_SERVICE_NAME
+        value: "vici"
 
 databases:
   - name: vici-db

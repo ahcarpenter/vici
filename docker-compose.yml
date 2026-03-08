@@ -72,6 +72,7 @@ services:
       INNGEST_DEV: "1"
       INNGEST_BASE_URL: http://inngest:8288
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger-collector:4317
+      OTEL_SERVICE_NAME: vici
       WEBHOOK_BASE_URL: http://localhost:8000
       GIT_SHA: ${GIT_SHA:-dev}
     volumes:
