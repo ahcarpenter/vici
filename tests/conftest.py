@@ -3,6 +3,7 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from prometheus_client import REGISTRY  # noqa: F401
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -23,6 +24,18 @@ DATABASE_URL_TEST = "sqlite+aiosqlite:///:memory:"
 # Remove stale test.db if it exists on disk
 if os.path.exists("test.db"):
     os.remove("test.db")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _prometheus_registry_isolation():
+    """Prevent duplicate metric registration errors across test session.
+
+    src/metrics.py uses module-level singletons registered on import.
+    This fixture is a no-op sentinel — the real protection is that metrics.py
+    registers once at module import time (session scope prevents re-import).
+    If tests see ValueError: Duplicated timeseries, add unregister logic here.
+    """
+    yield
 
 
 @pytest.fixture(scope="session", autouse=True)
