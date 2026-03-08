@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -106,7 +107,24 @@ async def lifespan(app: FastAPI):
     import src.inngest_client as ic
     ic._orchestrator = orchestrator
 
+    # Background gauge updater — polls pinecone_sync_queue every 15s
+    from src.metrics import pinecone_sync_queue_depth
+
+    async def _update_gauges():
+        while True:
+            try:
+                async with get_sessionmaker()() as session:
+                    result = await session.execute(
+                        text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
+                    )
+                    pinecone_sync_queue_depth.set(result.scalar_one())
+            except Exception:
+                pass  # non-fatal — metric will be stale until next cycle
+            await asyncio.sleep(15)
+
+    _gauge_task = asyncio.create_task(_update_gauges())
     yield
+    _gauge_task.cancel()
     provider.force_flush()
 
 
