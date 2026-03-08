@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 02.6-02-PLAN.md
-last_updated: "2026-03-08T15:13:31.001Z"
+stopped_at: Completed 02.7-01-PLAN.md
+last_updated: "2026-03-08T16:11:02.863Z"
 last_activity: "2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere"
 progress:
-  total_phases: 10
-  completed_phases: 7
-  total_plans: 20
-  completed_plans: 20
+  total_phases: 11
+  completed_phases: 8
+  total_plans: 21
+  completed_plans: 21
   percent: 78
 ---
 
@@ -133,6 +133,7 @@ Recent decisions affecting current work:
 - [Phase 02.5]: Counter increment tests use _value.get() internal before/after comparison — avoids registry scrape
 - [Phase 02.6-01]: STACK.md and ARCHITECTURE.md now reflect the actual built system (Phases 01–02.5) with 0 pgvector references, 2026-03-08 date, HIGH confidence sourced from STATE.md/PROJECT.md/REQUIREMENTS.md
 - [Phase 02.6]: FEATURES.md and PITFALLS.md patched with accurate ✅/⏳ status, Phase 3/4 forward-looking content, 8 new implementation pitfalls, zero pgvector references
+- [Phase 02.7-01]: README links to .env.example via explicit cp command; migrations step marked optional when using Docker
 
 ### Roadmap Evolution
 
@@ -143,6 +144,7 @@ Recent decisions affecting current work:
 - Phase 02.2 removed: consolidated into Phase 02.4
 - Phase 02.5 inserted after Phase 02.4: Production hardening to staff engineer standards (INSERTED)
 - Phase 02.6 inserted after Phase 2: Ensure research docs are current (URGENT)
+- Phase 02.7 inserted after Phase 2: flesh out the README.md to also include instructions for getting setup locally (URGENT)
 
 ### Pending Todos
 
@@ -162,7 +164,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-08T15:10:50.348Z
-Stopped at: Completed 02.6-02-PLAN.md
+Last session: 2026-03-08T16:11:02.861Z
+Stopped at: Completed 02.7-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
