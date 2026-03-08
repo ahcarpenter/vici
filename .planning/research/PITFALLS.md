@@ -1,8 +1,8 @@
 # Pitfalls Research
 
 **Domain:** SMS webhook + AI extraction + job matching API (Python/FastAPI)
-**Researched:** 2026-03-05
-**Confidence:** MEDIUM — web access unavailable; findings from training knowledge (cutoff Aug 2025). All five domains have extensive documented community experience. Flag items marked LOW for phase-specific verification.
+**Researched:** 2026-03-08
+**Confidence:** HIGH — original pitfalls verified against implementation; new pitfalls derived directly from STATE.md Accumulated Context (Phases 01–02.5). Source: STATE.md decisions, PROJECT.md.
 
 ---
 
@@ -41,6 +41,8 @@ Twilio expects a webhook response within 15 seconds. If your handler awaits GPT 
 The natural "happy path" implementation is: receive SMS → call GPT → store result → send reply → return 200. This works in development where GPT responds in 2-3 seconds, but fails under load or during OpenAI degradation.
 
 **How to avoid:**
+✅ **Resolved via Inngest (Phase 01-03, ASYNC-01):** Webhook emits `message.received` Inngest event and returns HTTP 200 immediately. All GPT processing happens in `process-message` Inngest function with 3 retries configured. Idempotency implemented via MessageSid unique constraint (SEC-02).
+
 - Return HTTP 200 (empty TwiML response) to Twilio immediately upon receiving the webhook.
 - Process GPT extraction and SMS reply in a background task (FastAPI `BackgroundTasks` or a task queue like Celery/ARQ).
 - Implement idempotency: store the Twilio `MessageSid` before processing; if the same `MessageSid` arrives again, return 200 and skip reprocessing.
@@ -53,6 +55,8 @@ The natural "happy path" implementation is: receive SMS → call GPT → store r
 - GPT API p99 latency approaching 10+ seconds.
 
 **Phase to address:** Twilio webhook foundation phase — idempotency must be designed in from the first working endpoint, not retrofitted.
+
+**Status: ✅ Resolved.** Resolution: Inngest event-driven model (not BackgroundTasks).
 
 ---
 
@@ -75,6 +79,8 @@ Phone numbers as identity means that when a carrier reassigns a previously-used 
 - Sudden change in posting behavior from a long-dormant phone number.
 
 **Phase to address:** Schema design phase — the `users` table must have `created_at` and a soft-delete/reactivation path from the start.
+
+**Status: ✅ Addressed.** `users.created_at` is in the schema; user records use integer FKs.
 
 ---
 
@@ -101,6 +107,8 @@ GPT is trained to be helpful and will infer or confabulate values rather than re
 
 **Phase to address:** GPT extraction service phase — schema design and prompt engineering must be done together with validation logic.
 
+**Status: Active concern.** Pydantic discriminated union validates output. GPT hallucination of NULL fields remains a Phase 3 risk — ensure null handling in earnings math query.
+
 ---
 
 ### Pitfall 5: Skipping the Two-Step Classify-then-Extract Split
@@ -123,6 +131,8 @@ Combining classification and extraction reduces latency and cost. The risk is ac
 - High rate of SMS replies that look like "unknown" or fallback paths.
 
 **Phase to address:** GPT extraction service phase — classification logic must be the first thing tested before extraction logic is built.
+
+**Status: ✅ Addressed.** Discriminated union `JobExtraction | WorkerExtraction | UnknownMessage` implemented via `beta.chat.completions.parse`. Unknown branch sends graceful SMS reply (EXT-04).
 
 ---
 
@@ -148,27 +158,7 @@ Most SQLAlchemy tutorials still use synchronous patterns. Async SQLAlchemy (`asy
 
 **Phase to address:** FastAPI infrastructure phase — async database setup must be the foundation, not a refactor item.
 
----
-
-### Pitfall 7: pgvector Index Not Created Before Production Load
-
-**What goes wrong:**
-pgvector without an index does exact nearest-neighbor search (sequential scan over all rows). For the first few hundred job postings this is imperceptible. At a few thousand rows, job-matching queries become noticeably slow. At tens of thousands, the endpoint times out.
-
-**Why it happens:**
-pgvector is included in the schema from day one (correctly), but the index creation is deferred because "we don't need semantic search yet." The earnings-math matching query triggers a pgvector distance scan anyway if embeddings are part of a future ORDER BY, and the index doesn't exist.
-
-**How to avoid:**
-- Create the `ivfflat` or `hnsw` index in the initial migration, even if it's not used yet: `CREATE INDEX ON job_postings USING hnsw (embedding vector_cosine_ops)`.
-- Use `hnsw` over `ivfflat` for this use case: HNSW doesn't require knowing the number of lists upfront and handles incremental inserts better (IVFFlat requires rebuilding the index after significant data growth).
-- Add a migration test that verifies the index exists.
-
-**Warning signs:**
-- `EXPLAIN ANALYZE` on job queries shows `Seq Scan` on the embeddings column.
-- Query time grows linearly with row count.
-- pgvector was added to the schema but no corresponding index migration exists.
-
-**Phase to address:** Schema/database foundation phase — index must be in the initial migration.
+**Status: ✅ Addressed.** `create_async_engine` + `AsyncSession` + asyncpg from Phase 01-01. `expire_on_commit=False` set on `async_sessionmaker`.
 
 ---
 
@@ -194,6 +184,8 @@ Signature validation is treated as sufficient protection. But a valid sender (a 
 
 **Phase to address:** Twilio webhook foundation phase — rate limiting must be co-located with the endpoint, not a later addition.
 
+**Status: ✅ Addressed.** PostgreSQL TTL counter implemented (SEC-03) — no Redis required. Rate limit SELECT uses raw SQL to bypass ORM identity cache (Phase 02.1-01 decision).
+
 ---
 
 ### Pitfall 9: Earnings Math Matching Without Handling Missing/Zero Values
@@ -216,6 +208,8 @@ The happy path test always uses complete job postings. Edge cases with missing f
 - SQL query returns unexpectedly large result sets when tested with incomplete data.
 
 **Phase to address:** Job matching logic phase — matching SQL must be written with explicit null handling, tested against incomplete data.
+
+**Status: Active concern for Phase 3.** Earnings math SQL must explicitly exclude jobs with NULL pay_rate or NULL estimated_duration.
 
 ---
 
@@ -240,6 +234,114 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 
 **Phase to address:** Schema/database foundation phase — raw message logging belongs in the initial schema.
 
+**Status: ✅ Addressed.** `audit_log` table stores raw SMS body and raw GPT response per message (SEC-04). `AuditLogRepository` in `src/sms/repository.py`.
+
+---
+
+## Implementation Pitfalls (Phases 01–02.5 Lessons Learned)
+
+The following pitfalls were discovered during implementation (Phases 01–02.5). They are concrete, project-specific lessons derived from STATE.md Accumulated Context.
+
+### Pitfall 11: Twilio Sync SDK Blocks Async Event Loop
+
+**What goes wrong:**
+`twilio_client.messages.create(...)` called directly inside `async def` blocks the asyncio event loop for the duration of the HTTP call.
+
+**Why it happens:**
+The official `twilio-python` SDK uses `requests` (blocking sync). Easy to miss because it works fine in synchronous code.
+
+**How to avoid:**
+Always wrap in `asyncio.to_thread()`: `await asyncio.to_thread(twilio_client.messages.create, to=..., from_=..., body=...)`. Create the span in the async context wrapping the call, not inside the sync function — OTel context is not propagated into threads.
+
+**Phase addressed:** Phase 02-gpt (Unknown branch), applicable to Phase 4 outbound SMS.
+
+---
+
+### Pitfall 12: Module-Level Vars for Inngest DI
+
+**What goes wrong:**
+`_orchestrator = PipelineOrchestrator(...)` at module top-level in `inngest_client.py` fails — the DI graph isn't built at import time.
+
+**Why it happens:**
+Inngest functions are registered at module import; they can't receive injected dependencies directly from FastAPI's Depends system.
+
+**How to avoid:**
+Declare `_orchestrator: PipelineOrchestrator | None = None` at module level. Set the var inside `app.lifespan()` after building the full DI graph. Access via `assert _orchestrator is not None` at the start of the Inngest function handler. Same pattern applies to `_openai_client`.
+
+**Phase addressed:** Phase 02.1-03, Phase 02.5.
+
+---
+
+### Pitfall 13: OTel ALWAYS_ON vs ParentBasedTraceIdRatio Sampler
+
+**What goes wrong:**
+`ParentBasedTraceIdRatio` sampler causes ambiguous sampling — if there's no parent span (most inbound requests), sampling falls back to root sampler; if there is a parent, sampling is based on parent's decision. Traces go missing inconsistently.
+
+**How to avoid:**
+Use `ALWAYS_ON` sampler for unambiguous local coverage. `ParentBasedTraceIdRatio` is only useful when you want to inherit sampling decisions from an upstream service — not applicable here.
+
+**Phase addressed:** Phase 02.3.
+
+---
+
+### Pitfall 14: OpenSearch replicas > 0 on Single-Node
+
+**What goes wrong:**
+Default `number_of_replicas: 1` in index template — single-node OpenSearch can't allocate replica shards → index health stays yellow → Jaeger index creation fails silently.
+
+**How to avoid:**
+Set `number_of_replicas: 0` in the OpenSearch index template for local dev. Jaeger's index template config (in jaeger.yaml) controls this.
+
+**Phase addressed:** Phase 02.3.
+
+---
+
+### Pitfall 15: Circular Imports with Prometheus Metrics
+
+**What goes wrong:**
+Importing `from src.metrics import gpt_call_counter` at module top-level in `service.py` creates a circular import: `service.py` → `metrics.py` → (possibly) back through the DI graph.
+
+**How to avoid:**
+Lazy-import Prometheus metrics inside the function that uses them: `from src.metrics import gpt_call_counter` inside the `process()` method body. Consistent with `if TYPE_CHECKING` pattern for types.
+
+**Phase addressed:** Phase 02.4-01, Phase 02.5.
+
+---
+
+### Pitfall 16: Inngest Function Not Directly Callable in Tests
+
+**What goes wrong:**
+Calling `await process_message(ctx)` in tests raises an error — the Inngest `Function` wrapper is not directly callable.
+
+**How to avoid:**
+Call `await process_message._handler(ctx)` in tests. The `_handler` attribute is the raw async function before Inngest wraps it.
+
+**Phase addressed:** Phase 02-gpt.
+
+---
+
+### Pitfall 17: Patch Target for Braintrust-Wrapped OpenAI Client
+
+**What goes wrong:**
+`mock.patch("braintrust.wrap_openai")` does not intercept the call — `service.py` uses a direct import: `from braintrust import wrap_openai`. The mock patches the source, not the import site.
+
+**How to avoid:**
+Always patch at the import site in the module under test: `mock.patch("src.extraction.service.wrap_openai")`.
+
+**Phase addressed:** Phase 02-gpt.
+
+---
+
+### Pitfall 18: HEALTHCHECK Must Use Liveness Endpoint
+
+**What goes wrong:**
+Docker HEALTHCHECK that probes a readiness endpoint (one that checks DB connectivity) fails during DB startup → container restarts in a loop before the database is healthy.
+
+**How to avoid:**
+`/health` must return HTTP 200 based on liveness only (no DB connection). DB connectivity is a readiness concern, not a liveness concern. Twilio's 15-second timeout means a DB-dependent health check can also cascade into webhook failures.
+
+**Phase addressed:** Phase 02.5.
+
 ---
 
 ## Technical Debt Patterns
@@ -250,9 +352,9 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 | Synchronous SQLAlchemy in async FastAPI | Faster initial setup, familiar syntax | Blocks event loop, requires full refactor under load | Never for a new project — the async setup cost is ~30 minutes |
 | JSON mode instead of structured outputs | Simpler prompt | Hallucinated field values, no schema enforcement | Never for extraction pipelines — structured outputs cost the same |
 | No idempotency on webhook | Simpler handler code | Duplicate job postings, duplicate SMS messages under load or retry | Never — Twilio retries are guaranteed to happen |
-| ivfflat over hnsw index | Marginally faster index creation | Must rebuild index after significant data growth; requires VACUUM | Only if you know dataset size will be static and small |
 | In-memory rate limiting (no Redis) | No Redis dependency | Rate limits reset on process restart, don't work across multiple workers | Acceptable for MVP single-process deployment; must change with horizontal scale |
 | Hardcoded phone number format assumptions | Simpler parsing | Breaks when international numbers arrive or Twilio normalizes differently | Never — always use E.164 format from Twilio's `From` field as-is |
+| Module-level DI vars set at import time | Faster initial wiring | Inngest function gets uninitialized dependencies (None) | Only acceptable if set inside FastAPI lifespan before first event fires |
 
 ---
 
@@ -262,11 +364,10 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 |-------------|----------------|------------------|
 | Twilio signature validation | Validate against `request.url` which reflects internal proxy URL | Set `WEBHOOK_BASE_URL` env var; reconstruct URL from config; enable Uvicorn `--proxy-headers` |
 | Twilio TwiML response | Return JSON `{"status": "ok"}` instead of TwiML | Return `<Response></Response>` or `application/json` with status 200 — Twilio ignores non-TwiML body but logs warnings |
-| Twilio reply timing | Send SMS reply inside the webhook handler before returning | Use `BackgroundTasks` — return 200 to Twilio immediately, send reply asynchronously |
+| Twilio reply timing | Send SMS reply inside the webhook handler before returning | Use Inngest — emit event before returning HTTP 200; all processing in Inngest function |
 | OpenAI structured outputs | Use `response_format={"type": "json_object"}` (JSON mode) | Use `response_format` with a full JSON schema via the `json_schema` type for enforcement |
 | OpenAI token limits | Not accounting for the full context: system prompt + message + JSON schema | Calculate token budget: schema alone can be 500-1000 tokens; SMS is small but system prompt adds up |
 | asyncpg + SQLAlchemy | Using `psycopg2` connection string with async engine | Use `postgresql+asyncpg://` DSN; asyncpg is a separate driver with different parameter syntax |
-| pgvector extension | Forgetting `CREATE EXTENSION IF NOT EXISTS vector` in migration | Include extension creation in the first Alembic migration; check it exists in health endpoint |
 
 ---
 
@@ -274,7 +375,6 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| No pgvector index | Job match queries slow, increasing linearly with table size | Create HNSW index in initial migration | ~1,000 rows with no index; ~100,000 rows with IVFFlat if not tuned |
 | Calling OpenAI synchronously in async handler | Request queue backs up; p99 latency = GPT latency | Always use `await openai.chat.completions.create()` with async client | Immediately under any concurrent load (2+ simultaneous SMS) |
 | Fetching all matching jobs then filtering in Python | Memory spikes, slow at scale | Push filtering logic into SQL WHERE clause | ~10,000 job postings |
 | N+1 queries in job result formatting | Each job requires a separate query to fetch poster info | Use SQL JOINs or `selectinload` in SQLAlchemy | ~50 results returned |
@@ -313,11 +413,12 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 - [ ] **Twilio signature validation:** Often missing in the "fast first deployment" — verify by sending a request with an invalid signature and confirming HTTP 403 is returned.
 - [ ] **Idempotency on webhook:** Looks done when the handler runs once in dev — verify by replaying the same `MessageSid` twice and confirming only one DB record is created.
 - [ ] **Async database session:** Looks done when queries return results — verify with a concurrency test (10 simultaneous requests) and check event loop blocking warnings.
-- [ ] **pgvector HNSW index:** Looks done when `CREATE EXTENSION vector` is in migrations — verify `\d job_postings` shows an index on the embedding column.
 - [ ] **Null handling in earnings math:** Looks done when test jobs with complete data match — verify with a job that has null `rate` and null `estimated_hours`.
 - [ ] **Rate limiting:** Looks done when the endpoint returns 200 — verify by sending 20 messages from the same number in 10 seconds and confirming throttling kicks in.
 - [ ] **Raw message logging:** Looks done when the `jobs` table is populated — verify a separate `raw_messages` table exists with the original SMS body and GPT response.
 - [ ] **GPT structured output (not JSON mode):** Looks done when JSON is returned — verify the API call uses `response_format` with a JSON schema, not `{"type": "json_object"}`.
+- [ ] **Inngest function wired to orchestrator:** Looks done when function is registered — verify _orchestrator module var is set by lifespan (not None) before first event fires
+- [ ] **OTel traces appearing in Jaeger:** Looks done when OTel is initialized — verify with ALWAYS_ON sampler; check OpenSearch replica count (replicas=0 for single-node)
 
 ---
 
@@ -328,7 +429,6 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 | Signature validation never implemented | MEDIUM | Add middleware; test in staging; no data loss but emergency deploy required |
 | Duplicate records from missing idempotency | HIGH | Deduplicate records by (phone, created_at, content hash); notify affected users; add idempotency in emergency deploy |
 | Sync DB blocking event loop | HIGH | Full refactor to async SQLAlchemy; all queries must be audited; requires significant regression testing |
-| pgvector index missing at scale | LOW-MEDIUM | `CREATE INDEX CONCURRENTLY` — can be done online without downtime but takes time on large tables |
 | GPT hallucinated pay rates in live data | MEDIUM | Audit all jobs where rate was extracted but source SMS had no numeric content; soft-delete suspect records; add validation retroactively |
 | Phone number recycled, wrong user gets data | MEDIUM | Hard to detect retroactively; add inactivity check going forward; communicate to affected users if detected |
 | No raw message audit trail | HIGH | Data is gone; no recovery possible — only prevention |
@@ -345,7 +445,6 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 | GPT hallucinating fields | Phase 2: GPT extraction service | Feed SMS with no numeric content; confirm `rate` field is null |
 | Missing classification checkpoint | Phase 2: GPT extraction service | Feed ambiguous SMS; confirm `message_type` is validated before extraction fields used |
 | Sync DB in async handler | Phase 1: FastAPI infrastructure | Concurrency test with 10 simultaneous requests; no event loop warnings |
-| pgvector index missing | Phase 1: Schema design | `\d job_postings` shows HNSW index in migration; EXPLAIN ANALYZE shows index scan |
 | No rate limiting | Phase 1: Webhook infrastructure | 20 messages/10s from same number triggers throttle |
 | Null handling in earnings math | Phase 3: Job matching logic | Query with null-rate jobs; confirm excluded from results |
 | No raw message audit trail | Phase 1: Schema design | `raw_messages` table exists; every processed message has a corresponding raw record |
@@ -356,15 +455,14 @@ Storing raw responses feels like unnecessary storage overhead. Teams store only 
 
 - Twilio webhook security documentation (official): https://www.twilio.com/docs/usage/security — signature validation using HMAC-SHA1 with auth token; URL must be exact match. **HIGH confidence** (well-documented official requirement).
 - OpenAI structured outputs vs JSON mode: Official OpenAI platform documentation distinguishes schema-enforced structured outputs from JSON mode. **HIGH confidence** (released and documented through training cutoff).
-- pgvector HNSW index recommendation: pgvector README recommends HNSW over IVFFlat for most use cases due to better incremental insert handling. **HIGH confidence** (documented in pgvector GitHub README).
 - FastAPI async SQLAlchemy: SQLAlchemy async documentation (`sqlalchemy[asyncio]`, `asyncpg`). **HIGH confidence** (documented pattern, core FastAPI/SQLAlchemy ecosystem).
 - Twilio 15-second webhook timeout: Documented in Twilio's webhook best practices. **HIGH confidence** (core Twilio operational requirement).
 - Phone number recycling: FCC-documented practice; US carriers required to retire numbers for 45+ days before reassignment (NANP guidelines). **HIGH confidence**.
 - GPT prompt injection risk: OWASP LLM Top 10, extensively documented. **MEDIUM confidence** — specific behavior depends on model version.
 - Rate limiting and OpenAI spend: OpenAI spend limits are configurable in the dashboard. **HIGH confidence**.
 
-*Note: Web access was unavailable during this research session. All findings are from training knowledge (cutoff Aug 2025). Findings marked HIGH confidence reflect well-established, officially-documented behaviors that are unlikely to have changed. Recommend verifying LOW/MEDIUM items during phase-specific research.*
+PRIMARY: STATE.md Accumulated Context (40+ implementation decisions), PROJECT.md, REQUIREMENTS.md (HIGH confidence — derived from built system). Updated 2026-03-08.
 
 ---
 *Pitfalls research for: SMS webhook + AI extraction + PostgreSQL job matching API (Vici)*
-*Researched: 2026-03-05*
+*Researched: 2026-03-08*
