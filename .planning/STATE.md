@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-07T23:48:34.823Z"
+stopped_at: Completed 02.1-01-PLAN.md
+last_updated: "2026-03-08T06:27:10.932Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 11
+  completed_plans: 9
   percent: 67
 ---
 
@@ -58,6 +58,7 @@ Progress: [███████░░░] 67%
 | Phase 02-gpt-extraction-service P01 | 35 | 2 tasks | 12 files |
 | Phase 02-gpt-extraction-service P02 | 45 | 2 tasks | 14 files |
 | Phase 02-gpt-extraction-service P03 | 15 | 2 tasks | 4 files |
+| Phase 02.1-refactor-persistence-layer-and-service-boundaries P01 | 332 | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -86,10 +87,14 @@ Recent decisions affecting current work:
 - [Phase 02-gpt-extraction-service]: PineconeSyncQueue SQLModel in src/extraction/models.py registered via src/models.py
 - [Phase 02-gpt-extraction-service]: Call process_message._handler(ctx) in tests — Inngest Function wrapper is not directly callable
 - [Phase 02-gpt-extraction-service]: Twilio send in unknown branch uses asyncio.to_thread() — Twilio REST client is synchronous
+- [Phase 02.1-01]: Nested Settings use model_validator(mode=after) remapping flat env vars — no .env changes required
+- [Phase 02.1-01]: Rate limit SELECT uses raw SQL to bypass ORM identity cache stale reads across multiple calls in same session
+- [Phase 02.1-01]: sms/service.py is now a pure-function module — hash_phone and emit_message_received_event only
 
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Apply revised 3NF schema and propagate throughout app (URGENT)
+- Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
 
 ### Pending Todos
 
@@ -101,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-07T23:46:06.507Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-08T06:27:10.929Z
+Stopped at: Completed 02.1-01-PLAN.md
 Resume file: None
