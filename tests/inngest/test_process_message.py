@@ -1,4 +1,3 @@
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import inngest
@@ -11,7 +10,6 @@ from src.extraction.schemas import (
     UnknownMessage,
     WorkerExtraction,
 )
-from src.extraction.constants import UNKNOWN_REPLY_TEXT
 
 
 def _make_ctx(message_sid="SMtest", from_number="+13125551234", body="hello"):

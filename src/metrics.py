@@ -5,7 +5,7 @@ startup (or lazily inside functions) — never instantiate metrics inside
 classes or conditionals to avoid duplicate registration errors.
 """
 
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 gpt_calls_total = Counter(
     "gpt_calls_total",

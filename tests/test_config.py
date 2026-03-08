@@ -1,8 +1,6 @@
 """
 Tests for nested Pydantic Settings (RED until Task 2 implements nested Settings).
 """
-import pytest
-from pydantic import ValidationError
 
 
 def test_sms_auth_token_reads_from_twilio_auth_token(monkeypatch):

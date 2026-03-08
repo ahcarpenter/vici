@@ -1,17 +1,14 @@
 """Tests for src/metrics.py — METRICS-01, METRICS-02, METRICS-03."""
 
 import pytest
-from prometheus_client import REGISTRY
-
 
 # ── Task 1: Registry and singleton tests ────────────────────────────────────
 
 
 def test_import_metrics_does_not_raise_value_error():
     """Importing src.metrics twice does not raise ValueError (duplicate registration)."""
-    import src.metrics  # noqa: F401
     # Second import hits module cache — no re-registration, no ValueError
-    import src.metrics  # noqa: F401, F811
+    import src.metrics  # noqa: F401  # noqa: F401, F811
 
 
 def test_gpt_calls_total_increments():
@@ -48,6 +45,7 @@ def test_inngest_queue_depth_settable():
 async def test_gpt_calls_total_increments_after_process():
     """After process(), gpt_calls_total increments with classification_result label."""
     from unittest.mock import AsyncMock, MagicMock
+
     from src.extraction.service import ExtractionService
     from src.metrics import gpt_calls_total
 
@@ -75,6 +73,7 @@ async def test_gpt_calls_total_increments_after_process():
 async def test_gpt_call_duration_seconds_recorded_after_process():
     """After process(), gpt_call_duration_seconds has recorded an observation."""
     from unittest.mock import AsyncMock, MagicMock
+
     from src.extraction.service import ExtractionService
     from src.metrics import gpt_call_duration_seconds
 
@@ -113,6 +112,7 @@ async def test_gpt_call_duration_seconds_recorded_after_process():
 async def test_gpt_token_counters_increment_after_process():
     """gpt_input_tokens_total and gpt_output_tokens_total increment by usage counts."""
     from unittest.mock import AsyncMock, MagicMock
+
     from src.extraction.service import ExtractionService
     from src.metrics import gpt_input_tokens_total, gpt_output_tokens_total
 
@@ -153,6 +153,7 @@ def test_pinecone_gauge_settable():
 
 def test_pipeline_failures_total_is_counter():
     from prometheus_client import Counter
+
     from src.metrics import pipeline_failures_total
     assert isinstance(pipeline_failures_total, Counter)
 

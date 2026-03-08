@@ -3,9 +3,8 @@ Tests for PipelineOrchestrator — plan 02.1-02.
 Mocks at service/repo boundaries; verifies transaction discipline.
 Span tests added in plan 02.3-02 using InMemorySpanExporter.
 """
-import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from opentelemetry.sdk.trace import TracerProvider

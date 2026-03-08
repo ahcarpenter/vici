@@ -1,17 +1,15 @@
 """Tests for production hardening: pipeline_failures_total, Inngest retry config, gauge updater logging."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import structlog
-
 
 # ── Test 1: pipeline_failures_total counter exists in src.metrics ─────────────
 
 def test_pipeline_failures_total_importable():
     """pipeline_failures_total is a prometheus Counter with label 'function'."""
     from prometheus_client import Counter
+
     from src.metrics import pipeline_failures_total
 
     assert isinstance(pipeline_failures_total, Counter)
@@ -24,9 +22,8 @@ def test_pipeline_failures_total_importable():
 @pytest.mark.asyncio
 async def test_on_failure_handler_increments_counter():
     """After calling _handle_process_message_failure, counter increments by 1."""
-    from prometheus_client import Counter
-    from src.metrics import pipeline_failures_total
     from src.inngest_client import _handle_process_message_failure
+    from src.metrics import pipeline_failures_total
 
     # Read current value before
     before = pipeline_failures_total.labels(function="process-message")._value.get()

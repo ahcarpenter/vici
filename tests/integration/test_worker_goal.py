@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel import select
 
 import src.inngest_client as ic
+from src.database import get_session
 from src.extraction.orchestrator import PipelineOrchestrator
 from src.extraction.schemas import ExtractionResult, WorkerExtraction
 from src.inngest_client import get_inngest_client
@@ -22,7 +23,6 @@ from src.sms.models import Message
 from src.sms.repository import MessageRepository
 from src.work_requests.models import WorkRequest
 from src.work_requests.repository import WorkRequestRepository
-from src.database import get_session
 
 
 def _make_ctx(message_sid: str, from_number: str = "+13125551234", body: str = "I need $200 today"):

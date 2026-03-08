@@ -5,8 +5,10 @@ from typing import Any
 
 import inngest.fast_api
 import structlog
+from braintrust import wrap_openai
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from openai import AsyncOpenAI
 from opentelemetry import trace as otel_trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -17,9 +19,6 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
-
-from braintrust import wrap_openai
-from openai import AsyncOpenAI
 from twilio.rest import Client as TwilioClient
 
 from src.config import get_settings

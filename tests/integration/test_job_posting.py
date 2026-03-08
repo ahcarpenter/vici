@@ -6,16 +6,15 @@ Job row written to DB → message.message_type == 'job_posting'.
 
 External deps mocked: OpenAI (via ExtractionService.process), Pinecone, Twilio lifespan.
 """
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel import select
 
 import src.inngest_client as ic
+from src.database import get_session
 from src.extraction.orchestrator import PipelineOrchestrator
 from src.extraction.schemas import ExtractionResult, JobExtraction
 from src.inngest_client import get_inngest_client
@@ -26,7 +25,6 @@ from src.sms.audit_repository import AuditLogRepository
 from src.sms.models import AuditLog, Message
 from src.sms.repository import MessageRepository
 from src.work_requests.repository import WorkRequestRepository
-from src.database import get_session
 
 
 def _make_ctx(message_sid: str, from_number: str = "+13125551234", body: str = "Need a mover"):
@@ -52,6 +50,7 @@ async def test_full_pipeline_job_posting(test_engine, async_session):
 
     # Build a real orchestrator pointing at test session
     from unittest.mock import AsyncMock as AM
+
     from src.extraction.service import ExtractionService
 
     mock_extraction_service = MagicMock(spec=ExtractionService)

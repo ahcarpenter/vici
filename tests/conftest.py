@@ -3,9 +3,9 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from prometheus_client import REGISTRY  # noqa: F401
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from prometheus_client import REGISTRY  # noqa: F401
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 

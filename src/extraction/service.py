@@ -1,16 +1,15 @@
 from datetime import date
 
 import structlog
-from braintrust import init_logger, wrap_openai
-from openai import APIStatusError, AsyncOpenAI, RateLimitError
+from braintrust import init_logger
+from openai import APIStatusError, RateLimitError
+from opentelemetry import trace as otel_trace
 from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_random_exponential,
 )
-
-from opentelemetry import trace as otel_trace
 
 from src.extraction.constants import GPT_MODEL
 from src.extraction.prompts import SYSTEM_PROMPT
@@ -32,9 +31,10 @@ class ExtractionService:
     async def process(self, sms_text: str, phone_hash: str) -> ExtractionResult:
         """GPT classification only — no DB, no session param."""
         import time
+
         from src.metrics import (
-            gpt_calls_total,
             gpt_call_duration_seconds,
+            gpt_calls_total,
             gpt_input_tokens_total,
             gpt_output_tokens_total,
         )

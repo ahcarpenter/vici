@@ -6,7 +6,7 @@ from sqlmodel import select
 
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
-from src.sms.models import Message, RateLimit
+from src.sms.models import Message
 from src.users.models import User
 
 

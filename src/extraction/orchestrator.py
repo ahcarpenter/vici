@@ -8,8 +8,6 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_sessionmaker
-
-tracer = otel_trace.get_tracer(__name__)
 from src.extraction.constants import UNKNOWN_REPLY_TEXT
 from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
@@ -20,6 +18,7 @@ from src.sms.repository import MessageRepository
 from src.work_requests.repository import WorkRequestRepository
 from src.work_requests.schemas import WorkRequestCreate
 
+tracer = otel_trace.get_tracer(__name__)
 log = structlog.get_logger()
 
 

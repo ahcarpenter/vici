@@ -2,10 +2,9 @@
 Tests for MessageRepository and AuditLogRepository (RED until Task 3 creates repositories).
 """
 import pytest
-import pytest_asyncio
 
-from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
+from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 
 
 @pytest.mark.asyncio
@@ -51,9 +50,10 @@ async def test_enforce_rate_limit_over_limit(async_session, make_user):
 @pytest.mark.asyncio
 async def test_audit_log_write(async_session, make_message):
     """AuditLogRepository.write inserts a row that exists after caller commits."""
+    from sqlmodel import select
+
     from src.sms.audit_repository import AuditLogRepository
     from src.sms.models import AuditLog
-    from sqlmodel import select
 
     message = await make_message()
     await AuditLogRepository.write(

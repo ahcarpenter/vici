@@ -6,26 +6,16 @@ Note: Pinecone integration tests have moved to tests/test_pipeline_orchestrator.
 as PipelineOrchestrator now owns all storage orchestration.
 """
 import hashlib
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
 
-from src.extraction.schemas import (
-    ExtractionResult,
-    JobExtraction,
-    WorkerExtraction,
-    UnknownMessage,
-)
-from src.jobs.models import Job
-from src.jobs.schemas import JobCreate
 from src.jobs.repository import JobRepository
-from src.work_requests.schemas import WorkRequestCreate
-from src.work_requests.repository import WorkRequestRepository
+from src.jobs.schemas import JobCreate
 from src.sms.models import Message
 from src.users.models import User
-from tests.extraction.conftest import make_mock_openai_client
-
+from src.work_requests.repository import WorkRequestRepository
+from src.work_requests.schemas import WorkRequestCreate
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
