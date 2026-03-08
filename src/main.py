@@ -19,6 +19,9 @@ from sqlalchemy import text
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
+from braintrust import wrap_openai
+from openai import AsyncOpenAI
+
 from src.extraction.service import ExtractionService
 from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.sms.exceptions import TwilioSignatureInvalid
@@ -66,7 +69,12 @@ async def lifespan(app: FastAPI):
     _configure_structlog()
     provider = _configure_otel(app)
     settings = get_settings()
-    app.state.extraction_service = ExtractionService(settings)
+    openai_client = wrap_openai(
+        AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
+    )
+    app.state.extraction_service = ExtractionService(
+        openai_client=openai_client, settings=settings
+    )
     yield
     provider.force_flush()
 

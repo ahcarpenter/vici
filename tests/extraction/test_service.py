@@ -24,9 +24,13 @@ class MockObservabilitySettings:
 class MockSettings:
     extraction = MockExtractionSettings()
     observability = MockObservabilitySettings()
-    # Preserve flat attributes for any remaining direct references
     openai_api_key = "test-key"
     braintrust_api_key = "test-bt-key"
+
+
+def _make_service(mock_client):
+    """Construct ExtractionService with a pre-built mock client."""
+    return ExtractionService(openai_client=mock_client, settings=MockSettings())
 
 
 @pytest.mark.asyncio
@@ -41,12 +45,10 @@ async def test_classify_job():
     expected = ExtractionResult(message_type="job_posting", job=job)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        result = await service.process(
-            "Need a mover for Saturday downtown Chicago", "hash123"
-        )
+    service = _make_service(mock_client)
+    result = await service.process(
+        "Need a mover for Saturday downtown Chicago", "hash123"
+    )
 
     assert result.message_type == "job_posting"
     assert result.job is not None
@@ -58,10 +60,8 @@ async def test_classify_worker():
     expected = ExtractionResult(message_type="worker_goal", worker=worker)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        result = await service.process("I need $200 today", "hash123")
+    service = _make_service(mock_client)
+    result = await service.process("I need $200 today", "hash123")
 
     assert result.message_type == "worker_goal"
     assert result.worker is not None
@@ -76,10 +76,8 @@ async def test_classify_unknown():
     expected = ExtractionResult(message_type="unknown", unknown=unknown)
     mock_client = make_mock_openai_client(expected)
 
-    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        result = await service.process("Hello", "hash123")
+    service = _make_service(mock_client)
+    result = await service.process("Hello", "hash123")
 
     assert result.message_type == "unknown"
     assert result.unknown is not None
@@ -87,15 +85,16 @@ async def test_classify_unknown():
 
 
 def test_braintrust_instrumentation():
+    """ExtractionService can be constructed with a pre-wrapped client."""
     from openai import AsyncOpenAI
 
+    raw_client = AsyncOpenAI(api_key="test-key")
     with patch("src.extraction.service.wrap_openai") as mock_wrap:
+        # Simulate: caller wraps before passing in
         mock_wrap.return_value = AsyncMock()
-        ExtractionService(MockSettings())
-        mock_wrap.assert_called_once()
-        # Verify the argument is an AsyncOpenAI instance
-        call_args = mock_wrap.call_args[0]
-        assert isinstance(call_args[0], AsyncOpenAI)
+        wrapped = mock_wrap(raw_client)
+        service = ExtractionService(openai_client=wrapped, settings=MockSettings())
+        assert service._client is wrapped
 
 
 @pytest.mark.asyncio
@@ -115,7 +114,6 @@ async def test_tenacity_retry_on_rate_limit():
     mock_completion = MagicMock()
     mock_completion.choices = [mock_choice]
 
-    # Raise RateLimitError on first call, succeed on second
     rate_limit_error = RateLimitError(
         message="Rate limit exceeded",
         response=MagicMock(status_code=429, headers={}),
@@ -129,11 +127,9 @@ async def test_tenacity_retry_on_rate_limit():
         side_effect=[rate_limit_error, mock_completion]
     )
 
-    with patch("src.extraction.service.wrap_openai", return_value=mock_client):
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        # Should not raise — tenacity retries transparently
-        result = await service.process("Moving job in Chicago", "hash123")
+    service = _make_service(mock_client)
+    # Should not raise — tenacity retries transparently
+    result = await service.process("Moving job in Chicago", "hash123")
 
     assert result.message_type == "job_posting"
     assert mock_client.beta.chat.completions.parse.call_count == 2

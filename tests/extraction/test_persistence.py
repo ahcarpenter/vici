@@ -1,6 +1,9 @@
 """
 Tests for Plan 02-02: persistence layer for extraction results.
-Tests: JobRepository.create, WorkRequestRepository.create, ExtractionService.process() with storage.
+Tests: JobRepository.create, WorkRequestRepository.create.
+
+Note: Pinecone integration tests have moved to tests/test_pipeline_orchestrator.py
+as PipelineOrchestrator now owns all storage orchestration.
 """
 import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,7 +17,6 @@ from src.extraction.schemas import (
     WorkerExtraction,
     UnknownMessage,
 )
-from src.extraction.service import ExtractionService
 from src.jobs.models import Job
 from src.jobs.schemas import JobCreate
 from src.jobs.repository import JobRepository
@@ -25,37 +27,12 @@ from src.users.models import User
 from tests.extraction.conftest import make_mock_openai_client
 
 
-class MockExtractionSettings:
-    openai_api_key = "test-key"
-
-
-class MockPineconeSettings:
-    api_key = "test-pc-key"
-    index_host = "https://test.svc.pinecone.io"
-
-
-class MockObservabilitySettings:
-    braintrust_api_key = "test-bt-key"
-
-
-class MockSettings:
-    extraction = MockExtractionSettings()
-    pinecone = MockPineconeSettings()
-    observability = MockObservabilitySettings()
-    # Preserve flat attributes for any remaining direct references
-    openai_api_key = "test-key"
-    braintrust_api_key = "test-bt-key"
-    pinecone_api_key = "test-pc-key"
-    pinecone_index_host = "https://test.svc.pinecone.io"
-
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
 @pytest_asyncio.fixture
 async def user_and_message(async_session, request):
     """Create a User + Message row for FK references, unique per test."""
-    # Use request node name to generate unique identifiers per test
     unique_seed = request.node.name.encode()
     phone_hash = hashlib.sha256(unique_seed).hexdigest()
     msg_sid = f"SM{hashlib.md5(unique_seed).hexdigest()[:10]}"
@@ -129,109 +106,3 @@ async def test_worker_persistence(async_session, user_and_message):
     assert wr.target_timeframe == "today"
     assert wr.user_id == user.id
     assert wr.message_id == msg2.id
-
-
-# ── Task 2 tests: ExtractionService with storage wired ───────────────────────
-
-
-@pytest.mark.asyncio
-async def test_pinecone_upsert(async_session, user_and_message):
-    """ExtractionService.process() attempts Pinecone upsert after job commit."""
-    user, msg = user_and_message
-
-    # Need a fresh message for this test
-    msg3 = Message(
-        message_sid=f"SM{hashlib.md5(b'pinecone_upsert_msg3').hexdigest()[:10]}",
-        user_id=user.id,
-        body="Moving job on Friday $30/hr",
-    )
-    async_session.add(msg3)
-    await async_session.flush()
-
-    job = JobExtraction(
-        description="Moving job on Friday",
-        datetime_flexible=False,
-        location="Chicago",
-        pay_type="hourly",
-        pay_rate=30.0,
-    )
-    expected = ExtractionResult(message_type="job_posting", job=job)
-    mock_client = make_mock_openai_client(expected)
-
-    with (
-        patch("src.extraction.service.wrap_openai", return_value=mock_client),
-        patch("src.extraction.pinecone_client.PineconeAsyncio") as mock_pc,
-    ):
-        # Set up PineconeAsyncio async context manager
-        mock_pc_instance = AsyncMock()
-        mock_pc_instance.__aenter__ = AsyncMock(return_value=mock_pc_instance)
-        mock_pc_instance.__aexit__ = AsyncMock(return_value=None)
-        mock_index = AsyncMock()
-        mock_index.__aenter__ = AsyncMock(return_value=mock_index)
-        mock_index.__aexit__ = AsyncMock(return_value=None)
-        mock_pc_instance.IndexAsyncio = MagicMock(return_value=mock_index)
-        mock_pc.return_value = mock_pc_instance
-
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        result = await service.process(
-            sms_text="Moving job on Friday $30/hr",
-            phone_hash=user.phone_hash,
-            message_id=msg3.id,
-            user_id=user.id,
-            session=async_session,
-        )
-
-    assert result.message_type == "job_posting"
-    # Verify Pinecone upsert was called
-    mock_index.upsert.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_pinecone_failure_enqueues_sync(async_session, user_and_message):
-    """On Pinecone failure, ExtractionService logs error and writes pinecone_sync_queue row."""
-    user, msg = user_and_message
-
-    msg4 = Message(
-        message_sid=f"SM{hashlib.md5(b'pinecone_failure_msg4').hexdigest()[:10]}",
-        user_id=user.id,
-        body="Painting job downtown $500 flat",
-    )
-    async_session.add(msg4)
-    await async_session.flush()
-
-    job = JobExtraction(
-        description="Painting job downtown",
-        datetime_flexible=True,
-        location="downtown",
-        pay_type="flat",
-        pay_rate=500.0,
-    )
-    expected = ExtractionResult(message_type="job_posting", job=job)
-    mock_client = make_mock_openai_client(expected)
-
-    with (
-        patch("src.extraction.service.wrap_openai", return_value=mock_client),
-        patch(
-            "src.extraction.pinecone_client.PineconeAsyncio",
-            side_effect=Exception("Pinecone unavailable"),
-        ),
-    ):
-        service = ExtractionService(MockSettings())
-        service._client = mock_client
-        result = await service.process(
-            sms_text="Painting job downtown $500 flat",
-            phone_hash=user.phone_hash,
-            message_id=msg4.id,
-            user_id=user.id,
-            session=async_session,
-        )
-
-    assert result.message_type == "job_posting"
-    # Verify pinecone_sync_queue row was created
-    from sqlalchemy import text as sa_text
-    row = await async_session.execute(
-        sa_text("SELECT * FROM pinecone_sync_queue WHERE status = 'pending'")
-    )
-    rows = row.fetchall()
-    assert len(rows) >= 1

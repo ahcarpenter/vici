@@ -9,6 +9,9 @@ from twilio.rest import Client as TwilioClient
 from src.config import get_settings
 from src.database import get_sessionmaker
 from src.extraction.constants import UNKNOWN_REPLY_TEXT
+from braintrust import wrap_openai
+from openai import AsyncOpenAI
+
 from src.extraction.service import ExtractionService
 from src.sms.models import Message
 from src.sms.service import hash_phone
@@ -54,14 +57,13 @@ async def process_message(ctx: inngest.Context) -> str:
         message_id = message.id
         user_id = message.user_id
 
-        service = ExtractionService(settings)
+        openai_client = wrap_openai(
+            AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
+        )
+        service = ExtractionService(openai_client=openai_client, settings=settings)
         result = await service.process(
             sms_text=body,
             phone_hash=phone_hash,
-            message_id=message_id,
-            user_id=user_id,
-            session=session,
-            message_sid=message_sid,
         )
 
     if result.message_type == "unknown":
