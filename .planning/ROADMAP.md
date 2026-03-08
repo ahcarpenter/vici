@@ -72,7 +72,7 @@ Plans:
 **Goal:** Surgically update the 5 research docs in .planning/research/ (STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md, SUMMARY.md) to reflect the actual implemented state after Phases 01-02.5, and add forward-looking sections for Phase 3/4 needs
 **Requirements**: DOC-01, DOC-02, DOC-03
 **Depends on:** Phase 02.5
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 02.6-01-PLAN.md — Patch STACK.md and ARCHITECTURE.md (remove pgvector, add Inngest/Braintrust/Pinecone, update arch diagram and component names)
