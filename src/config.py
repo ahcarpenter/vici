@@ -25,6 +25,7 @@ class ObservabilitySettings(BaseModel):
     braintrust_api_key: str = ""
     otel_endpoint: str = "http://localhost:4317"
     otel_service_name: str = "vici"
+    service_version: str = "dev"  # populated from GIT_SHA env var
 
 
 class Settings(BaseSettings):
@@ -53,6 +54,7 @@ class Settings(BaseSettings):
 
     # Flat observability env vars
     braintrust_api_key: str = ""
+    git_sha: str = "dev"  # populated from GIT_SHA env var in docker-compose
 
     # Nested sub-models (populated via model_validator below)
     sms: SmsSettings = SmsSettings()
@@ -81,6 +83,7 @@ class Settings(BaseSettings):
             braintrust_api_key=self.braintrust_api_key,
             otel_endpoint=self.otel_exporter_otlp_endpoint,
             otel_service_name=self.otel_service_name,
+            service_version=self.git_sha,
         )
         return self
 

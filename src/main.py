@@ -13,6 +13,7 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
@@ -61,9 +62,13 @@ def _configure_structlog() -> None:
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
-    resource = Resource(attributes={"service.name": settings.observability.otel_service_name})
+    resource = Resource(attributes={
+        "service.name": settings.observability.otel_service_name,
+        "deployment.environment": "development" if settings.inngest_dev else "production",
+        "service.version": settings.observability.service_version,
+    })
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
-    provider = TracerProvider(resource=resource)
+    provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     otel_trace.set_tracer_provider(provider)
     FastAPIInstrumentor().instrument_app(app)
