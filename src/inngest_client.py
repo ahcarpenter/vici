@@ -20,6 +20,7 @@ def get_inngest_client() -> inngest.Inngest:
     return inngest.Inngest(
         app_id="vici",
         is_production=not settings.inngest_dev,
+        event_api_base_url=settings.inngest_base_url,
     )
 
 
