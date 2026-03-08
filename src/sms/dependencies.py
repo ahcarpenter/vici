@@ -34,8 +34,10 @@ def _public_request_url(request: Request) -> str:
 
 async def validate_twilio_request(request: Request) -> dict:
     settings = get_settings()
-    validator = RequestValidator(settings.twilio_auth_token)
     form_data = dict(await request.form())
+    if settings.env == "development":
+        return form_data
+    validator = RequestValidator(settings.sms.auth_token)
     url = _public_request_url(request)
     signature = request.headers.get("X-Twilio-Signature", "")
     if not validator.validate(url, form_data, signature):

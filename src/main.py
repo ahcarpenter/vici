@@ -39,7 +39,6 @@ def _configure_structlog() -> None:
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
             _add_otel_context,
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.JSONRenderer(),
@@ -52,8 +51,8 @@ def _configure_structlog() -> None:
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
-    resource = Resource(attributes={"service.name": settings.otel_service_name})
-    exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
+    resource = Resource(attributes={"service.name": settings.observability.otel_service_name})
+    exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     otel_trace.set_tracer_provider(provider)

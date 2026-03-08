@@ -17,8 +17,8 @@ async def write_job_embedding(
     )
     vector = emb_resp.data[0].embedding  # list[float], EMBEDDING_DIMS elements
 
-    async with PineconeAsyncio(api_key=settings.pinecone_api_key) as pc:
-        async with pc.IndexAsyncio(host=settings.pinecone_index_host) as idx:
+    async with PineconeAsyncio(api_key=settings.pinecone.api_key) as pc:
+        async with pc.IndexAsyncio(host=settings.pinecone.index_host) as idx:
             await idx.upsert(
                 vectors=[
                     Vector(

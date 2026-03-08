@@ -13,7 +13,18 @@ from src.extraction.service import ExtractionService
 from tests.extraction.conftest import make_mock_openai_client
 
 
+class MockExtractionSettings:
+    openai_api_key = "test-key"
+
+
+class MockObservabilitySettings:
+    braintrust_api_key = "test-bt-key"
+
+
 class MockSettings:
+    extraction = MockExtractionSettings()
+    observability = MockObservabilitySettings()
+    # Preserve flat attributes for any remaining direct references
     openai_api_key = "test-key"
     braintrust_api_key = "test-bt-key"
 

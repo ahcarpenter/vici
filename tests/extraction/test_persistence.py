@@ -25,7 +25,24 @@ from src.users.models import User
 from tests.extraction.conftest import make_mock_openai_client
 
 
+class MockExtractionSettings:
+    openai_api_key = "test-key"
+
+
+class MockPineconeSettings:
+    api_key = "test-pc-key"
+    index_host = "https://test.svc.pinecone.io"
+
+
+class MockObservabilitySettings:
+    braintrust_api_key = "test-bt-key"
+
+
 class MockSettings:
+    extraction = MockExtractionSettings()
+    pinecone = MockPineconeSettings()
+    observability = MockObservabilitySettings()
+    # Preserve flat attributes for any remaining direct references
     openai_api_key = "test-key"
     braintrust_api_key = "test-bt-key"
     pinecone_api_key = "test-pc-key"

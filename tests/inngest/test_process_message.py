@@ -13,7 +13,31 @@ from src.extraction.schemas import (
 from src.extraction.constants import UNKNOWN_REPLY_TEXT
 
 
+class MockSmsSettings:
+    auth_token = "token"
+    account_sid = "ACtest"
+    from_number = "+10000000000"
+
+
+class MockExtractionSettings:
+    openai_api_key = "test-key"
+
+
+class MockPineconeSettings:
+    api_key = ""
+    index_host = ""
+
+
+class MockObservabilitySettings:
+    braintrust_api_key = "test-bt-key"
+
+
 class MockSettings:
+    sms = MockSmsSettings()
+    extraction = MockExtractionSettings()
+    pinecone = MockPineconeSettings()
+    observability = MockObservabilitySettings()
+    # Preserve flat attributes for any remaining direct references
     openai_api_key = "test-key"
     braintrust_api_key = "test-bt-key"
     twilio_account_sid = "ACtest"

@@ -65,11 +65,11 @@ async def process_message(ctx: inngest.Context) -> str:
         )
 
     if result.message_type == "unknown":
-        twilio_client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+        twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
         await asyncio.to_thread(
             twilio_client.messages.create,
             to=from_number,
-            from_=settings.twilio_from_number,
+            from_=settings.sms.from_number,
             body=UNKNOWN_REPLY_TEXT,
         )
         logger.info("unknown_reply_sent", message_sid=message_sid, to=from_number)

@@ -25,7 +25,7 @@ log = structlog.get_logger()
 class ExtractionService:
     def __init__(self, settings):
         self._client = wrap_openai(
-            AsyncOpenAI(api_key=settings.openai_api_key, max_retries=0)
+            AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
         )
         self._settings = settings
 
