@@ -64,13 +64,14 @@ Plans:
 
 ### Phase 02.4: ensure prometheus instance is setup (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Prometheus and Grafana added to Docker Compose with full auto-provisioning; custom GPT and queue-depth metrics instrumented in the application — zero manual setup after docker compose up
+**Requirements**: METRICS-01, METRICS-02, METRICS-03, INFRA-01, INFRA-02, INFRA-03
 **Depends on:** Phase 2
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 02.4 to break down)
+- [ ] 02.4-01-PLAN.md — src/metrics.py custom metric singletons, ExtractionService GPT instrumentation, pinecone_sync_queue_depth gauge background task, unit tests
+- [ ] 02.4-02-PLAN.md — Prometheus + Grafana Docker Compose services, config/provisioning files, pre-built FastAPI dashboard, human verification checkpoint
 
 ### Phase 02.3: Migrate Jaeger to v2 and optimize tracing setup (INSERTED)
 
