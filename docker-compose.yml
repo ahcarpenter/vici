@@ -47,6 +47,8 @@ services:
   jaeger-query:
     image: jaegertracing/jaeger:2.16.0
     command: --config /etc/jaeger/query-config.yaml
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:4317
     volumes:
       - ./jaeger/query-config.yaml:/etc/jaeger/query-config.yaml
     ports:
