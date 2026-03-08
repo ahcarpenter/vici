@@ -66,6 +66,19 @@ Plans:
 - [x] 02-02-PLAN.md — Alembic migration (PineconeSyncQueue table), JobRepository, WorkRequestRepository, Pinecone embedding write with fire-and-forget fallback, lifespan singleton
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
+
+### Phase 02.6: Ensure research docs are current (INSERTED)
+
+**Goal:** Surgically update the 5 research docs in .planning/research/ (STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md, SUMMARY.md) to reflect the actual implemented state after Phases 01-02.5, and add forward-looking sections for Phase 3/4 needs
+**Requirements**: DOC-01, DOC-02, DOC-03
+**Depends on:** Phase 02.5
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02.6-01-PLAN.md — Patch STACK.md and ARCHITECTURE.md (remove pgvector, add Inngest/Braintrust/Pinecone, update arch diagram and component names)
+- [ ] 02.6-02-PLAN.md — Patch FEATURES.md and PITFALLS.md (annotate ✅/⏳, add Phase 3/4 sections, add implementation pitfalls 11-18)
+- [ ] 02.6-03-PLAN.md — Comprehensive refresh of SUMMARY.md (replace all stale content with accurate built-system facts)
+
 ### Phase 02.1: Refactor persistence layer and service boundaries (INSERTED)
 
 **Goal:** Clean architecture refactor — split ExtractionService into GPT-only service + PipelineOrchestrator, add MessageRepository/AuditLogRepository, normalize repositories to flush-only, group Settings into 4 nested Pydantic models, convert boolean returns to exceptions, wire full DI graph through FastAPI lifespan
