@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 2
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 02.7 to break down)
+
 ### Phase 02.6: Ensure research docs are current (INSERTED)
 
 **Goal:** Surgically update the 5 research docs in .planning/research/ (STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md, SUMMARY.md) to reflect the actual implemented state after Phases 01-02.5, and add forward-looking sections for Phase 3/4 needs

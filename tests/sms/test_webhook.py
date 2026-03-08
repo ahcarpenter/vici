@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from sqlmodel import select
 from twilio.request_validator import RequestValidator
 
+from src.config import get_settings
 from src.sms.models import AuditLog, Message
 from src.users.models import User
 
@@ -42,8 +43,9 @@ async def test_valid_signature(client: AsyncClient, mock_twilio_validator):
 
 
 async def test_valid_signature_real(client: AsyncClient):
-    token = "test_twilio_auth_token"
-    url = "http://localhost:8000/webhook/sms"
+    settings = get_settings()
+    token = settings.sms.auth_token
+    url = f"{settings.webhook_base_url}/webhook/sms"
     sig = RequestValidator(token).compute_signature(url, VALID_FORM)
     response = await client.post(
         "/webhook/sms",
