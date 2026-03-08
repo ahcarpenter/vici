@@ -34,7 +34,7 @@
 
 **Rate Limiting:**
 - Threshold: 5 messages per minute per phone number
-- PostgreSQL TTL counter: dedicated `rate_limit` table with columns `(phone_hash, window_start, count)` — upsert increments count per 1-minute bucket
+- PostgreSQL TTL counter: dedicated `rate_limit` table with columns `(phone_hash, created_at, count)` — upsert increments count per 1-minute bucket
 - On breach: return HTTP 200 with empty TwiML body
 - Webhook security gate order (cheapest to most expensive):
   1. Twilio signature validation (crypto only, no DB) → 403 on failure
@@ -61,7 +61,7 @@ None — discussion stayed within phase scope.
 |----|-------------|-----------------|
 | SEC-01 | Twilio X-Twilio-Signature HMAC validation; HTTP 403 on failure | `RequestValidator` dependency pattern documented; URL reconstruction for proxies critical |
 | SEC-02 | MessageSid deduplication before any processing (unique constraint + idempotency check) | `inbound_message` table with unique MessageSid + `ON CONFLICT DO NOTHING` pattern |
-| SEC-03 | Per-phone rate limiting (5/min) using PostgreSQL TTL counter table | `rate_limit(phone_hash, window_start, count)` upsert pattern; no Redis needed |
+| SEC-03 | Per-phone rate limiting (5/min) using PostgreSQL TTL counter table | `rate_limit(phone_hash, created_at, count)` upsert pattern; no Redis needed |
 | SEC-04 | Audit table for raw SMS + raw GPT response (GPT column populated in Phase 2) | Schema columns exist in Phase 1 migration; write happens in Phase 2 |
 | IDN-01 | Phone number auto-registration on first inbound message (E.164, no signup) | `phone` table with upsert; Twilio `From` field is already E.164 normalized |
 | IDN-02 | `created_at` timestamp on phone identity for number recycling detection | SQLModel column with `default=datetime.utcnow` |
@@ -599,7 +599,7 @@ services:
 
 **What goes wrong:** The `rate_limit` table accumulates stale rows indefinitely. At scale, the upsert query slows down as it scans old rows.
 
-**Why it happens:** The lazy-cleanup approach (delete stale rows for a phone on next request) requires an explicit `DELETE WHERE window_start < now() - interval '1 minute'` in the same transaction as the upsert. Easy to forget to implement the cleanup half.
+**Why it happens:** The lazy-cleanup approach (delete stale rows for a phone on next request) requires an explicit `DELETE WHERE created_at < now() - interval '1 minute'` in the same transaction as the upsert. Easy to forget to implement the cleanup half.
 
 **How to avoid:** The upsert transaction for any phone must first delete that phone's old windows, then upsert the current window. One SQL statement handles both: delete stale + insert current.
 
@@ -701,27 +701,27 @@ async def check_rate_limit(
 ) -> bool:
     """Returns True if rate limit exceeded, False if OK."""
     phone_hash = hashlib.sha256(from_number.encode()).hexdigest()
-    window_start = datetime.utcnow().replace(second=0, microsecond=0)
+    created_at = datetime.utcnow().replace(second=0, microsecond=0)
 
     # Delete stale windows for this phone (lazy cleanup)
     await session.execute(
         text(
             "DELETE FROM rate_limit "
-            "WHERE phone_hash = :phone_hash AND window_start < :cutoff"
+            "WHERE phone_hash = :phone_hash AND created_at < :cutoff"
         ),
-        {"phone_hash": phone_hash, "cutoff": window_start - timedelta(minutes=1)},
+        {"phone_hash": phone_hash, "cutoff": created_at - timedelta(minutes=1)},
     )
 
     # Upsert current window
     result = await session.execute(
         text(
-            "INSERT INTO rate_limit (phone_hash, window_start, count) "
-            "VALUES (:phone_hash, :window_start, 1) "
-            "ON CONFLICT (phone_hash, window_start) "
+            "INSERT INTO rate_limit (phone_hash, created_at, count) "
+            "VALUES (:phone_hash, :created_at, 1) "
+            "ON CONFLICT (phone_hash, created_at) "
             "DO UPDATE SET count = rate_limit.count + 1 "
             "RETURNING count"
         ),
-        {"phone_hash": phone_hash, "window_start": window_start},
+        {"phone_hash": phone_hash, "created_at": created_at},
     )
     await session.commit()
     count = result.scalar_one()

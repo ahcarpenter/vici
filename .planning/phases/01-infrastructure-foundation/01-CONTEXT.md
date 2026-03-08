@@ -63,16 +63,16 @@ All tables use TIMESTAMPTZ (not TIMESTAMP) for all datetime columns. All inter-t
 - `id` SERIAL PK
 - `job_id` INTEGER NOT NULL REFERENCES job(id) ON DELETE RESTRICT
 - `work_request_id` INTEGER NOT NULL REFERENCES work_request(id) ON DELETE RESTRICT
-- `matched_at` TIMESTAMPTZ NOT NULL
+- `created_at` TIMESTAMPTZ NOT NULL
 - UNIQUE (job_id, work_request_id) — a pair is matched at most once
 - Note: both users are derivable via JOIN (job→user, work_request→user); no denormalized user_id columns per 3NF
 
 **`rate_limit`**
 - `id` SERIAL PK
 - `user_id` INTEGER NOT NULL REFERENCES user(id) ON DELETE RESTRICT
-- `window_start` TIMESTAMPTZ NOT NULL
+- `created_at` TIMESTAMPTZ NOT NULL
 - `count` INTEGER NOT NULL DEFAULT 0
-- UNIQUE (user_id, window_start)
+- UNIQUE (user_id, created_at)
 
 **`audit_log`**
 - `id` SERIAL PK
@@ -103,7 +103,7 @@ All tables use TIMESTAMPTZ (not TIMESTAMP) for all datetime columns. All inter-t
 
 ### Rate Limiting
 - Threshold: 5 messages per minute per user
-- rate_limit table keyed on user_id + window_start (1-minute buckets) — upsert increments count
+- rate_limit table keyed on user_id + created_at (1-minute buckets) — upsert increments count
 - On breach: return HTTP 200 with empty TwiML body — Twilio won't retry on 200
 - Webhook security gate order (cheapest to most expensive):
   1. Twilio signature validation (crypto only, no DB) → 403 on failure

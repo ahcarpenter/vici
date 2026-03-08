@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02.4-02-PLAN.md
-last_updated: "2026-03-08T09:18:00.311Z"
+last_updated: "2026-03-08T09:36:30.025Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 9
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 1 of 4 (Infrastructure Foundation)
+Phase: 1 of 3 (Infrastructure Foundation)
 Plan: 2 of 3 in current phase
 Status: In Progress
 Last activity: 2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented
@@ -119,6 +119,7 @@ Recent decisions affecting current work:
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
 - Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 and optimize tracing setup (URGENT)
 - Phase 02.4 inserted after Phase 2: Ensure prometheus instance is setup (URGENT)
+- Phase 02.5 inserted after Phase 2: Remove audit_log table and redirect logs to stdout (URGENT)
 
 ### Pending Todos
 
