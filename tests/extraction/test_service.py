@@ -15,6 +15,7 @@ from tests.extraction.conftest import make_mock_openai_client
 
 class MockExtractionSettings:
     openai_api_key = "test-key"
+    gpt_model = "gpt-5.2"
 
 
 class MockObservabilitySettings:

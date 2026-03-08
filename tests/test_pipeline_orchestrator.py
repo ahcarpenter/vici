@@ -1,11 +1,15 @@
 """
 Tests for PipelineOrchestrator — plan 02.1-02.
 Mocks at service/repo boundaries; verifies transaction discipline.
+Span tests added in plan 02.3-02 using InMemorySpanExporter.
 """
 import json
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from src.extraction.schemas import (
     ExtractionResult,
@@ -187,3 +191,102 @@ async def test_pinecone_failure_enqueues_retry():
     # Enqueue via separate session
     mock_s2.execute.assert_awaited()
     mock_s2.commit.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Span tests (plan 02.3-02)
+# ---------------------------------------------------------------------------
+
+def _span_exporter_for_orchestrator():
+    """Return (exporter, test_tracer) patched into orchestrator module."""
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    test_tracer = provider.get_tracer("test")
+    return exporter, test_tracer
+
+
+@pytest.mark.asyncio
+async def test_job_branch_emits_pinecone_span():
+    """Job branch emits a 'pinecone.upsert' span with db.system, db.operation, db.vector.job_id."""
+    import src.extraction.orchestrator as orch_module
+
+    exporter, test_tracer = _span_exporter_for_orchestrator()
+    original_tracer = orch_module.tracer
+    orch_module.tracer = test_tracer
+
+    try:
+        job = JobExtraction(
+            description="Need a mover for Saturday",
+            datetime_flexible=False,
+            location="downtown Chicago",
+            pay_type="hourly",
+            pay_rate=25.0,
+        )
+        result = ExtractionResult(message_type="job_posting", job=job)
+        orchestrator, _, job_repo, _, _, pinecone = _make_orchestrator(result)
+        session = _make_session()
+
+        with patch("src.extraction.orchestrator.get_sessionmaker"):
+            await orchestrator.run(
+                session=session,
+                sms_text="Need a mover for Saturday",
+                phone_hash="hash123",
+                message_id=1,
+                user_id=10,
+                message_sid="SMabc",
+                from_number="+15551234567",
+            )
+
+        spans = exporter.get_finished_spans()
+        span_names = [s.name for s in spans]
+        assert "pinecone.upsert" in span_names, f"Expected 'pinecone.upsert' span. Got: {span_names}"
+
+        pinecone_span = next(s for s in spans if s.name == "pinecone.upsert")
+        attrs = dict(pinecone_span.attributes)
+        assert attrs.get("db.system") == "pinecone"
+        assert attrs.get("db.operation") == "upsert"
+        assert "db.vector.job_id" in attrs
+    finally:
+        orch_module.tracer = original_tracer
+        exporter.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_unknown_branch_emits_twilio_span():
+    """Unknown branch emits a 'twilio.send_sms' span with messaging.system and messaging.destination."""
+    import src.extraction.orchestrator as orch_module
+
+    exporter, test_tracer = _span_exporter_for_orchestrator()
+    original_tracer = orch_module.tracer
+    orch_module.tracer = test_tracer
+
+    try:
+        unknown = UnknownMessage(reason="Greeting with no actionable content")
+        result = ExtractionResult(message_type="unknown", unknown=unknown)
+        orchestrator, _, _, _, _, _ = _make_orchestrator(result)
+        session = _make_session()
+
+        # Mock asyncio.to_thread to avoid real Twilio call
+        with patch("src.extraction.orchestrator.asyncio.to_thread", new=AsyncMock(return_value=None)):
+            await orchestrator.run(
+                session=session,
+                sms_text="Hello!",
+                phone_hash="hash789",
+                message_id=3,
+                user_id=12,
+                message_sid="SMghi",
+                from_number="+15550001111",
+            )
+
+        spans = exporter.get_finished_spans()
+        span_names = [s.name for s in spans]
+        assert "twilio.send_sms" in span_names, f"Expected 'twilio.send_sms' span. Got: {span_names}"
+
+        twilio_span = next(s for s in spans if s.name == "twilio.send_sms")
+        attrs = dict(twilio_span.attributes)
+        assert attrs.get("messaging.system") == "twilio"
+        assert attrs.get("messaging.destination") == "+15550001111"
+    finally:
+        orch_module.tracer = original_tracer
+        exporter.shutdown()

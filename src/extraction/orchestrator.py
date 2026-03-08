@@ -3,10 +3,13 @@ import json
 from datetime import UTC, datetime
 
 import structlog
+from opentelemetry import trace as otel_trace
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_sessionmaker
+
+tracer = otel_trace.get_tracer(__name__)
 from src.extraction.constants import UNKNOWN_REPLY_TEXT
 from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
@@ -99,13 +102,17 @@ class PipelineOrchestrator:
 
             # Fire-and-forget Pinecone upsert (after commit)
             try:
-                await self._pinecone_client(
-                    job_id=job.id,
-                    description=result.job.description,
-                    phone_hash=phone_hash,
-                    openai_client=self._extraction_service._client,
-                    settings=self._extraction_service._settings,
-                )
+                with tracer.start_as_current_span("pinecone.upsert") as span:
+                    span.set_attribute("db.system", "pinecone")
+                    span.set_attribute("db.operation", "upsert")
+                    span.set_attribute("db.vector.job_id", str(job.id))
+                    await self._pinecone_client(
+                        job_id=job.id,
+                        description=result.job.description,
+                        phone_hash=phone_hash,
+                        openai_client=self._extraction_service._client,
+                        settings=self._extraction_service._settings,
+                    )
             except Exception as e:
                 log.error("pinecone_write_failed", job_id=job.id, error=str(e))
                 # Enqueue retry in a separate session so the main commit is not affected
@@ -157,12 +164,15 @@ class PipelineOrchestrator:
 
             # Send Twilio unknown reply (synchronous client wrapped in thread)
             settings = self._extraction_service._settings
-            await asyncio.to_thread(
-                self._twilio_client.messages.create,
-                to=from_number,
-                from_=settings.sms.from_number,
-                body=UNKNOWN_REPLY_TEXT,
-            )
+            with tracer.start_as_current_span("twilio.send_sms") as span:
+                span.set_attribute("messaging.system", "twilio")
+                span.set_attribute("messaging.destination", from_number)
+                await asyncio.to_thread(
+                    self._twilio_client.messages.create,
+                    to=from_number,
+                    from_=settings.sms.from_number,
+                    body=UNKNOWN_REPLY_TEXT,
+                )
             log.info("unknown_reply_sent", message_sid=message_sid, to=from_number)
 
         return result
