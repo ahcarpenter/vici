@@ -28,7 +28,7 @@ class Message(SQLModel, table=True):
 class RateLimit(SQLModel, table=True):
     __tablename__ = "rate_limit"
     __table_args__ = (
-        UniqueConstraint("user_id", "window_start", name="uq_rate_limit_user_window"),
+        UniqueConstraint("user_id", "created_at", name="uq_rate_limit_user_window"),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -37,7 +37,7 @@ class RateLimit(SQLModel, table=True):
             sa.Integer, sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
         )
     )
-    window_start: datetime = Field(
+    created_at: datetime = Field(
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False)
     )
     count: int = Field(default=1)

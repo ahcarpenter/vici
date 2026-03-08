@@ -94,7 +94,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("job_id", sa.Integer(), nullable=False),
         sa.Column("work_request_id", sa.Integer(), nullable=False),
-        sa.Column("matched_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["job_id"], ["job.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["work_request_id"], ["work_request.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
@@ -106,11 +106,11 @@ def upgrade() -> None:
         "rate_limit",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("window_start", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("count", sa.Integer(), nullable=False, server_default="1"),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "window_start", name="uq_rate_limit_user_window"),
+        sa.UniqueConstraint("user_id", "created_at", name="uq_rate_limit_user_window"),
     )
 
     # 7. audit_log (depends on message via nullable FK)

@@ -23,7 +23,7 @@ class Match(SQLModel, table=True):
             sa.Integer, sa.ForeignKey("work_request.id", ondelete="RESTRICT"), nullable=False
         )
     )
-    matched_at: datetime = Field(
+    created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),
     )
