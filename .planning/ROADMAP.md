@@ -62,12 +62,22 @@ Plans:
 - [ ] 02-01-PLAN.md — Pydantic extraction schemas, ExtractionService with Braintrust-wrapped OpenAI client, static system prompt with few-shot examples, tenacity retry, test scaffold
 - [ ] 02-02-PLAN.md — Alembic migration (job columns + pinecone_sync_queue), job/worker repositories, Pinecone embedding write with fire-and-forget fallback, lifespan singleton, Inngest cron stub
 
+### Phase 02.4: ensure prometheus instance is setup (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 2
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 02.4 to break down)
+
 ### Phase 02.3: Migrate Jaeger to v2 and optimize tracing setup (INSERTED)
 
 **Goal:** Jaeger v1 all-in-one replaced with Jaeger v2 (collector + query) backed by OpenSearch 2.x; OTel TracerProvider configured with ALWAYS_ON sampler and extended resource attributes; manual spans added to all four uninstrumented pipeline steps (Inngest, GPT, Pinecone, Twilio)
 **Requirements**: TBD
 **Depends on:** Phase 2
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 02.3-01-PLAN.md — Jaeger v2 docker-compose migration (opensearch + jaeger-collector + jaeger-query), YAML config files, _configure_otel() ALWAYS_ON sampler + resource attributes

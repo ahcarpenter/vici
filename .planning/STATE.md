@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.3-01-PLAN.md
-last_updated: "2026-03-08T07:55:45.415Z"
+stopped_at: Completed 02.3-02-PLAN.md (awaiting human verify checkpoint)
+last_updated: "2026-03-08T08:01:14.394Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
-  total_phases: 8
-  completed_phases: 4
+  total_phases: 9
+  completed_phases: 5
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 67
 ---
 
@@ -62,6 +62,7 @@ Progress: [███████░░░] 67%
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P02 | 233 | 2 tasks | 9 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P03 | 25 | 2 tasks | 7 files |
 | Phase 02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup P01 | 20 | 2 tasks | 6 files |
+| Phase 02.3 P02 | 20 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -101,12 +102,15 @@ Recent decisions affecting current work:
 - [Phase 02.3]: ALWAYS_ON sampler (not ParentBasedTraceIdRatio) — unambiguous, no parent-based override
 - [Phase 02.3]: opensearch replicas=0 for single-node local dev — replicas>0 causes yellow cluster health
 - [Phase 02.3]: GIT_SHA env var maps to git_sha flat field in Settings, wired to observability.service_version
+- [Phase 02.3]: Module-level tracer patched directly in test fixtures (not via set_tracer_provider) — provider override warning makes InMemorySpanExporter approach unreliable without direct attribute patching
+- [Phase 02.3]: Twilio span created in async context wrapping asyncio.to_thread — OTel context not propagated into threads
 
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Apply revised 3NF schema and propagate throughout app (URGENT)
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
 - Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 and optimize tracing setup (URGENT)
+- Phase 02.4 inserted after Phase 2: Ensure prometheus instance is setup (URGENT)
 
 ### Pending Todos
 
@@ -118,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T07:55:45.413Z
-Stopped at: Completed 02.3-01-PLAN.md
+Last session: 2026-03-08T08:01:14.392Z
+Stopped at: Completed 02.3-02-PLAN.md (awaiting human verify checkpoint)
 Resume file: None
