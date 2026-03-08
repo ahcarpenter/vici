@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.1-01-PLAN.md
-last_updated: "2026-03-08T06:27:10.932Z"
+stopped_at: Completed 02.1-02-PLAN.md
+last_updated: "2026-03-08T06:33:48.985Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 67
 ---
 
@@ -59,6 +59,7 @@ Progress: [███████░░░] 67%
 | Phase 02-gpt-extraction-service P02 | 45 | 2 tasks | 14 files |
 | Phase 02-gpt-extraction-service P03 | 15 | 2 tasks | 4 files |
 | Phase 02.1-refactor-persistence-layer-and-service-boundaries P01 | 332 | 3 tasks | 21 files |
+| Phase 02.1-refactor-persistence-layer-and-service-boundaries P02 | 233 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 02.1-01]: Nested Settings use model_validator(mode=after) remapping flat env vars — no .env changes required
 - [Phase 02.1-01]: Rate limit SELECT uses raw SQL to bypass ORM identity cache stale reads across multiple calls in same session
 - [Phase 02.1-01]: sms/service.py is now a pure-function module — hash_phone and emit_message_received_event only
+- [Phase 02.1-02]: ExtractionService receives pre-built openai_client — caller wraps with braintrust.wrap_openai before injection
+- [Phase 02.1-02]: PipelineOrchestrator.run() issues single session.commit() per branch; Pinecone fires after commit to avoid rollback coupling
+- [Phase 02.1-02]: Pinecone failure enqueued in separate session so main transaction is not affected
 
 ### Roadmap Evolution
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T06:27:10.929Z
-Stopped at: Completed 02.1-01-PLAN.md
+Last session: 2026-03-08T06:33:48.982Z
+Stopped at: Completed 02.1-02-PLAN.md
 Resume file: None
