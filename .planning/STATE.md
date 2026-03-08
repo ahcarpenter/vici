@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.4-01-PLAN.md
-last_updated: "2026-03-08T08:58:44.268Z"
+stopped_at: "Checkpoint: human-verify 02.4-02 task 3"
+last_updated: "2026-03-08T09:01:19.395Z"
 last_activity: "2026-03-06 — Plan 01-02 complete: webhook security gate chain implemented"
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
   percent: 67
 ---
 
@@ -64,6 +64,7 @@ Progress: [███████░░░] 67%
 | Phase 02.3-migrate-jaeger-to-v2-and-optimize-tracing-setup P01 | 20 | 2 tasks | 6 files |
 | Phase 02.3 P02 | 20 | 2 tasks | 7 files |
 | Phase 02.4-ensure-prometheus-instance-is-setup P01 | 15 | 3 tasks | 7 files |
+| Phase 02.4-ensure-prometheus-instance-is-setup P02 | 15 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Recent decisions affecting current work:
 - [Phase 02.4-01]: Metrics imported inside process() (not at module top of service.py) to avoid circular imports
 - [Phase 02.4-01]: _call_with_retry returns (result, usage) tuple — process() unpacks and records token metrics
 - [Phase 02.4-01]: inngest_queue_depth Gauge always reads 0 — stub placeholder, no background task needed
+- [Phase 02.4-02]: Dashboard datasource referenced by uid='prometheus' to ensure reliable resolution after provisioning
+- [Phase 02.4-02]: grafana_data is the first named Docker volume in this project; others use bind mounts
 
 ### Roadmap Evolution
 
@@ -127,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-08T08:58:44.265Z
-Stopped at: Completed 02.4-01-PLAN.md
+Last session: 2026-03-08T09:01:19.392Z
+Stopped at: Checkpoint: human-verify 02.4-02 task 3
 Resume file: None
