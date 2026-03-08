@@ -142,3 +142,4 @@
 | PROD-06 | Phase 02.5 | Complete | .env.example audit |
 | PROD-07 | Phase 02.5 | Complete | Gauge updater background task |
 | PROD-08 | Phase 02.5 | Complete | Wave 1 coverage audit |
+| DOC-README | Phase 02.7 | Complete | Full developer README with local setup, env vars, architecture, and deployment |
