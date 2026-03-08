@@ -62,6 +62,18 @@ Plans:
 - [ ] 02-01-PLAN.md — Pydantic extraction schemas, ExtractionService with Braintrust-wrapped OpenAI client, static system prompt with few-shot examples, tenacity retry, test scaffold
 - [ ] 02-02-PLAN.md — Alembic migration (job columns + pinecone_sync_queue), job/worker repositories, Pinecone embedding write with fire-and-forget fallback, lifespan singleton, Inngest cron stub
 
+### Phase 02.1: Refactor persistence layer and service boundaries (INSERTED)
+
+**Goal:** Clean architecture refactor addressing 30 staff-engineer audit findings — split ExtractionService into GPT-only service + PipelineOrchestrator, add MessageRepository/AuditLogRepository, normalize repositories to flush-only, group Settings into 4 nested Pydantic models, convert boolean returns to exceptions, and wire a full DI graph through FastAPI lifespan
+**Requirements**: layering/DI, persistence/repositories, transactions/flush, config/settings, exception-handling, test-restructuring
+**Depends on:** Phase 2
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02.1-01-PLAN.md — Config nesting (4 sub-models), MessageRepository, AuditLogRepository, exception-based SMS router, Wave 0 test scaffold
+- [ ] 02.1-02-PLAN.md — ExtractionService decomposition (GPT-only), PipelineOrchestrator creation, flush-only repository normalization
+- [ ] 02.1-03-PLAN.md — Full DI graph in lifespan, Inngest function wiring to orchestrator, 3 integration happy-path tests
+
 ### Phase 3: Earnings Math Matching
 **Goal**: A tested MatchService exists that accepts a worker goal record and returns a ranked list of jobs satisfying `rate × duration >= target_earnings`, sorted by soonest available then shortest duration, with SMS formatting and empty-match handling — ready to be called from the Inngest function in Phase 4
 **Depends on**: Phase 2
@@ -99,5 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 3/3 | Complete   | 2026-03-06 |
 | 2. GPT Extraction Service | 0/2 | Not started | - |
+| 02.1. Refactor persistence layer | 0/3 | Not started | - |
 | 3. Earnings Math Matching | 0/1 | Not started | - |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | - |
