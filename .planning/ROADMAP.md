@@ -97,16 +97,6 @@ Plans:
 - [ ] 02.3-01-PLAN.md — Jaeger v2 docker-compose migration (opensearch + jaeger-collector + jaeger-query), YAML config files, _configure_otel() ALWAYS_ON sampler + resource attributes
 - [ ] 02.3-02-PLAN.md — Manual OTel spans for Inngest function, GPT calls, Pinecone upserts, Twilio SMS; span attribute conventions; unit tests with InMemorySpanExporter
 
-### Phase 02.2: ensure prometheus is setup fully and correctly (INSERTED)
-
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
-**Depends on:** Phase 2
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 02.2 to break down)
-
 ### Phase 02.1: Refactor persistence layer and service boundaries (INSERTED)
 
 **Goal:** Clean architecture refactor addressing 30 staff-engineer audit findings — split ExtractionService into GPT-only service + PipelineOrchestrator, add MessageRepository/AuditLogRepository, normalize repositories to flush-only, group Settings into 4 nested Pydantic models, convert boolean returns to exceptions, and wire a full DI graph through FastAPI lifespan
