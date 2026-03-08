@@ -112,8 +112,12 @@ async def test_tenacity_retry_on_rate_limit():
     mock_message.parsed = expected
     mock_choice = MagicMock()
     mock_choice.message = mock_message
+    mock_usage = MagicMock()
+    mock_usage.prompt_tokens = 10
+    mock_usage.completion_tokens = 5
     mock_completion = MagicMock()
     mock_completion.choices = [mock_choice]
+    mock_completion.usage = mock_usage
 
     rate_limit_error = RateLimitError(
         message="Rate limit exceeded",

@@ -31,12 +31,27 @@ class ExtractionService:
 
     async def process(self, sms_text: str, phone_hash: str) -> ExtractionResult:
         """GPT classification only — no DB, no session param."""
+        import time
+        from src.metrics import (
+            gpt_calls_total,
+            gpt_call_duration_seconds,
+            gpt_input_tokens_total,
+            gpt_output_tokens_total,
+        )
+
         user_message = f"Today is {date.today().isoformat()}. Message: {sms_text}"
 
         with tracer.start_as_current_span("gpt.classify_and_extract") as span:
             span.set_attribute("gen_ai.system", "openai")
             span.set_attribute("gen_ai.request.model", self._settings.extraction.gpt_model)
-            result = await self._call_with_retry(user_message)
+            t0 = time.perf_counter()
+            result, usage = await self._call_with_retry(user_message)
+            gpt_call_duration_seconds.observe(time.perf_counter() - t0)
+
+        gpt_calls_total.labels(classification_result=result.message_type).inc()
+        if usage:
+            gpt_input_tokens_total.inc(usage.prompt_tokens or 0)
+            gpt_output_tokens_total.inc(usage.completion_tokens or 0)
 
         log.info(
             "gpt_classified",
@@ -60,4 +75,4 @@ class ExtractionService:
             ],
             response_format=ExtractionResult,
         )
-        return completion.choices[0].message.parsed
+        return completion.choices[0].message.parsed, completion.usage

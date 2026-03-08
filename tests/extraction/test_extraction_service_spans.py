@@ -60,7 +60,10 @@ async def test_extraction_service_emits_gpt_span(span_exporter):
         ),
     )
 
-    with patch.object(service, "_call_with_retry", new=AsyncMock(return_value=stub_result)):
+    stub_usage = MagicMock()
+    stub_usage.prompt_tokens = 10
+    stub_usage.completion_tokens = 5
+    with patch.object(service, "_call_with_retry", new=AsyncMock(return_value=(stub_result, stub_usage))):
         result = await service.process(sms_text="Need a mover", phone_hash="hash123")
 
     assert result.message_type == "job_posting"
@@ -83,8 +86,11 @@ async def test_extraction_service_gpt_span_attributes_match_settings(span_export
     assert service._settings.extraction.gpt_model == GPT_MODEL
 
     stub_result = ExtractionResult(message_type="unknown")
+    stub_usage = MagicMock()
+    stub_usage.prompt_tokens = 0
+    stub_usage.completion_tokens = 0
 
-    with patch.object(service, "_call_with_retry", new=AsyncMock(return_value=stub_result)):
+    with patch.object(service, "_call_with_retry", new=AsyncMock(return_value=(stub_result, stub_usage))):
         await service.process(sms_text="Hello!", phone_hash="hash456")
 
     spans = span_exporter.get_finished_spans()
