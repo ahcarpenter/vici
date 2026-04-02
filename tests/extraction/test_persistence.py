@@ -59,7 +59,7 @@ async def test_job_persistence(async_session, user_and_message):
         datetime_flexible=False,
         raw_sms="Need a mover for Saturday downtown Chicago $25/hr",
     )
-    job = await JobRepository.create(async_session, job_create)
+    job = await JobRepository().create(async_session, job_create)
 
     assert job.id is not None
     assert job.description == "Need a mover for Saturday"
@@ -89,7 +89,7 @@ async def test_worker_persistence(async_session, user_and_message):
         target_timeframe="today",
         raw_sms="I need $200 today",
     )
-    wr = await WorkRequestRepository.create(async_session, wr_create)
+    wr = await WorkRequestRepository().create(async_session, wr_create)
 
     assert wr.id is not None
     assert wr.target_earnings == 200.0

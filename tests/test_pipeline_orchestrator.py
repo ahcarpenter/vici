@@ -23,11 +23,19 @@ def _make_orchestrator(
     extraction_result: ExtractionResult,
     pinecone_side_effect=None,
 ):
-    """Build a PipelineOrchestrator with all deps mocked."""
+    """Build a PipelineOrchestrator with all deps mocked via handler chain."""
     from src.extraction.orchestrator import PipelineOrchestrator
+    from src.pipeline.handlers.job_posting import JobPostingHandler
+    from src.pipeline.handlers.unknown import UnknownMessageHandler
+    from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 
     mock_extraction_service = AsyncMock()
     mock_extraction_service.process = AsyncMock(return_value=extraction_result)
+    # For UnknownMessageHandler — needs settings.sms.from_number
+    mock_extraction_service.settings = MagicMock()
+    mock_extraction_service.settings.sms.from_number = "+15559999999"
+    # For JobPostingHandler — needs openai_client
+    mock_extraction_service.openai_client = MagicMock()
 
     mock_job_repo = AsyncMock()
     mock_job = MagicMock()
@@ -39,7 +47,6 @@ def _make_orchestrator(
     mock_wr.id = 99
     mock_wr_repo.create = AsyncMock(return_value=mock_wr)
 
-    mock_message_repo = AsyncMock()
     mock_audit_repo = AsyncMock()
     mock_audit_repo.write = AsyncMock(return_value=None)
 
@@ -49,14 +56,27 @@ def _make_orchestrator(
 
     mock_twilio = MagicMock()
 
+    handlers = [
+        JobPostingHandler(
+            job_repo=mock_job_repo,
+            audit_repo=mock_audit_repo,
+            pinecone_client=mock_pinecone,
+            extraction_service=mock_extraction_service,
+        ),
+        WorkerGoalHandler(
+            work_request_repo=mock_wr_repo,
+            audit_repo=mock_audit_repo,
+        ),
+        UnknownMessageHandler(
+            twilio_client=mock_twilio,
+            extraction_service=mock_extraction_service,
+        ),
+    ]
+
     orchestrator = PipelineOrchestrator(
         extraction_service=mock_extraction_service,
-        job_repo=mock_job_repo,
-        work_request_repo=mock_wr_repo,
-        message_repo=mock_message_repo,
         audit_repo=mock_audit_repo,
-        pinecone_client=mock_pinecone,
-        twilio_client=mock_twilio,
+        handlers=handlers,
     )
     return orchestrator, mock_extraction_service, mock_job_repo, mock_wr_repo, mock_audit_repo, mock_pinecone
 
@@ -83,7 +103,7 @@ async def test_job_branch_commits_once():
     orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
     session = _make_session()
 
-    with patch("src.extraction.orchestrator.get_sessionmaker"):
+    with patch("src.pipeline.handlers.job_posting.get_sessionmaker"):
         out = await orchestrator.run(
             session=session,
             sms_text="Need a mover for Saturday",
@@ -173,7 +193,7 @@ async def test_pinecone_failure_enqueues_retry():
     mock_s2.__aexit__ = AsyncMock(return_value=None)
     mock_sessionmaker = MagicMock(return_value=mock_s2)
 
-    with patch("src.extraction.orchestrator.get_sessionmaker", return_value=mock_sessionmaker):
+    with patch("src.pipeline.handlers.job_posting.get_sessionmaker", return_value=mock_sessionmaker):
         out = await orchestrator.run(
             session=session,
             sms_text="Painting job downtown $500",
@@ -197,6 +217,7 @@ async def test_pinecone_failure_enqueues_retry():
 # Span tests (plan 02.3-02)
 # ---------------------------------------------------------------------------
 
+
 def _span_exporter_for_orchestrator():
     """Return (exporter, test_tracer) patched into orchestrator module."""
     exporter = InMemorySpanExporter()
@@ -209,11 +230,11 @@ def _span_exporter_for_orchestrator():
 @pytest.mark.asyncio
 async def test_job_branch_emits_pinecone_span():
     """Job branch emits a 'pinecone.upsert' span with db.system, db.operation, db.vector.job_id."""
-    import src.extraction.orchestrator as orch_module
+    import src.pipeline.handlers.job_posting as job_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
-    original_tracer = orch_module.tracer
-    orch_module.tracer = test_tracer
+    original_tracer = job_handler_module.tracer
+    job_handler_module.tracer = test_tracer
 
     try:
         job = JobExtraction(
@@ -227,7 +248,7 @@ async def test_job_branch_emits_pinecone_span():
         orchestrator, _, job_repo, _, _, pinecone = _make_orchestrator(result)
         session = _make_session()
 
-        with patch("src.extraction.orchestrator.get_sessionmaker"):
+        with patch("src.pipeline.handlers.job_posting.get_sessionmaker"):
             await orchestrator.run(
                 session=session,
                 sms_text="Need a mover for Saturday",
@@ -248,18 +269,18 @@ async def test_job_branch_emits_pinecone_span():
         assert attrs.get("db.operation") == "upsert"
         assert "db.vector.job_id" in attrs
     finally:
-        orch_module.tracer = original_tracer
+        job_handler_module.tracer = original_tracer
         exporter.shutdown()
 
 
 @pytest.mark.asyncio
 async def test_unknown_branch_emits_twilio_span():
     """Unknown branch emits a 'twilio.send_sms' span with messaging.system and messaging.destination."""
-    import src.extraction.orchestrator as orch_module
+    import src.pipeline.handlers.unknown as unknown_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
-    original_tracer = orch_module.tracer
-    orch_module.tracer = test_tracer
+    original_tracer = unknown_handler_module.tracer
+    unknown_handler_module.tracer = test_tracer
 
     try:
         unknown = UnknownMessage(reason="Greeting with no actionable content")
@@ -268,7 +289,7 @@ async def test_unknown_branch_emits_twilio_span():
         session = _make_session()
 
         # Mock asyncio.to_thread to avoid real Twilio call
-        with patch("src.extraction.orchestrator.asyncio.to_thread", new=AsyncMock(return_value=None)):
+        with patch("src.pipeline.handlers.unknown.asyncio.to_thread", new=AsyncMock(return_value=None)):
             await orchestrator.run(
                 session=session,
                 sms_text="Hello!",
@@ -288,7 +309,7 @@ async def test_unknown_branch_emits_twilio_span():
         assert attrs.get("messaging.system") == "twilio"
         assert attrs.get("messaging.destination") == "+15550001111"
     finally:
-        orch_module.tracer = original_tracer
+        unknown_handler_module.tracer = original_tracer
         exporter.shutdown()
 
 

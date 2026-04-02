@@ -21,9 +21,11 @@ from src.inngest_client import get_inngest_client
 from src.jobs.models import Job
 from src.jobs.repository import JobRepository
 from src.main import create_app
+from src.pipeline.handlers.job_posting import JobPostingHandler
+from src.pipeline.handlers.unknown import UnknownMessageHandler
+from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.models import AuditLog, Message
-from src.sms.repository import MessageRepository
 from src.work_requests.repository import WorkRequestRepository
 
 
@@ -54,9 +56,9 @@ async def test_full_pipeline_job_posting(test_engine, async_session):
     from src.extraction.service import ExtractionService
 
     mock_extraction_service = MagicMock(spec=ExtractionService)
-    mock_extraction_service._settings = MagicMock()
-    mock_extraction_service._settings.sms.from_number = "+10000000000"
-    mock_extraction_service._client = MagicMock()
+    mock_extraction_service.settings = MagicMock()
+    mock_extraction_service.settings.sms.from_number = "+10000000000"
+    mock_extraction_service.openai_client = MagicMock()
 
     extraction_result = ExtractionResult(
         message_type="job_posting",
@@ -75,14 +77,31 @@ async def test_full_pipeline_job_posting(test_engine, async_session):
 
     mock_twilio = MagicMock()
 
+    job_repo = JobRepository()
+    work_request_repo = WorkRequestRepository()
+    audit_repo = AuditLogRepository()
+
+    handlers = [
+        JobPostingHandler(
+            job_repo=job_repo,
+            audit_repo=audit_repo,
+            pinecone_client=noop_pinecone,
+            extraction_service=mock_extraction_service,
+        ),
+        WorkerGoalHandler(
+            work_request_repo=work_request_repo,
+            audit_repo=audit_repo,
+        ),
+        UnknownMessageHandler(
+            twilio_client=mock_twilio,
+            extraction_service=mock_extraction_service,
+        ),
+    ]
+
     orchestrator = PipelineOrchestrator(
         extraction_service=mock_extraction_service,
-        job_repo=JobRepository,
-        work_request_repo=WorkRequestRepository,
-        message_repo=MessageRepository,
-        audit_repo=AuditLogRepository,
-        pinecone_client=noop_pinecone,
-        twilio_client=mock_twilio,
+        audit_repo=audit_repo,
+        handlers=handlers,
     )
 
     # Override sessionmaker used by orchestrator's pinecone fallback
@@ -100,7 +119,7 @@ async def test_full_pipeline_job_posting(test_engine, async_session):
     try:
         with (
             patch("src.inngest_client.get_sessionmaker", return_value=lambda: session_factory()),
-            patch("src.extraction.orchestrator.get_sessionmaker", return_value=lambda: session_factory()),
+            patch("src.pipeline.handlers.job_posting.get_sessionmaker", return_value=lambda: session_factory()),
             patch("twilio.request_validator.RequestValidator.validate", return_value=True),
             patch.object(get_inngest_client(), "send", new_callable=AsyncMock),
         ):

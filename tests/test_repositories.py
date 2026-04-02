@@ -56,7 +56,7 @@ async def test_audit_log_write(async_session, make_message):
     from src.sms.models import AuditLog
 
     message = await make_message()
-    await AuditLogRepository.write(
+    await AuditLogRepository().write(
         async_session,
         message_sid=message.message_sid,
         event="test_event",

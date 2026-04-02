@@ -69,7 +69,7 @@ async def check_idempotency(
             await MessageRepository.check_idempotency(session, message_sid)
     except DuplicateMessageSid:
         async with session.begin():
-            await AuditLogRepository.write(session, message_sid, "duplicate")
+            await AuditLogRepository().write(session, message_sid, "duplicate")
         raise
     return form_data
 
@@ -99,6 +99,6 @@ async def enforce_rate_limit(
             await MessageRepository.enforce_rate_limit(session, user.id)
     except RateLimitExceeded:
         async with session.begin():
-            await AuditLogRepository.write(session, message_sid, "rate_limited")
+            await AuditLogRepository().write(session, message_sid, "rate_limited")
         raise
     return form_data, user

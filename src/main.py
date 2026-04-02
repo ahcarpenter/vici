@@ -29,9 +29,11 @@ from src.extraction.pinecone_client import write_job_embedding
 from src.extraction.service import ExtractionService
 from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.jobs.repository import JobRepository
+from src.pipeline.handlers.job_posting import JobPostingHandler
+from src.pipeline.handlers.unknown import UnknownMessageHandler
+from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
-from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
 from src.work_requests.repository import WorkRequestRepository
 
@@ -62,13 +64,15 @@ def _configure_structlog() -> None:
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
-    resource = Resource(attributes={
-        "service.name": settings.observability.otel_service_name,
-        "deployment.environment": (
-            "development" if settings.inngest_dev else "production"
-        ),
-        "service.version": settings.observability.service_version,
-    })
+    resource = Resource(
+        attributes={
+            "service.name": settings.observability.otel_service_name,
+            "deployment.environment": (
+                "development" if settings.inngest_dev else "production"
+            ),
+            "service.version": settings.observability.service_version,
+        }
+    )
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
     provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
     provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -94,20 +98,39 @@ async def lifespan(app: FastAPI):
     pinecone_client = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
+    # Build handler instances (repos are now instances, not class refs)
+    job_repo = JobRepository()
+    work_request_repo = WorkRequestRepository()
+    audit_repo = AuditLogRepository()
+
+    handlers = [
+        JobPostingHandler(
+            job_repo=job_repo,
+            audit_repo=audit_repo,
+            pinecone_client=pinecone_client,
+            extraction_service=extraction_service,
+        ),
+        WorkerGoalHandler(
+            work_request_repo=work_request_repo,
+            audit_repo=audit_repo,
+        ),
+        UnknownMessageHandler(
+            twilio_client=twilio_client,
+            extraction_service=extraction_service,
+        ),
+    ]
+
     orchestrator = PipelineOrchestrator(
         extraction_service=extraction_service,
-        job_repo=JobRepository,
-        work_request_repo=WorkRequestRepository,
-        message_repo=MessageRepository,
-        audit_repo=AuditLogRepository,
-        pinecone_client=pinecone_client,
-        twilio_client=twilio_client,
+        audit_repo=audit_repo,
+        handlers=handlers,
     )
 
     app.state.orchestrator = orchestrator
 
     # Inject orchestrator and openai_client into inngest_client module
     import src.inngest_client as ic
+
     ic._orchestrator = orchestrator
     ic._openai_client = openai_client
 

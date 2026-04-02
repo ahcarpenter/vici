@@ -32,8 +32,8 @@ async def receive_sms(
     body = form_data.get("Body", "")
 
     async with session.begin():
-        message = await MessageRepository.create(session, message_sid, user.id, body)
-        await AuditLogRepository.write(
+        message = await MessageRepository().create(session, message_sid, user.id, body)
+        await AuditLogRepository().write(
             session,
             message_sid,
             "received",
