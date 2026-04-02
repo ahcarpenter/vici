@@ -78,6 +78,16 @@ Plans:
 - [x] 02.8-01-PLAN.md — SUPERSEDED by 02.8-02 (research found REFACTOR-03/04 already done in codebase)
 - [x] 02.8-02-PLAN.md — UserRepository extraction, EarlyReturn exception handler, sms/router.py Depends() refactor
 
+### Phase 02.8.1: refactor the code as appropriate taking SOLID principles into account (INSERTED)
+
+**Goal:** Refactor PipelineOrchestrator.run() from 3 inline branches into Chain of Responsibility handler pattern, and extract duplicated session.add/flush/return across 4 repositories into BaseRepository Template Method — preparing the codebase for Phase 3/4 handler additions (OCP) and eliminating 4x persist duplication (DRY)
+**Requirements**: SOLID-01, SOLID-02
+**Depends on:** Phase 02.8
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02.8.1-PLAN.md — BaseRepository Template Method, Chain of Responsibility handlers, orchestrator refactor, DI rewiring
+
 ### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
 
 **Goal:** Write a complete README.md covering project purpose, local setup, environment variable reference, running tests, project structure, and deployment — so any developer can clone and run the stack without prior context
