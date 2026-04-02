@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.8-01-PLAN.md
-last_updated: "2026-04-02T21:37:19.689Z"
+stopped_at: Phase 02.8.1 context gathered
+last_updated: "2026-04-02T22:41:16.362Z"
 last_activity: 2026-04-02
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 9
   total_plans: 23
   completed_plans: 23
@@ -146,6 +146,7 @@ Recent decisions affecting current work:
 
 - Phase 1.1 inserted after Phase 1: Apply revised 3NF schema (URGENT)
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
+- Phase 02.8.1 inserted after Phase 02.8: refactor the code as appropriate taking SOLID principles into account (URGENT)
 - Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 (URGENT)
 - Phase 02.4 inserted after Phase 2: Ensure Prometheus is setup (URGENT)
 - Phase 02.2 removed: consolidated into Phase 02.4
@@ -173,7 +174,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T19:41:34.575Z
-Stopped at: Completed 02.8-01-PLAN.md
-Resume file: None
+Last session: 2026-04-02T22:41:16.359Z
+Stopped at: Phase 02.8.1 context gathered
+Resume file: .planning/phases/02.8.1-refactor-the-code-as-appropriate-taking-solid-principles-into-account/02.8.1-CONTEXT.md
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
