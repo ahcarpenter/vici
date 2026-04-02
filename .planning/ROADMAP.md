@@ -67,15 +67,15 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
-### Phase 02.8: review all existing code and refactor taking into account the standards in .claude/AGENTS.md (INSERTED)
+### Phase 02.8: Review all existing code and refactor to CLAUDE.md standards (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Refactor all src/ files to meet FastAPI best practices defined in .claude/CLAUDE.md — Depends() injection for all SMS gates, Pydantic Field() constraints on all schemas, UserRepository extraction, DB naming convention, bug fix, encapsulation fix, and inline import removal
+**Requirements**: REFACTOR-01, REFACTOR-02, REFACTOR-03, REFACTOR-04, REFACTOR-05
 **Depends on:** Phase 2
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 02.8 to break down)
+- [ ] 02.8-01-PLAN.md — All refactors: bug fix, imports, DB naming, encapsulation, Field() constraints, UserRepository extraction, sms/router.py Depends() refactor with EarlyReturn handler
 
 ### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
 
