@@ -30,7 +30,7 @@ from src.extraction.service import ExtractionService
 from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.jobs.repository import JobRepository
 from src.sms.audit_repository import AuditLogRepository
-from src.sms.exceptions import TwilioSignatureInvalid
+from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
 from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
 from src.work_requests.repository import WorkRequestRepository
@@ -64,7 +64,9 @@ def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
     resource = Resource(attributes={
         "service.name": settings.observability.otel_service_name,
-        "deployment.environment": "development" if settings.inngest_dev else "production",
+        "deployment.environment": (
+            "development" if settings.inngest_dev else "production"
+        ),
         "service.version": settings.observability.service_version,
     })
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
@@ -86,7 +88,9 @@ async def lifespan(app: FastAPI):
     openai_client = wrap_openai(
         AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
     )
-    extraction_service = ExtractionService(openai_client=openai_client, settings=settings)
+    extraction_service = ExtractionService(
+        openai_client=openai_client, settings=settings
+    )
     pinecone_client = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
@@ -115,12 +119,16 @@ async def lifespan(app: FastAPI):
             try:
                 async with get_sessionmaker()() as session:
                     result = await session.execute(
-                        text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
+                        text(
+                            "SELECT COUNT(*) FROM pinecone_sync_queue "
+                            "WHERE status = 'pending'"
+                        )
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
             except Exception as exc:
                 structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed — metric stale",
+                    "gauge_updater: pinecone_sync_queue depth read failed"
+                    " — metric stale",
                     error=str(exc),
                 )
             await asyncio.sleep(15)
@@ -147,6 +155,7 @@ def create_app() -> FastAPI:
         TwilioSignatureInvalid,
         twilio_signature_invalid_handler,
     )
+    app.add_exception_handler(EarlyReturn, early_return_handler)
 
     # Routers
     app.include_router(sms_router)

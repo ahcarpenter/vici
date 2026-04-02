@@ -192,7 +192,7 @@ async def test_sync_pinecone_queue_failure_path():
     update_call_args = update_session.execute.call_args
     query_str = str(update_call_args.args[0])
     assert "failed" in query_str
-    assert "retry_count" in query_str
+    assert "attempts" in query_str
     assert update_session.commit.await_count == 1
 
 
