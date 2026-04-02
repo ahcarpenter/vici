@@ -72,10 +72,10 @@ Plans:
 **Goal:** Refactor all src/ files to meet FastAPI best practices defined in .claude/CLAUDE.md — Depends() injection for all SMS gates, UserRepository extraction, and EarlyReturn exception handler for Twilio 200-response paths. (Research confirmed Field() constraints, bug fix, inline imports, DB naming, and encapsulation are already done.)
 **Requirements**: REFACTOR-01, REFACTOR-02, REFACTOR-03, REFACTOR-04, REFACTOR-05
 **Depends on:** Phase 2
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 02.8-01-PLAN.md — SUPERSEDED by 02.8-02 (research found REFACTOR-03/04 already done in codebase)
+- [x] 02.8-01-PLAN.md — SUPERSEDED by 02.8-02 (research found REFACTOR-03/04 already done in codebase)
 - [x] 02.8-02-PLAN.md — UserRepository extraction, EarlyReturn exception handler, sms/router.py Depends() refactor
 
 ### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
