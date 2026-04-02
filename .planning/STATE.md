@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Completed 02.7-01-PLAN.md
-last_updated: "2026-04-02T14:54:25.690Z"
-last_activity: "2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere"
+status: executing
+stopped_at: Completed 02.8-02-PLAN.md
+last_updated: "2026-04-02T19:39:34.611Z"
+last_activity: 2026-04-02
 progress:
   total_phases: 12
   completed_phases: 8
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 23
+  completed_plans: 22
   percent: 78
 ---
 
@@ -21,13 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
-**Current focus:** Phase 3 — Earnings Math Matching (next to execute)
+**Current focus:** Phase 02.8 — review-all-existing-code-and-refactor-being-sure-to-take-claude-md
 
 ## Current Position
 
-Phase: Phase 3 — Earnings Math Matching (not yet started)
-Status: Ready to plan/execute Phase 3
-Last activity: 2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere
+Phase: 02.8 (review-all-existing-code-and-refactor-being-sure-to-take-claude-md) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-02
 
 Progress: [████████░░] 78% (7 of 8 phases complete, all 19 plans complete)
 
@@ -137,6 +138,9 @@ Recent decisions affecting current work:
 - [Phase 02.6-01]: STACK.md and ARCHITECTURE.md now reflect the actual built system (Phases 01–02.5) with 0 pgvector references, 2026-03-08 date, HIGH confidence sourced from STATE.md/PROJECT.md/REQUIREMENTS.md
 - [Phase 02.6]: FEATURES.md and PITFALLS.md patched with accurate ✅/⏳ status, Phase 3/4 forward-looking content, 8 new implementation pitfalls, zero pgvector references
 - [Phase 02.7-01]: README links to .env.example via explicit cp command; migrations step marked optional when using Docker
+- [Phase 02.8]: UserRepository owns user upsert; MessageRepository no longer calls user logic (D-08)
+- [Phase 02.8]: EarlyReturn base exception short-circuits Twilio webhook to HTTP 200; avoids Twilio retries on 4xx
+- [Phase 02.8]: check_idempotency wraps SELECT in session.begin() to prevent autobegin leak blocking downstream begin() calls
 
 ### Roadmap Evolution
 
@@ -148,6 +152,7 @@ Recent decisions affecting current work:
 - Phase 02.5 inserted after Phase 02.4: Production hardening to staff engineer standards (INSERTED)
 - Phase 02.6 inserted after Phase 2: Ensure research docs are current (URGENT)
 - Phase 02.7 inserted after Phase 2: flesh out the README.md to also include instructions for getting setup locally (URGENT)
+- Phase 02.8 inserted after Phase 2: review all existing code, and refactor being sure to take CLAUDE.md (INSERTED)
 - Phase 02.8 inserted after Phase 2: review all existing code and refactor taking into account the standards in .claude/AGENTS.md (URGENT)
 
 ### Pending Todos
@@ -168,7 +173,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-08T16:11:02.861Z
-Stopped at: Completed 02.7-01-PLAN.md
+Last session: 2026-04-02T19:39:29.282Z
+Stopped at: Completed 02.8-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
