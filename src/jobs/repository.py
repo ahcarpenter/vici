@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +16,6 @@ class JobRepository:
                     str(job_create.ideal_datetime)
                 )
                 if ideal_dt.tzinfo is None:
-                    from datetime import timezone
                     ideal_dt = ideal_dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 ideal_dt = None

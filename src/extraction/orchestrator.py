@@ -109,8 +109,8 @@ class PipelineOrchestrator:
                         job_id=job.id,
                         description=result.job.description,
                         phone_hash=phone_hash,
-                        openai_client=self._extraction_service._client,
-                        settings=self._extraction_service._settings,
+                        openai_client=self._extraction_service.openai_client,
+                        settings=self._extraction_service.settings,
                     )
             except Exception as e:
                 log.error("pinecone_write_failed", job_id=job.id, error=str(e))
@@ -162,7 +162,7 @@ class PipelineOrchestrator:
             await session.commit()
 
             # Send Twilio unknown reply (synchronous client wrapped in thread)
-            settings = self._extraction_service._settings
+            settings = self._extraction_service.settings
             with tracer.start_as_current_span("twilio.send_sms") as span:
                 span.set_attribute("messaging.system", "twilio")
                 span.set_attribute("messaging.destination", from_number)

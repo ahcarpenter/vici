@@ -1,9 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class WorkRequestCreate(BaseModel):
-    user_id: int
-    message_id: int
-    target_earnings: float
-    target_timeframe: str
-    raw_sms: str
+    user_id: int = Field(gt=0)
+    message_id: int = Field(gt=0)
+    target_earnings: float = Field(gt=0)
+    target_timeframe: str = Field(min_length=1, max_length=255)
+    raw_sms: str = Field(min_length=1, max_length=1600)

@@ -1,3 +1,4 @@
+import time
 from datetime import date
 
 import structlog
@@ -14,6 +15,12 @@ from tenacity import (
 from src.extraction.constants import GPT_MODEL
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
+from src.metrics import (
+    gpt_call_duration_seconds,
+    gpt_calls_total,
+    gpt_input_tokens_total,
+    gpt_output_tokens_total,
+)
 
 tracer = otel_trace.get_tracer(__name__)
 
@@ -28,17 +35,16 @@ class ExtractionService:
         self._client = openai_client
         self._settings = settings
 
+    @property
+    def openai_client(self):
+        return self._client
+
+    @property
+    def settings(self):
+        return self._settings
+
     async def process(self, sms_text: str, phone_hash: str) -> ExtractionResult:
         """GPT classification only — no DB, no session param."""
-        import time
-
-        from src.metrics import (
-            gpt_call_duration_seconds,
-            gpt_calls_total,
-            gpt_input_tokens_total,
-            gpt_output_tokens_total,
-        )
-
         user_message = f"Today is {date.today().isoformat()}. Message: {sms_text}"
 
         with tracer.start_as_current_span("gpt.classify_and_extract") as span:

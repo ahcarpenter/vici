@@ -134,7 +134,7 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
             )
             async with get_sessionmaker()() as session:
                 await session.execute(
-                    text("UPDATE pinecone_sync_queue SET status='failed', retry_count=retry_count+1 WHERE id=:id"),
+                    text("UPDATE pinecone_sync_queue SET status='failed', attempts=attempts+1 WHERE id=:id"),
                     {"id": row["id"]},
                 )
                 await session.commit()
