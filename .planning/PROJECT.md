@@ -122,4 +122,4 @@ audit_log (id PK, message_id FK, raw_body, raw_gpt_response, created_at)
 | ALWAYS_ON OTel sampler | Unambiguous trace coverage; no parent-based override confusion | Implemented — Phase 02.3 |
 
 ---
-*Last updated: 2026-04-02 after Phase 02.8 completion — CLAUDE.md standards refactor, UserRepository, EarlyReturn handler, and Depends() chain all implemented and verified*
+*Last updated: 2026-04-02 after Phase 02.8.1 completion — SOLID refactor: BaseRepository Template Method (4 repos), Chain of Responsibility for PipelineOrchestrator (zero if/elif/else in run()), all 76 tests pass*
