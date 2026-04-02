@@ -20,7 +20,9 @@ class Match(SQLModel, table=True):
     )
     work_request_id: int = Field(
         sa_column=sa.Column(
-            sa.Integer, sa.ForeignKey("work_request.id", ondelete="RESTRICT"), nullable=False
+            sa.Integer,
+            sa.ForeignKey("work_request.id", ondelete="RESTRICT"),
+            nullable=False,
         )
     )
     created_at: datetime = Field(

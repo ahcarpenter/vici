@@ -49,7 +49,9 @@ class ExtractionService:
 
         with tracer.start_as_current_span("gpt.classify_and_extract") as span:
             span.set_attribute("gen_ai.system", "openai")
-            span.set_attribute("gen_ai.request.model", self._settings.extraction.gpt_model)
+            span.set_attribute(
+                "gen_ai.request.model", self._settings.extraction.gpt_model
+            )
             t0 = time.perf_counter()
             result, usage = await self._call_with_retry(user_message)
             gpt_call_duration_seconds.observe(time.perf_counter() - t0)

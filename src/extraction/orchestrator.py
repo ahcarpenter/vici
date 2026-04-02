@@ -96,7 +96,7 @@ class PipelineOrchestrator:
                 message_id=message_id,
             )
 
-            # Single commit for this branch (before Pinecone — failure should not roll back)
+            # Single commit (before Pinecone — failure should not roll back)
             await session.commit()
 
             # Fire-and-forget Pinecone upsert (after commit)
@@ -118,7 +118,8 @@ class PipelineOrchestrator:
                 async with get_sessionmaker()() as s2:
                     await s2.execute(
                         sa_text(
-                            "INSERT INTO pinecone_sync_queue (job_id, status, attempts, created_at) "
+                            "INSERT INTO pinecone_sync_queue "
+                            "(job_id, status, attempts, created_at) "
                             "VALUES (:job_id, 'pending', 0, :created_at)"
                         ),
                         {"job_id": job.id, "created_at": datetime.now(UTC)},

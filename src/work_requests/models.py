@@ -9,7 +9,9 @@ from sqlmodel import Field, SQLModel
 class WorkRequest(SQLModel, table=True):
     __tablename__ = "work_request"
     __table_args__ = (
-        CheckConstraint("target_earnings > 0", name="ck_work_request_target_earnings_positive"),
+        CheckConstraint(
+            "target_earnings > 0", name="ck_work_request_target_earnings_positive"
+        ),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)

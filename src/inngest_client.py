@@ -34,7 +34,7 @@ def get_inngest_client() -> inngest.Inngest:
 
 
 async def _handle_process_message_failure(ctx: inngest.Context) -> None:
-    """Called by Inngest after retries are exhausted. Logs error and increments failure counter."""
+    """Called by Inngest after retries exhausted. Logs error and increments counter."""
     logger = structlog.get_logger()
     logger.error(
         "process_message: permanent failure after retries exhausted",
@@ -52,7 +52,7 @@ async def _handle_process_message_failure(ctx: inngest.Context) -> None:
     on_failure=_handle_process_message_failure,
 )
 async def process_message(ctx: inngest.Context) -> str:
-    """Wire SMS body through PipelineOrchestrator; orchestrator handles all pipeline logic."""
+    """Wire SMS body through PipelineOrchestrator; orchestrator owns pipeline logic."""
     logger = structlog.get_logger()
     data = ctx.event.data
     message_sid: str = data.get("message_sid", "")
@@ -74,7 +74,10 @@ async def process_message(ctx: inngest.Context) -> str:
             )
             message = row.scalar_one_or_none()
             if message is None:
-                logger.error("process_message: message row not found", message_sid=message_sid)
+                logger.error(
+                    "process_message: message row not found",
+                    message_sid=message_sid,
+                )
                 return "ok"
 
             message_id = message.id
@@ -105,7 +108,11 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
 
     async with get_sessionmaker()() as session:
         result = await session.execute(
-            text("SELECT id, job_id, description, phone_hash FROM pinecone_sync_queue WHERE status = 'pending' LIMIT 50")
+            text(
+                "SELECT id, job_id, description, phone_hash "
+                "FROM pinecone_sync_queue "
+                "WHERE status = 'pending' LIMIT 50"
+            )
         )
         rows = result.mappings().all()
 
@@ -122,7 +129,9 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
             )
             async with get_sessionmaker()() as session:
                 await session.execute(
-                    text("UPDATE pinecone_sync_queue SET status='success' WHERE id=:id"),
+                    text(
+                        "UPDATE pinecone_sync_queue SET status='success' WHERE id=:id"
+                    ),
                     {"id": row["id"]},
                 )
                 await session.commit()
@@ -134,7 +143,10 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
             )
             async with get_sessionmaker()() as session:
                 await session.execute(
-                    text("UPDATE pinecone_sync_queue SET status='failed', attempts=attempts+1 WHERE id=:id"),
+                    text(
+                        "UPDATE pinecone_sync_queue "
+                        "SET status='failed', attempts=attempts+1 WHERE id=:id"
+                    ),
                     {"id": row["id"]},
                 )
                 await session.commit()
