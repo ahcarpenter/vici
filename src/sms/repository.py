@@ -7,7 +7,6 @@ from sqlmodel import select
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 from src.sms.models import Message
-from src.users.models import User
 
 
 class MessageRepository:
@@ -19,24 +18,6 @@ class MessageRepository:
         )
         if result.first() is not None:
             raise DuplicateMessageSid(message_sid)
-
-    @staticmethod
-    async def get_or_create_user(session: AsyncSession, phone_hash: str) -> User:
-        """Upsert a user row by phone_hash. Returns the User ORM object."""
-        await session.execute(
-            text(
-                """
-                INSERT INTO "user" (phone_hash, created_at)
-                VALUES (:phone_hash, :created_at)
-                ON CONFLICT (phone_hash) DO NOTHING
-                """
-            ),
-            {"phone_hash": phone_hash, "created_at": datetime.now(UTC)},
-        )
-        result = await session.execute(
-            select(User).where(User.phone_hash == phone_hash)
-        )
-        return result.scalar_one()
 
     @staticmethod
     async def enforce_rate_limit(session: AsyncSession, user_id: int) -> int:
@@ -61,7 +42,8 @@ class MessageRepository:
         # return the stale pre-upsert value across multiple calls in one session.
         count_result = await session.execute(
             text(
-                "SELECT count FROM rate_limit WHERE user_id = :user_id AND created_at = :created_at"
+                "SELECT count FROM rate_limit "
+                "WHERE user_id = :user_id AND created_at = :created_at"
             ),
             {"user_id": user_id, "created_at": window},
         )
