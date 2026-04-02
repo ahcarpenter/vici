@@ -1,11 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.repository import BaseRepository
 from src.sms.models import AuditLog
 
 
-class AuditLogRepository:
-    @staticmethod
+class AuditLogRepository(BaseRepository):
     async def write(
+        self,
         session: AsyncSession,
         message_sid: str,
         event: str,
@@ -19,5 +20,4 @@ class AuditLogRepository:
             detail=detail,
             message_id=message_id,
         )
-        session.add(row)
-        await session.flush()
+        await self._persist(session, row)

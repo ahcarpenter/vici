@@ -4,17 +4,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.jobs.models import Job
 from src.jobs.schemas import JobCreate
+from src.repository import BaseRepository
 
 
-class JobRepository:
-    @staticmethod
-    async def create(session: AsyncSession, job_create: JobCreate) -> Job:
+class JobRepository(BaseRepository):
+    async def create(self, session: AsyncSession, job_create: JobCreate) -> Job:
         ideal_dt = None
         if job_create.ideal_datetime:
             try:
-                ideal_dt = datetime.fromisoformat(
-                    str(job_create.ideal_datetime)
-                )
+                ideal_dt = datetime.fromisoformat(str(job_create.ideal_datetime))
                 if ideal_dt.tzinfo is None:
                     ideal_dt = ideal_dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
@@ -35,6 +33,4 @@ class JobRepository:
             datetime_flexible=job_create.datetime_flexible,
             created_at=datetime.now(UTC),
         )
-        session.add(job)
-        await session.flush()
-        return job
+        return await self._persist(session, job)

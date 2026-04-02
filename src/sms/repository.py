@@ -4,12 +4,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from src.repository import BaseRepository
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 from src.sms.models import Message
 
 
-class MessageRepository:
+class MessageRepository(BaseRepository):
     @staticmethod
     async def check_idempotency(session: AsyncSession, message_sid: str) -> None:
         """Raise DuplicateMessageSid if this message_sid has already been processed."""
@@ -53,8 +54,8 @@ class MessageRepository:
             raise RateLimitExceeded(f"user_id={user_id} count={count}")
         return count
 
-    @staticmethod
     async def create(
+        self,
         session: AsyncSession,
         message_sid: str,
         user_id: int,
@@ -66,6 +67,4 @@ class MessageRepository:
             user_id=user_id,
             body=body,
         )
-        session.add(message)
-        await session.flush()
-        return message
+        return await self._persist(session, message)
