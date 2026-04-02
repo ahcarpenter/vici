@@ -4,10 +4,10 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: Completed 02.7-01-PLAN.md
-last_updated: "2026-03-08T16:12:38.027Z"
+last_updated: "2026-04-02T14:54:25.690Z"
 last_activity: "2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere"
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 8
   total_plans: 21
   completed_plans: 21
@@ -29,13 +29,14 @@ Phase: Phase 3 — Earnings Math Matching (not yet started)
 Status: Ready to plan/execute Phase 3
 Last activity: 2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere
 
-Progress: [████████░░] 78% (7 of 9 phases complete, all 19 plans complete)
+Progress: [████████░░] 78% (7 of 8 phases complete, all 19 plans complete)
 
 ## What's Built
 
 The app is production-ready from the infrastructure and domain-logic perspective. Everything through extraction and storage is implemented, tested, and hardened:
 
 ### Complete
+
 - ✅ Async FastAPI skeleton, 5-gate Twilio webhook security chain
 - ✅ 3NF schema (User / Message / Job / WorkRequest / RateLimit / AuditLog / PineconeSyncQueue)
 - ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
@@ -47,6 +48,7 @@ The app is production-ready from the infrastructure and domain-logic perspective
 - ✅ Unknown-message graceful SMS reply implemented in PipelineOrchestrator
 
 ### Not Started
+
 - ⏳ Phase 3: MatchService (earnings math SQL, ranked SMS formatter, empty-match fallback)
 - ⏳ Phase 4: Outbound SMS for job posters and workers, STOP/START pass-through, Render.com deploy
 
@@ -70,6 +72,7 @@ src/
 ```
 
 **DI Graph (lifespan):**
+
 ```
 AsyncOpenAI → wrap_openai (Braintrust) → ExtractionService
 ExtractionService + repos + pinecone_client + TwilioClient → PipelineOrchestrator
@@ -145,6 +148,7 @@ Recent decisions affecting current work:
 - Phase 02.5 inserted after Phase 02.4: Production hardening to staff engineer standards (INSERTED)
 - Phase 02.6 inserted after Phase 2: Ensure research docs are current (URGENT)
 - Phase 02.7 inserted after Phase 2: flesh out the README.md to also include instructions for getting setup locally (URGENT)
+- Phase 02.8 inserted after Phase 2: review all existing code and refactor taking into account the standards in .claude/AGENTS.md (URGENT)
 
 ### Pending Todos
 

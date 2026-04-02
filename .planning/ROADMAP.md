@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.8: review all existing code and refactor taking into account the standards in .claude/AGENTS.md (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 2
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 02.8 to break down)
+
 ### Phase 02.7: flesh out the README.md to also include instructions for getting setup locally (INSERTED)
 
 **Goal:** Write a complete README.md covering project purpose, local setup, environment variable reference, running tests, project structure, and deployment — so any developer can clone and run the stack without prior context
