@@ -5,6 +5,10 @@ from temporalio.client import Client
 
 def hash_phone(e164_number: str) -> str:
     """SHA-256 hash of E.164 phone number. Twilio From is already E.164."""
+    if not e164_number:
+        raise ValueError(
+            f"hash_phone: e164_number must be a non-empty string, got {e164_number!r}"
+        )
     return hashlib.sha256(e164_number.encode()).hexdigest()
 
 

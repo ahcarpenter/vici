@@ -149,6 +149,12 @@ async def sync_pinecone_queue_activity() -> str:
                     await session.commit()
 
         span.set_attribute("pinecone.rows_failed", failed)
+        if failed:
+            logger.warning(
+                "sync-pinecone-queue: sweep completed with failures",
+                processed=len(rows),
+                failed=failed,
+            )
         logger.info("sync-pinecone-queue: sweep complete", processed=len(rows))
 
     return "ok"

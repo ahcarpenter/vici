@@ -1,3 +1,4 @@
+import structlog
 from datetime import UTC, datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,10 @@ class JobRepository(BaseRepository):
                 if ideal_dt.tzinfo is None:
                     ideal_dt = ideal_dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
+                structlog.get_logger().warning(
+                    "job.ideal_datetime_parse_failed",
+                    raw_value=str(job_create.ideal_datetime),
+                )
                 ideal_dt = None
 
         job = Job(

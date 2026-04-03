@@ -101,3 +101,164 @@ async def test_update_gauges_logs_warning_on_db_error():
     assert any(
         "gauge_updater" in event for _, event, _ in logged_events
     ), f"Expected a structlog warning but got: {logged_events}"
+
+
+# ── Task 4 tests ──────────────────────────────────────────────────────────────
+
+
+def test_hash_phone_raises_on_none():
+    """hash_phone(None) raises ValueError."""
+    from src.sms.service import hash_phone
+
+    with pytest.raises(ValueError):
+        hash_phone(None)
+
+
+def test_hash_phone_raises_on_empty_string():
+    """hash_phone("") raises ValueError."""
+    from src.sms.service import hash_phone
+
+    with pytest.raises(ValueError):
+        hash_phone("")
+
+
+def test_hash_phone_valid():
+    """hash_phone("+13125551234") returns a 64-char hex string."""
+    from src.sms.service import hash_phone
+
+    result = hash_phone("+13125551234")
+    assert len(result) == 64
+    assert all(c in "0123456789abcdef" for c in result)
+
+
+@pytest.mark.asyncio
+async def test_job_datetime_parse_failure_logs_warning():
+    """JobRepository.create with unparseable ideal_datetime logs a warning and sets None."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.jobs.repository import JobRepository
+
+    # Construct a fake job_create with an ideal_datetime that looks truthy
+    # but whose str() representation fails fromisoformat.
+    class BadDateTime:
+        def __str__(self):
+            return "not-a-date"
+        def __bool__(self):
+            return True  # passes the `if job_create.ideal_datetime:` check
+
+    job_create = MagicMock()
+    job_create.ideal_datetime = BadDateTime()
+    job_create.user_id = 1
+    job_create.message_id = 1
+    job_create.description = "Need a mover"
+    job_create.location = "Chicago"
+    job_create.pay_rate = 25.0
+    job_create.pay_type = "hourly"
+    job_create.estimated_duration_hours = None
+    job_create.raw_duration_text = None
+    job_create.raw_datetime_text = None
+    job_create.inferred_timezone = None
+    job_create.datetime_flexible = True
+    job_create.raw_sms = "Need a mover"
+
+    logged_warnings = []
+
+    class CapturingLogger:
+        def warning(self, event, **kw):
+            logged_warnings.append((event, kw))
+
+        def info(self, *a, **kw):
+            pass
+
+        def error(self, *a, **kw):
+            pass
+
+    mock_job = MagicMock()
+    mock_job.id = 1
+
+    repo = JobRepository()
+
+    with patch("src.jobs.repository.structlog.get_logger", return_value=CapturingLogger()):
+        with patch.object(repo, "_persist", AsyncMock(return_value=mock_job)):
+            job = await repo.create(MagicMock(), job_create)
+
+    assert job is mock_job
+    assert any("ideal_datetime_parse_failed" in e for e, _ in logged_warnings)
+    raw_values = [kw.get("raw_value") for _, kw in logged_warnings]
+    assert "not-a-date" in raw_values
+
+
+@pytest.mark.asyncio
+async def test_sync_pinecone_queue_logs_failure_summary():
+    """sync_pinecone_queue_activity with 1 failing row logs a warning with failed count."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import src.temporal.activities as acts
+    from src.temporal.activities import sync_pinecone_queue_activity
+
+    row1 = {"id": 1, "job_id": 10, "description": "Mover", "phone_hash": "abc"}
+    row2 = {"id": 2, "job_id": 20, "description": "Driver", "phone_hash": "def"}
+
+    mock_write = AsyncMock(side_effect=[None, Exception("Pinecone error")])
+    mock_openai = MagicMock()
+    mock_settings = MagicMock()
+
+    select_session = AsyncMock()
+    select_result = MagicMock()
+    select_result.mappings.return_value.all.return_value = [row1, row2]
+    select_session.execute = AsyncMock(return_value=select_result)
+
+    update_session = AsyncMock()
+    update_session.execute = AsyncMock(return_value=MagicMock())
+    update_session.commit = AsyncMock()
+
+    call_count = {"n": 0}
+
+    def make_session():
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=select_session)
+            cm.__aexit__ = AsyncMock(return_value=None)
+        else:
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=update_session)
+            cm.__aexit__ = AsyncMock(return_value=None)
+        return cm
+
+    mock_sessionmaker = MagicMock(side_effect=make_session)
+
+    class CapturingLogger:
+        def __init__(self):
+            self.logged_warnings = []
+
+        def warning(self, event, **kw):
+            self.logged_warnings.append((event, kw))
+
+        def info(self, *a, **kw):
+            pass
+
+        def error(self, *a, **kw):
+            pass
+
+    original = acts._openai_client
+    acts._openai_client = mock_openai
+    try:
+        capturing_logger = CapturingLogger()
+        with (
+            patch("src.temporal.activities.get_sessionmaker", return_value=mock_sessionmaker),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
+            patch("src.temporal.activities.get_settings", return_value=mock_settings),
+            patch("structlog.get_logger", return_value=capturing_logger),
+        ):
+            result = await sync_pinecone_queue_activity()
+    finally:
+        acts._openai_client = original
+
+    assert result == "ok"
+    failure_logs = [
+        (e, kw) for e, kw in capturing_logger.logged_warnings
+        if "sweep completed with failures" in e
+    ]
+    assert len(failure_logs) > 0
+    assert failure_logs[0][1].get("failed") == 1
