@@ -236,25 +236,11 @@ ruff check --fix src
 ruff format src
 ```
 
-## Object-Oriented Patterns
-- Consider SOLID principles when thinking through design patterns to use for all Python code.
-- Also take into account the Gang of Four patterns when applying SOLID principles. In the sense of leveraging those to help align with SOLID principles.
-
+## Object-Oriented Design Patterns
 ### Rules
-- Apply SOLID principles if there is a known near-term churn expected around the code, or feature being built out.
-- Apply SOLID principles if there are three, or more instances of the same code, being sure to DRY up that code. 
-
-### Common Mistakes to Avoid
-
-DO NOT optimize for code adaptability (via SOLID) prematurely.
-
-# CORRECT: Applying SOLID principles if there is a known near-term churn expected around the code, or feature being built out.
-
-# CORRECT: Applying SOLID principles if there are three, or more instances of the same code, being sure to DRY up that code.
-
-# BAD: SOLID being applied to code design when there is no near-term churn around the feature, or code, expected.
-
-# BAD: Applying SOLID principles if there are one, or two, instances of the same code, and no near-term churn around the feature, or code, expected.
+- Apply SOLID principles when writing Python code relentlessly.
+- When considering patterns that adhere to those principles, prefer leveraging Gang of Four patterns over less canonical design patterns
+- Apply DRY relentlessly
 
 ## Quick Reference
 

@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.13: ruthlessly refactor this codebase where appropriate in light of the latest revisions to AGENTS.md (INSERTED)
+
+**Goal:** Apply SOLID and DRY relentlessly per updated AGENTS.md — fix GPT_MODEL DRY violation (ExtractionService bypasses injected settings), rename pinecone_client.py to utils.py (domain file naming), and extract _update_gauges from lifespan to module-level (SRP)
+**Requirements**: DRY-01, DRY-02, SOLID-SRP-01, NAMING-01
+**Depends on:** Phase 02.12
+**Plans:** 1/1 plans complete
+
+Plans:
+- [ ] 02.13-01-PLAN.md — Fix DRY in ExtractionService, rename pinecone_client.py to utils.py, extract _update_gauges to module level
+
 ### Phase 02.12: simplify architecture — distill app essence and map domains canonically (INSERTED)
 
 **Goal:** [Urgent work - to be planned]
