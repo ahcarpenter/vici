@@ -2,14 +2,21 @@ import json
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
+from opentelemetry import trace as otel_trace
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
+from src.pipeline.constants import (
+    OTEL_ATTR_MESSAGE_ID,
+    OTEL_ATTR_MESSAGING_SYSTEM,
+    OTEL_ATTR_PHONE_HASH,
+)
 from src.sms import service as sms_service
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.dependencies import enforce_rate_limit
 from src.sms.exceptions import EMPTY_TWIML
 from src.sms.repository import MessageRepository
+from src.sms.service import hash_phone
 
 router = APIRouter(prefix="/webhook", tags=["sms"])
 
@@ -30,6 +37,11 @@ async def receive_sms(
     message_sid = form_data.get("MessageSid", "")
     from_number = form_data.get("From", "")
     body = form_data.get("Body", "")
+
+    span = otel_trace.get_current_span()
+    span.set_attribute(OTEL_ATTR_MESSAGE_ID, message_sid)
+    span.set_attribute(OTEL_ATTR_PHONE_HASH, hash_phone(from_number))
+    span.set_attribute(OTEL_ATTR_MESSAGING_SYSTEM, "twilio")
 
     async with session.begin():
         message = await MessageRepository().create(session, message_sid, user.id, body)

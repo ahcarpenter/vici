@@ -1,13 +1,17 @@
 import json
 
+from opentelemetry import trace as otel_trace
 from sqlalchemy import text as sa_text
 
 from src.extraction.schemas import ExtractionResult
+from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_WORK_REQUEST_USER_ID
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
 from src.work_requests.repository import WorkRequestRepository
 from src.work_requests.schemas import WorkRequestCreate
+
+tracer = otel_trace.get_tracer(__name__)
 
 
 class WorkerGoalHandler(MessageHandler):
@@ -23,6 +27,12 @@ class WorkerGoalHandler(MessageHandler):
         return result.message_type == "worker_goal" and result.worker is not None
 
     async def handle(self, ctx: PipelineContext) -> None:
+        with tracer.start_as_current_span("pipeline.handle_worker_goal") as span:
+            span.set_attribute(OTEL_ATTR_MESSAGE_ID, ctx.message_sid)
+            span.set_attribute(OTEL_ATTR_WORK_REQUEST_USER_ID, str(ctx.user_id))
+            return await self._do_handle(ctx)
+
+    async def _do_handle(self, ctx: PipelineContext) -> None:
         result = ctx.result
         wr_create = WorkRequestCreate(
             user_id=ctx.user_id,

@@ -7,8 +7,13 @@ from sqlalchemy import text as sa_text
 from src.extraction.constants import UNKNOWN_REPLY_TEXT
 from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
+from src.pipeline.constants import (
+    OTEL_ATTR_MESSAGING_DESTINATION,
+    OTEL_ATTR_MESSAGING_SYSTEM,
+)
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
+from src.sms.service import hash_phone
 
 tracer = otel_trace.get_tracer(__name__)
 log = structlog.get_logger()
@@ -32,8 +37,10 @@ class UnknownMessageHandler(MessageHandler):
 
         settings = self._extraction_service.settings
         with tracer.start_as_current_span("twilio.send_sms") as span:
-            span.set_attribute("messaging.system", "twilio")
-            span.set_attribute("messaging.destination", ctx.from_number)
+            span.set_attribute(OTEL_ATTR_MESSAGING_SYSTEM, "twilio")
+            span.set_attribute(
+                OTEL_ATTR_MESSAGING_DESTINATION, hash_phone(ctx.from_number)
+            )
             try:
                 await asyncio.to_thread(
                     self._twilio_client.messages.create,

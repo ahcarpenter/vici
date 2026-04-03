@@ -10,6 +10,11 @@ from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
 from src.jobs.repository import JobRepository
 from src.jobs.schemas import JobCreate
+from src.pipeline.constants import (
+    OTEL_ATTR_DB_OPERATION,
+    OTEL_ATTR_DB_SYSTEM,
+    OTEL_ATTR_DB_VECTOR_JOB_ID,
+)
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
@@ -70,9 +75,9 @@ class JobPostingHandler(MessageHandler):
         # Fire-and-forget Pinecone upsert (after commit)
         try:
             with tracer.start_as_current_span("pinecone.upsert") as span:
-                span.set_attribute("db.system", "pinecone")
-                span.set_attribute("db.operation", "upsert")
-                span.set_attribute("db.vector.job_id", str(job.id))
+                span.set_attribute(OTEL_ATTR_DB_SYSTEM, "pinecone")
+                span.set_attribute(OTEL_ATTR_DB_OPERATION, "upsert")
+                span.set_attribute(OTEL_ATTR_DB_VECTOR_JOB_ID, str(job.id))
                 await self._pinecone_client(
                     job_id=job.id,
                     description=result.job.description,

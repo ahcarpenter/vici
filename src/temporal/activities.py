@@ -11,6 +11,7 @@ from temporalio.exceptions import ApplicationError
 from src.config import get_settings
 from src.database import get_sessionmaker
 from src.extraction.utils import write_job_embedding
+from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 from src.sms.models import Message
 from src.sms.service import hash_phone
 
@@ -46,6 +47,8 @@ async def process_message_activity(input: ProcessMessageInput) -> str:
     with tracer.start_as_current_span("temporal.process_message") as span:
         span.set_attribute("temporal.event", "message.received")
         span.set_attribute("temporal.function", "process-message")
+        span.set_attribute(OTEL_ATTR_MESSAGE_ID, message_sid)
+        span.set_attribute(OTEL_ATTR_PHONE_HASH, phone_hash)
 
         # Resolve message_id and user_id from the DB row written by the webhook handler
         async with get_sessionmaker()() as session:
