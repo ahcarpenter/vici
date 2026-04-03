@@ -4,7 +4,7 @@ An SMS-driven platform for the gig economy
 
 ## How It Works
 
-Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with a pay rate and duration. GPT classifies each inbound message and extracts structured data from both. The system then matches workers to the jobs that will help them earn that the quickest.
+Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with the relevant details (desc, pay, duration, expected done date). GPT classifies each inbound message and extracts structured data from both. Matching algorithm surfaces the gig(s) on-demand that the worker can then do to achieve their earnings goal in the shortest amount of time possible.
 
 ## Roadmap
 
