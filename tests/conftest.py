@@ -46,6 +46,8 @@ def _test_env():
     os.environ.setdefault("WEBHOOK_BASE_URL", "http://localhost:8000")
     os.environ.setdefault("OPENAI_API_KEY", "sk-test")
     os.environ.setdefault("PINECONE_API_KEY", "pc-test")
+    os.environ.setdefault("TEMPORAL_ADDRESS", "localhost:7233")
+    os.environ.setdefault("ENV", "test")
 
     # Clear caches in case tests are re-run in-process.
     get_settings.cache_clear()

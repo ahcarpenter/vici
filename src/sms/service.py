@@ -19,7 +19,7 @@ async def emit_message_received_event(
     body: str,
 ) -> None:
     """Fire-and-forget: start ProcessMessageWorkflow in Temporal."""
-    from src.temporal.worker import TASK_QUEUE
+    from src.temporal.constants import TASK_QUEUE
     from src.temporal.workflows import ProcessMessageWorkflow
 
     await client.start_workflow(

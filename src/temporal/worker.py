@@ -5,15 +5,11 @@ from temporalio.service import RPCError, RPCStatusCode
 from temporalio.worker import Worker
 
 import src.temporal.activities as _acts
+from src.config import get_settings
 from src.temporal.activities import (
     handle_process_message_failure_activity,
     process_message_activity,
     sync_pinecone_queue_activity,
-)
-from src.temporal.constants import (
-    CRON_SCHEDULE_PINECONE_SYNC,
-    TASK_QUEUE,
-    WORKFLOW_PINECONE_SYNC_ID,
 )
 from src.temporal.workflows import ProcessMessageWorkflow, SyncPineconeQueueWorkflow
 
@@ -33,10 +29,11 @@ async def run_worker(client: Client, orchestrator, openai_client) -> None:
     """Long-running coroutine. Cancel to stop. Set singletons before worker.run()."""
     _acts._orchestrator = orchestrator
     _acts._openai_client = openai_client
+    settings = get_settings()
 
     worker = Worker(
         client,
-        task_queue=TASK_QUEUE,
+        task_queue=settings.temporal.task_queue,
         workflows=[ProcessMessageWorkflow, SyncPineconeQueueWorkflow],
         activities=[
             process_message_activity,
@@ -49,12 +46,13 @@ async def run_worker(client: Client, orchestrator, openai_client) -> None:
 
 async def start_cron_if_needed(client: Client) -> None:
     """Register the Pinecone sync cron workflow. Idempotent on restart."""
+    settings = get_settings()
     try:
         await client.start_workflow(
             SyncPineconeQueueWorkflow.run,
-            id=WORKFLOW_PINECONE_SYNC_ID,
-            task_queue=TASK_QUEUE,
-            cron_schedule=CRON_SCHEDULE_PINECONE_SYNC,
+            id="sync-pinecone-queue-cron",
+            task_queue=settings.temporal.task_queue,
+            cron_schedule=settings.temporal.cron_schedule_pinecone_sync,
         )
     except (WorkflowAlreadyStartedError, RPCError) as err:
         already_exists = err.status == RPCStatusCode.ALREADY_EXISTS

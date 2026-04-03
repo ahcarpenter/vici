@@ -76,6 +76,9 @@ services:
       OTEL_SERVICE_NAME: vici
       WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:8000}
       GIT_SHA: ${GIT_SHA:-dev}
+      SMS_RATE_LIMIT_WINDOW_SECONDS: ${SMS_RATE_LIMIT_WINDOW_SECONDS:-60}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-vici-queue}
+      CRON_SCHEDULE_PINECONE_SYNC: ${CRON_SCHEDULE_PINECONE_SYNC:-*/5 * * * *}
     volumes:
       - ./src:/app/src
     ports:
@@ -129,8 +132,8 @@ services:
   grafana:
     image: grafana/grafana:11.4.0
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
