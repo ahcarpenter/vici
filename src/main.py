@@ -32,7 +32,6 @@ from src.extraction.service import ExtractionService
 from src.jobs.repository import JobRepository
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
-from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
 from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
 from src.work_requests.repository import WorkRequestRepository
@@ -98,14 +97,27 @@ async def lifespan(app: FastAPI):
     pinecone_client = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
+    audit_repo = AuditLogRepository()
+    handlers = [
+        JobPostingHandler(
+            job_repo=JobRepository(),
+            audit_repo=audit_repo,
+            pinecone_client=pinecone_client,
+            extraction_service=extraction_service,
+        ),
+        WorkerGoalHandler(
+            work_request_repo=WorkRequestRepository(),
+            audit_repo=audit_repo,
+        ),
+        UnknownMessageHandler(
+            twilio_client=twilio_client,
+            extraction_service=extraction_service,
+        ),
+    ]
     orchestrator = PipelineOrchestrator(
         extraction_service=extraction_service,
-        job_repo=JobRepository,
-        work_request_repo=WorkRequestRepository,
-        message_repo=MessageRepository,
-        audit_repo=AuditLogRepository,
-        pinecone_client=pinecone_client,
-        twilio_client=twilio_client,
+        audit_repo=audit_repo,
+        handlers=handlers,
     )
 
     app.state.orchestrator = orchestrator
