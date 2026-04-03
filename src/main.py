@@ -61,13 +61,15 @@ def _configure_structlog() -> None:
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
-    resource = Resource(attributes={
-        "service.name": settings.observability.otel_service_name,
-        "deployment.environment": (
-            "development" if settings.env != "production" else "production"
-        ),
-        "service.version": settings.observability.service_version,
-    })
+    resource = Resource(
+        attributes={
+            "service.name": settings.observability.otel_service_name,
+            "deployment.environment": (
+                "development" if settings.env != "production" else "production"
+            ),
+            "service.version": settings.observability.service_version,
+        }
+    )
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
     provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
     provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -87,7 +89,9 @@ async def lifespan(app: FastAPI):
     openai_client = wrap_openai(
         AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
     )
-    extraction_service = ExtractionService(openai_client=openai_client, settings=settings)
+    extraction_service = ExtractionService(
+        openai_client=openai_client, settings=settings
+    )
     pinecone_client = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
@@ -119,12 +123,16 @@ async def lifespan(app: FastAPI):
             try:
                 async with get_sessionmaker()() as session:
                     result = await session.execute(
-                        text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
+                        text(
+                            "SELECT COUNT(*) FROM pinecone_sync_queue"
+                            " WHERE status = 'pending'"
+                        )
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
             except Exception as exc:
                 structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed — metric stale",
+                    "gauge_updater: pinecone_sync_queue depth read failed"
+                    " — metric stale",
                     error=str(exc),
                 )
             await asyncio.sleep(15)
