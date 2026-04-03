@@ -22,6 +22,7 @@ from twilio.rest import Client as TwilioClient
 
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
+from src.metrics import pinecone_sync_queue_depth
 from src.exceptions import twilio_signature_invalid_handler
 from src.pipeline.handlers.job_posting import JobPostingHandler
 from src.pipeline.handlers.unknown import UnknownMessageHandler
@@ -81,6 +82,38 @@ def _configure_otel(app: FastAPI) -> TracerProvider:
     return provider
 
 
+async def _update_gauges() -> None:
+    """Poll pinecone_sync_queue every 15 s and update the depth gauge."""
+    consecutive_failures = 0
+    while True:
+        try:
+            async with get_sessionmaker()() as session:
+                result = await session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM pinecone_sync_queue"
+                        " WHERE status = 'pending'"
+                    )
+                )
+                pinecone_sync_queue_depth.set(result.scalar_one())
+                consecutive_failures = 0
+        except Exception as exc:
+            consecutive_failures += 1
+            if consecutive_failures > 5:
+                structlog.get_logger().critical(
+                    "gauge_updater: repeated DB failures, metric unreliable",
+                    consecutive_failures=consecutive_failures,
+                    error=str(exc),
+                )
+                pinecone_sync_queue_depth.set(-1)
+            else:
+                structlog.get_logger().warning(
+                    "gauge_updater: pinecone_sync_queue depth read failed"
+                    " — metric stale",
+                    error=str(exc),
+                )
+        await asyncio.sleep(15)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _configure_structlog()
@@ -131,38 +164,6 @@ async def lifespan(app: FastAPI):
     await start_cron_if_needed(temporal_client)
 
     # Background gauge updater — polls pinecone_sync_queue every 15s
-    from src.metrics import pinecone_sync_queue_depth
-
-    async def _update_gauges():
-        consecutive_failures = 0
-        while True:
-            try:
-                async with get_sessionmaker()() as session:
-                    result = await session.execute(
-                        text(
-                            "SELECT COUNT(*) FROM pinecone_sync_queue"
-                            " WHERE status = 'pending'"
-                        )
-                    )
-                    pinecone_sync_queue_depth.set(result.scalar_one())
-                    consecutive_failures = 0
-            except Exception as exc:
-                consecutive_failures += 1
-                if consecutive_failures > 5:
-                    structlog.get_logger().critical(
-                        "gauge_updater: repeated DB failures, metric unreliable",
-                        consecutive_failures=consecutive_failures,
-                        error=str(exc),
-                    )
-                    pinecone_sync_queue_depth.set(-1)
-                else:
-                    structlog.get_logger().warning(
-                        "gauge_updater: pinecone_sync_queue depth read failed"
-                        " — metric stale",
-                        error=str(exc),
-                    )
-            await asyncio.sleep(15)
-
     _gauge_task = asyncio.create_task(_update_gauges())
     yield
     _worker_task.cancel()
