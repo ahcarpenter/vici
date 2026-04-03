@@ -17,7 +17,7 @@ from src.sms.service import hash_phone
 tracer = otel_trace.get_tracer(__name__)
 
 if TYPE_CHECKING:
-    from src.extraction.orchestrator import PipelineOrchestrator
+    from src.pipeline.orchestrator import PipelineOrchestrator
 
 # Module-level singletons set by worker.run_worker() before the worker starts
 _orchestrator: "PipelineOrchestrator | None" = None

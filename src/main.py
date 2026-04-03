@@ -23,7 +23,10 @@ from twilio.rest import Client as TwilioClient
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
-from src.extraction.orchestrator import PipelineOrchestrator
+from src.pipeline.handlers.job_posting import JobPostingHandler
+from src.pipeline.handlers.unknown import UnknownMessageHandler
+from src.pipeline.handlers.worker_goal import WorkerGoalHandler
+from src.pipeline.orchestrator import PipelineOrchestrator
 from src.extraction.pinecone_client import write_job_embedding
 from src.extraction.service import ExtractionService
 from src.jobs.repository import JobRepository

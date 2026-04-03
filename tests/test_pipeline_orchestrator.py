@@ -24,7 +24,7 @@ def _make_orchestrator(
     pinecone_side_effect=None,
 ):
     """Build a PipelineOrchestrator with all deps mocked via handler chain."""
-    from src.extraction.orchestrator import PipelineOrchestrator
+    from src.pipeline.orchestrator import PipelineOrchestrator
     from src.pipeline.handlers.job_posting import JobPostingHandler
     from src.pipeline.handlers.unknown import UnknownMessageHandler
     from src.pipeline.handlers.worker_goal import WorkerGoalHandler
