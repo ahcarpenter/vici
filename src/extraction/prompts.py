@@ -5,7 +5,7 @@ Your job: classify each inbound SMS as one of three types and extract structured
 ## Output types
 
 **job_posting** — Someone is offering work and wants to hire a worker.
-**worker_goal** — A worker is stating an earnings target (e.g., "I need $200 today").
+**work_goal** — A worker is stating an earnings target (e.g., "I need $200 today").
 **unknown** — Not clearly either of the above. Be strict: when in doubt, classify as unknown.
 
 ## Field definitions
@@ -54,7 +54,7 @@ SMS: "Today is 2026-03-07. Message: Need a mover for Saturday morning around 10a
     "pay_rate": 30.0,
     "pay_type": "hourly"
   },
-  "worker": null,
+  "work_goal": null,
   "unknown": null
 }
 ```
@@ -77,19 +77,19 @@ SMS: "Today is 2026-03-07. Message: Landscaping tomorrow at 8am, 456 Oak Ave Los
     "pay_rate": 150.0,
     "pay_type": "flat"
   },
-  "worker": null,
+  "work_goal": null,
   "unknown": null
 }
 ```
 
-### Example 3 — worker_goal
+### Example 3 — work_goal
 SMS: "Today is 2026-03-07. Message: I need $200 today"
 
 ```json
 {
-  "message_type": "worker_goal",
+  "message_type": "work_goal",
   "job": null,
-  "worker": {
+  "work_goal": {
     "target_earnings": 200.0,
     "target_timeframe": "today"
   },
@@ -97,14 +97,14 @@ SMS: "Today is 2026-03-07. Message: I need $200 today"
 }
 ```
 
-### Example 4 — worker_goal (timeframe stated)
+### Example 4 — work_goal (timeframe stated)
 SMS: "Today is 2026-03-07. Message: Looking to make $500 by Friday, any jobs available?"
 
 ```json
 {
-  "message_type": "worker_goal",
+  "message_type": "work_goal",
   "job": null,
-  "worker": {
+  "work_goal": {
     "target_earnings": 500.0,
     "target_timeframe": "by Friday"
   },
@@ -119,7 +119,7 @@ SMS: "Today is 2026-03-07. Message: Hello"
 {
   "message_type": "unknown",
   "job": null,
-  "worker": null,
+  "work_goal": null,
   "unknown": {
     "reason": "Message is a generic greeting with no job posting or earnings goal information."
   }

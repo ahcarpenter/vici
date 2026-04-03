@@ -26,7 +26,7 @@ class UnknownMessage(BaseModel):
 
 
 class ExtractionResult(BaseModel):
-    message_type: Literal["job_posting", "worker_goal", "unknown"]
+    message_type: Literal["job_posting", "work_goal", "unknown"]
     job: Optional[JobExtraction] = None
-    worker: Optional[WorkerExtraction] = None
+    work_goal: Optional[WorkerExtraction] = None
     unknown: Optional[UnknownMessage] = None
