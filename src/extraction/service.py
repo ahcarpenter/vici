@@ -1,5 +1,6 @@
 import time
 from datetime import date
+from typing import Any
 
 import structlog
 from braintrust import init_logger
@@ -14,7 +15,6 @@ from tenacity import (
 
 from temporalio.exceptions import ApplicationError
 
-from src.extraction.constants import GPT_MODEL
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
 from src.metrics import (
@@ -76,9 +76,9 @@ class ExtractionService:
         stop=stop_after_attempt(4),
         wait=wait_random_exponential(multiplier=1, min=1, max=60),
     )
-    async def _call_with_retry(self, user_message: str) -> ExtractionResult:
+    async def _call_with_retry(self, user_message: str) -> tuple[ExtractionResult, Any]:
         completion = await self._client.beta.chat.completions.parse(
-            model=GPT_MODEL,
+            model=self._settings.extraction.gpt_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},

@@ -3,6 +3,8 @@ from functools import lru_cache
 from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.extraction.constants import GPT_MODEL as _DEFAULT_GPT_MODEL
+
 
 class SmsSettings(BaseModel):
     auth_token: str = ""
@@ -13,7 +15,7 @@ class SmsSettings(BaseModel):
 
 class ExtractionSettings(BaseModel):
     openai_api_key: str = ""
-    gpt_model: str = "gpt-5.3-chat-latest"
+    gpt_model: str = _DEFAULT_GPT_MODEL
 
 
 class PineconeSettings(BaseModel):
