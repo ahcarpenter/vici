@@ -241,6 +241,15 @@ ruff format src
 - Apply SOLID principles when writing Python code relentlessly.
 - When considering patterns that adhere to those principles, prefer leveraging Gang of Four patterns over less canonical design patterns
 - Apply DRY relentlessly
+- Be sure all magic numbers are constantized
+
+## Database Schema Design
+### Rules
+- Ensure the schema is in 3NF
+
+## Domain Language
+
+If there is a more canonical to way express, or describe, a facet of the domain, wherever it exists, or will exist, throughout the repo, prefer using that language to describe it as opposed to a less canonical term.
 
 ## Quick Reference
 
