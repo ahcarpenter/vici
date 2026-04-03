@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.9: refactor the existing code to ensure temporal is being leveraged as opposed to inngest (INSERTED)
+
+**Goal:** Replace all Inngest usage with Temporal so the app no longer depends on Inngest infrastructure. The observable behavior (SMS processing pipeline, Pinecone sync cron) must remain identical.
+**Requirements**: TEMPORAL-01, TEMPORAL-02, TEMPORAL-03
+**Depends on:** Phase 2
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02.9-01-PLAN.md — Create src/temporal/ package (activities, workflows, worker), update main/config/sms/docker-compose, migrate tests
+
 ### Phase 02.8: Review all existing code and refactor to CLAUDE.md standards (INSERTED)
 
 **Goal:** Refactor all src/ files to meet FastAPI best practices defined in .claude/CLAUDE.md — Depends() injection for all SMS gates, UserRepository extraction, and EarlyReturn exception handler for Twilio 200-response paths. (Research confirmed Field() constraints, bug fix, inline imports, DB naming, and encapsulation are already done.)
@@ -204,5 +214,6 @@ Phases execute in numeric order: 1 → 01.1 → 2 → 02.1 → 02.3 → 02.4 →
 | 02.3. Migrate Jaeger to v2 | 2/2 | Complete | ~2026-03-08 |
 | 02.4. Ensure Prometheus setup | 2/2 | Complete | ~2026-03-08 |
 | 02.5. Production hardening | 4/4 | Complete | 2026-03-08 |
+| 02.9. Inngest to Temporal migration | 0/1 | In progress | — |
 | 3. Earnings Math Matching | 0/1 | Not started | — |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | — |
