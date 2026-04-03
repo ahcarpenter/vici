@@ -211,6 +211,8 @@ async def test_span_emitted_when_message_missing(span_exporter):
 
     mock_sessionmaker = MagicMock(return_value=mock_session)
 
+    from temporalio.exceptions import ApplicationError
+
     with (
         patch(
             "src.temporal.activities.get_sessionmaker",
@@ -220,7 +222,8 @@ async def test_span_emitted_when_message_missing(span_exporter):
             "src.temporal.activities.hash_phone", return_value="hashed"
         ),
     ):
-        await process_message_activity(inp)
+        with pytest.raises(ApplicationError):
+            await process_message_activity(inp)
 
     spans = span_exporter.get_finished_spans()
     span_names = [s.name for s in spans]
