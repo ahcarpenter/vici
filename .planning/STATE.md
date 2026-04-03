@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed Phase 02.10
-last_updated: "2026-04-03T05:00:00.000Z"
+stopped_at: Completed 02.11-01-PLAN.md
+last_updated: "2026-04-03T05:18:26.383Z"
 last_activity: 2026-04-03
 progress:
-  total_phases: 15
-  completed_phases: 13
+  total_phases: 16
+  completed_phases: 12
   total_plans: 27
-  completed_plans: 27
+  completed_plans: 26
   percent: 82
 ---
 
@@ -139,6 +139,8 @@ Recent decisions affecting current work:
 - [Phase 02.7-01]: README links to .env.example via explicit cp command; migrations step marked optional when using Docker
 - [Phase 02.9]: Replaced Inngest with Temporal: activities + workflows + worker in src/temporal/, RPCError for cron idempotency
 - [Phase 02.10]: Wire TracingInterceptor on Client.connect only — worker inherits interceptors from client automatically
+- [Phase 02.11]: Settings._validate_required_credentials fires before _build_sub_models since both are mode=after validators executed in declaration order
+- [Phase 02.11]: Rate limit uses Python datetime.now(UTC) bound param instead of NOW() SQL function for SQLite test compatibility
 
 ### Roadmap Evolution
 
@@ -170,7 +172,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T04:21:45.658Z
-Stopped at: Completed 02.10-01-PLAN.md
+Last session: 2026-04-03T05:18:20.589Z
+Stopped at: Completed 02.11-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
