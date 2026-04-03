@@ -12,7 +12,6 @@ from sqlmodel import SQLModel
 import src.models  # noqa: F401 — ensure all SQLModel tables registered before create_all
 from src.config import get_settings
 from src.database import get_engine, get_session
-from src.inngest_client import get_inngest_client
 from src.jobs.models import Job
 from src.main import create_app
 from src.sms.models import Message
@@ -49,7 +48,6 @@ def _test_env():
     # Clear caches in case tests are re-run in-process.
     get_settings.cache_clear()
     get_engine.cache_clear()
-    get_inngest_client.cache_clear()
 
 
 @pytest.fixture(scope="session")
@@ -90,6 +88,15 @@ async def client(async_session, app):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _auto_mock_temporal_client(app):
+    """Auto-mock temporal client on app.state for all tests."""
+    mock_client = AsyncMock()
+    mock_client.start_workflow = AsyncMock(return_value="wf-run-id")
+    app.state.temporal_client = mock_client
+    yield mock_client
+
+
 @pytest.fixture
 def mock_twilio_validator():
     with patch(
@@ -97,19 +104,6 @@ def mock_twilio_validator():
         return_value=True,
     ) as m:
         yield m
-
-
-@pytest.fixture
-def mock_inngest_client():
-    with patch.object(get_inngest_client(), "send", new_callable=AsyncMock) as m:
-        yield m
-
-
-@pytest.fixture(autouse=True)
-def _auto_mock_inngest_send():
-    """Auto-mock inngest_client.send for all tests to prevent real HTTP calls."""
-    with patch.object(get_inngest_client(), "send", new_callable=AsyncMock):
-        yield
 
 
 @pytest_asyncio.fixture

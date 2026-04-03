@@ -33,8 +33,7 @@ class Settings(BaseSettings):
     database_url: str = ""
     webhook_base_url: str = "http://localhost:8000"
     env: str = "production"
-    inngest_dev: bool = False
-    inngest_base_url: str = "http://localhost:8288"
+    temporal_address: str = "localhost:7233"
 
     # Flat Twilio env vars (remapped into sms sub-model)
     twilio_auth_token: str = ""

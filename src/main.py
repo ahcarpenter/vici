@@ -3,7 +3,6 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-import inngest.fast_api
 import structlog
 from braintrust import wrap_openai
 from fastapi import FastAPI
@@ -27,12 +26,12 @@ from src.exceptions import twilio_signature_invalid_handler
 from src.extraction.orchestrator import PipelineOrchestrator
 from src.extraction.pinecone_client import write_job_embedding
 from src.extraction.service import ExtractionService
-from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.jobs.repository import JobRepository
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import TwilioSignatureInvalid
 from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
+from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
 from src.work_requests.repository import WorkRequestRepository
 
 
@@ -64,7 +63,9 @@ def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
     resource = Resource(attributes={
         "service.name": settings.observability.otel_service_name,
-        "deployment.environment": "development" if settings.inngest_dev else "production",
+        "deployment.environment": (
+            "development" if settings.env != "production" else "production"
+        ),
         "service.version": settings.observability.service_version,
     })
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
@@ -102,10 +103,13 @@ async def lifespan(app: FastAPI):
 
     app.state.orchestrator = orchestrator
 
-    # Inject orchestrator and openai_client into inngest_client module
-    import src.inngest_client as ic
-    ic._orchestrator = orchestrator
-    ic._openai_client = openai_client
+    # Connect to Temporal and start the worker
+    temporal_client = await get_temporal_client(settings.temporal_address)
+    app.state.temporal_client = temporal_client
+    _worker_task = asyncio.create_task(
+        run_worker(temporal_client, orchestrator, openai_client)
+    )
+    await start_cron_if_needed(temporal_client)
 
     # Background gauge updater — polls pinecone_sync_queue every 15s
     from src.metrics import pinecone_sync_queue_depth
@@ -127,6 +131,11 @@ async def lifespan(app: FastAPI):
 
     _gauge_task = asyncio.create_task(_update_gauges())
     yield
+    _worker_task.cancel()
+    try:
+        await _worker_task
+    except asyncio.CancelledError:
+        pass
     _gauge_task.cancel()
     provider.force_flush()
 
@@ -136,11 +145,6 @@ def create_app() -> FastAPI:
 
     # Prometheus — expose /metrics endpoint
     Instrumentator().instrument(app).expose(app)
-
-    # Inngest — registers POST /api/inngest for Dev Server
-    inngest.fast_api.serve(
-        app, get_inngest_client(), [process_message, sync_pinecone_queue]
-    )
 
     # Exception handlers
     app.add_exception_handler(
