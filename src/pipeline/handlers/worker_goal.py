@@ -35,7 +35,6 @@ class WorkerGoalHandler(MessageHandler):
     async def _do_handle(self, ctx: PipelineContext) -> None:
         result = ctx.result
         wg_create = WorkGoalCreate(
-            user_id=ctx.user_id,
             message_id=ctx.message_id,
             target_earnings=result.worker.target_earnings,
             target_timeframe=result.worker.target_timeframe,
