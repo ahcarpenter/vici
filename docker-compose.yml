@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    env_file: .env.postgres.development
+    env_file: .env.postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vici"]
       interval: 5s
@@ -12,7 +12,7 @@ services:
 
   opensearch:
     image: opensearchproject/opensearch:2.19.4
-    env_file: .env.opensearch.development
+    env_file: .env.opensearch
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -41,7 +41,7 @@ services:
   jaeger-query:
     image: jaegertracing/jaeger:2.16.0
     command: --config /etc/jaeger/query-config.yaml
-    env_file: .env.jaeger-query.development
+    env_file: .env.jaeger-query
     volumes:
       - ./jaeger/query-config.yaml:/etc/jaeger/query-config.yaml
     ports:
@@ -61,7 +61,7 @@ services:
         condition: service_started
       temporal:
         condition: service_healthy
-    env_file: .env.app.development
+    env_file: .env.app
     volumes:
       - ./src:/app/src
     ports:
@@ -71,7 +71,7 @@ services:
 
   temporal:
     image: temporalio/auto-setup:1.26.2
-    env_file: .env.temporal.development
+    env_file: .env.temporal
     ports:
       - "7233:7233"
     depends_on:
@@ -86,7 +86,7 @@ services:
 
   temporal-ui:
     image: temporalio/ui:latest
-    env_file: .env.temporal-ui.development
+    env_file: .env.temporal-ui
     ports:
       - "8080:8080"
     depends_on:
@@ -108,7 +108,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
-    env_file: .env.grafana.development
+    env_file: .env.grafana
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
