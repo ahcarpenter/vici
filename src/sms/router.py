@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/webhook", tags=["sms"])
 
 @router.post("/sms")
 async def receive_sms(
+    request: Request,
     gates=Depends(enforce_rate_limit),
     session: AsyncSession = Depends(get_session),
 ):
