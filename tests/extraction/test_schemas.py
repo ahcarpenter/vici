@@ -55,5 +55,5 @@ def test_extraction_result_job_branch():
     result = ExtractionResult(message_type="job_posting", job=job)
     assert result.message_type == "job_posting"
     assert result.job is not None
-    assert result.worker is None
+    assert result.work_goal is None
     assert result.unknown is None

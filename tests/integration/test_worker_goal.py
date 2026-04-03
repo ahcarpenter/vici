@@ -49,7 +49,7 @@ async def test_worker_goal_handler_emits_span():
         )
 
         worker = WorkerExtraction(target_earnings=150.0, target_timeframe="this week")
-        result = ExtractionResult(message_type="worker_goal", worker=worker)
+        result = ExtractionResult(message_type="work_goal", work_goal=worker)
 
         test_message_sid = "SMwgtest"
         test_user_id = 42

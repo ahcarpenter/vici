@@ -78,7 +78,7 @@ async def test_gpt_call_duration_seconds_recorded_after_process():
     from src.metrics import gpt_call_duration_seconds
 
     mock_result = MagicMock()
-    mock_result.message_type = "worker_goal"
+    mock_result.message_type = "work_goal"
     mock_usage = MagicMock()
     mock_usage.prompt_tokens = 8
     mock_usage.completion_tokens = 4

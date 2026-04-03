@@ -58,15 +58,15 @@ async def test_classify_job():
 @pytest.mark.asyncio
 async def test_classify_worker():
     worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
-    expected = ExtractionResult(message_type="worker_goal", worker=worker)
+    expected = ExtractionResult(message_type="work_goal", work_goal=worker)
     mock_client = make_mock_openai_client(expected)
 
     service = _make_service(mock_client)
     result = await service.process("I need $200 today", "hash123")
 
-    assert result.message_type == "worker_goal"
-    assert result.worker is not None
-    assert result.worker.target_earnings == 200.0
+    assert result.message_type == "work_goal"
+    assert result.work_goal is not None
+    assert result.work_goal.target_earnings == 200.0
 
 
 @pytest.mark.asyncio

@@ -24,7 +24,7 @@ class WorkerGoalHandler(MessageHandler):
         self._audit_repo = audit_repo
 
     def can_handle(self, result: ExtractionResult) -> bool:
-        return result.message_type == "worker_goal" and result.worker is not None
+        return result.message_type == "work_goal" and result.work_goal is not None
 
     async def handle(self, ctx: PipelineContext) -> None:
         with tracer.start_as_current_span("pipeline.handle_worker_goal") as span:
@@ -36,14 +36,14 @@ class WorkerGoalHandler(MessageHandler):
         result = ctx.result
         wg_create = WorkGoalCreate(
             message_id=ctx.message_id,
-            target_earnings=result.worker.target_earnings,
-            target_timeframe=result.worker.target_timeframe,
+            target_earnings=result.work_goal.target_earnings,
+            target_timeframe=result.work_goal.target_timeframe,
             raw_sms=ctx.sms_text,
         )
         wg = await self._work_goal_repo.create(ctx.session, wg_create)
 
         await ctx.session.execute(
-            sa_text("UPDATE message SET message_type = 'worker_goal' WHERE id = :mid"),
+            sa_text("UPDATE message SET message_type = 'work_goal' WHERE id = :mid"),
             {"mid": ctx.message_id},
         )
         await self._audit_repo.write(

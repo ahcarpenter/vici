@@ -125,7 +125,7 @@ async def test_job_branch_commits_once():
 async def test_worker_branch_commits_once():
     """Worker branch: work_goal_repo.create called, audit written, commit once."""
     worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
-    result = ExtractionResult(message_type="worker_goal", worker=worker)
+    result = ExtractionResult(message_type="work_goal", work_goal=worker)
     orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
     session = _make_session()
 
@@ -139,7 +139,7 @@ async def test_worker_branch_commits_once():
         from_number="+15559876543",
     )
 
-    assert out.message_type == "worker_goal"
+    assert out.message_type == "work_goal"
     wr_repo.create.assert_awaited_once()
     session.commit.assert_awaited_once()
     # Audit must be written before commit (audit_repo.write called at least once)
@@ -328,7 +328,7 @@ async def test_orchestrator_emits_pipeline_span():
 
     try:
         worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
-        result = ExtractionResult(message_type="worker_goal", worker=worker)
+        result = ExtractionResult(message_type="work_goal", work_goal=worker)
         orchestrator, _, _, _, _, _ = _make_orchestrator(result)
         session = _make_session()
 
