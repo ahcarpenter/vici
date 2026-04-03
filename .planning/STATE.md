@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 02.12-01-PLAN.md
-last_updated: "2026-04-03T06:12:51Z"
-last_activity: 2026-04-03
+stopped_at: Completed 02.13-01-PLAN.md
+last_updated: "2026-04-03T06:49:25.196Z"
+last_activity: "2026-04-03 - Completed quick task 260403-30x: update all docs"
 progress:
   total_phases: 17
-  completed_phases: 14
-  total_plans: 28
-  completed_plans: 28
+  completed_phases: 12
+  total_plans: 27
+  completed_plans: 27
   percent: 82
 ---
 
@@ -152,6 +152,8 @@ Recent decisions affecting current work:
 - [Phase 02.10]: Wire TracingInterceptor on Client.connect only — worker inherits interceptors from client automatically
 - [Phase 02.11]: Settings._validate_required_credentials fires before _build_sub_models since both are mode=after validators executed in declaration order
 - [Phase 02.11]: Rate limit uses Python datetime.now(UTC) bound param instead of NOW() SQL function for SQLite test compatibility
+- [Phase 02.13]: GPT_MODEL constant in constants.py is the single source of truth; config.py imports it as ExtractionSettings.gpt_model default
+- [Phase 02.13]: pinecone_client.py renamed to utils.py via git mv to conform to AGENTS.md domain file naming convention
 
 ### Roadmap Evolution
 
@@ -185,7 +187,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T05:44:33.655Z
-Stopped at: Completed 02.12-01-PLAN.md
+Last session: 2026-04-03T06:49:20.465Z
+Stopped at: Completed 02.13-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
