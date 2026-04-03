@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 02.7-01-PLAN.md
-last_updated: "2026-03-08T16:12:38.027Z"
+stopped_at: Completed 02.14-01-PLAN.md
+last_updated: "2026-04-03T09:15:19.832Z"
 last_activity: "2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere"
 progress:
   total_phases: 11
@@ -36,6 +36,7 @@ Progress: [████████░░] 78% (7 of 9 phases complete, all 19 p
 The app is production-ready from the infrastructure and domain-logic perspective. Everything through extraction and storage is implemented, tested, and hardened:
 
 ### Complete
+
 - ✅ Async FastAPI skeleton, 5-gate Twilio webhook security chain
 - ✅ 3NF schema (User / Message / Job / WorkRequest / RateLimit / AuditLog / PineconeSyncQueue)
 - ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
@@ -47,6 +48,7 @@ The app is production-ready from the infrastructure and domain-logic perspective
 - ✅ Unknown-message graceful SMS reply implemented in PipelineOrchestrator
 
 ### Not Started
+
 - ⏳ Phase 3: MatchService (earnings math SQL, ranked SMS formatter, empty-match fallback)
 - ⏳ Phase 4: Outbound SMS for job posters and workers, STOP/START pass-through, Render.com deploy
 
@@ -70,6 +72,7 @@ src/
 ```
 
 **DI Graph (lifespan):**
+
 ```
 AsyncOpenAI → wrap_openai (Braintrust) → ExtractionService
 ExtractionService + repos + pinecone_client + TwilioClient → PipelineOrchestrator
@@ -134,6 +137,7 @@ Recent decisions affecting current work:
 - [Phase 02.6-01]: STACK.md and ARCHITECTURE.md now reflect the actual built system (Phases 01–02.5) with 0 pgvector references, 2026-03-08 date, HIGH confidence sourced from STATE.md/PROJECT.md/REQUIREMENTS.md
 - [Phase 02.6]: FEATURES.md and PITFALLS.md patched with accurate ✅/⏳ status, Phase 3/4 forward-looking content, 8 new implementation pitfalls, zero pgvector references
 - [Phase 02.7-01]: README links to .env.example via explicit cp command; migrations step marked optional when using Docker
+- [Phase 02.14]: Removed transitive user_id from Job/WorkRequest; converted rate_limit to rolling-window INSERT pattern
 
 ### Roadmap Evolution
 
@@ -164,7 +168,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-08T16:11:02.861Z
-Stopped at: Completed 02.7-01-PLAN.md
+Last session: 2026-04-03T09:15:19.829Z
+Stopped at: Completed 02.14-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`
