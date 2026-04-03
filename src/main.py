@@ -22,20 +22,25 @@ from twilio.rest import Client as TwilioClient
 
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
-from src.metrics import pinecone_sync_queue_depth
 from src.exceptions import twilio_signature_invalid_handler
+from src.extraction.constants import OPENAI_MAX_RETRIES
+from src.extraction.service import ExtractionService
+from src.extraction.utils import write_job_embedding
+from src.jobs.repository import JobRepository
+from src.metrics import pinecone_sync_queue_depth
 from src.pipeline.handlers.job_posting import JobPostingHandler
 from src.pipeline.handlers.unknown import UnknownMessageHandler
 from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 from src.pipeline.orchestrator import PipelineOrchestrator
-from src.extraction.utils import write_job_embedding
-from src.extraction.service import ExtractionService
-from src.jobs.repository import JobRepository
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
 from src.sms.router import router as sms_router
+from src.temporal.constants import WORKER_SHUTDOWN_TIMEOUT_SECONDS
 from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
 from src.work_requests.repository import WorkRequestRepository
+
+_GAUGE_POLL_INTERVAL_SECONDS: int = 15
+_GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
 
 
 # ── structlog OTel processor ────────────────────────────────────────────────────
@@ -98,7 +103,7 @@ async def _update_gauges() -> None:
                 consecutive_failures = 0
         except Exception as exc:
             consecutive_failures += 1
-            if consecutive_failures > 5:
+            if consecutive_failures > _GAUGE_MAX_CONSECUTIVE_FAILURES:
                 structlog.get_logger().critical(
                     "gauge_updater: repeated DB failures, metric unreliable",
                     consecutive_failures=consecutive_failures,
@@ -111,7 +116,7 @@ async def _update_gauges() -> None:
                     " — metric stale",
                     error=str(exc),
                 )
-        await asyncio.sleep(15)
+        await asyncio.sleep(_GAUGE_POLL_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
@@ -122,7 +127,10 @@ async def lifespan(app: FastAPI):
 
     # Build DI graph
     openai_client = wrap_openai(
-        AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
+        AsyncOpenAI(
+            api_key=settings.extraction.openai_api_key,
+            max_retries=OPENAI_MAX_RETRIES,
+        )
     )
     extraction_service = ExtractionService(
         openai_client=openai_client, settings=settings
@@ -168,7 +176,7 @@ async def lifespan(app: FastAPI):
     yield
     _worker_task.cancel()
     try:
-        await asyncio.wait_for(_worker_task, timeout=10)
+        await asyncio.wait_for(_worker_task, timeout=WORKER_SHUTDOWN_TIMEOUT_SECONDS)
     except (asyncio.CancelledError, asyncio.TimeoutError):
         pass
     _gauge_task.cancel()

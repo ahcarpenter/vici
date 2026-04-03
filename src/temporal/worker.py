@@ -10,9 +10,12 @@ from src.temporal.activities import (
     process_message_activity,
     sync_pinecone_queue_activity,
 )
+from src.temporal.constants import (
+    CRON_SCHEDULE_PINECONE_SYNC,
+    TASK_QUEUE,
+    WORKFLOW_PINECONE_SYNC_ID,
+)
 from src.temporal.workflows import ProcessMessageWorkflow, SyncPineconeQueueWorkflow
-
-TASK_QUEUE = "vici-queue"
 
 
 async def get_temporal_client(address: str) -> Client:
@@ -49,9 +52,9 @@ async def start_cron_if_needed(client: Client) -> None:
     try:
         await client.start_workflow(
             SyncPineconeQueueWorkflow.run,
-            id="sync-pinecone-queue-cron",
+            id=WORKFLOW_PINECONE_SYNC_ID,
             task_queue=TASK_QUEUE,
-            cron_schedule="*/5 * * * *",
+            cron_schedule=CRON_SCHEDULE_PINECONE_SYNC,
         )
     except (WorkflowAlreadyStartedError, RPCError) as err:
         already_exists = err.status == RPCStatusCode.ALREADY_EXISTS

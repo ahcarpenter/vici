@@ -6,6 +6,7 @@ import structlog
 from braintrust import init_logger
 from openai import APIStatusError, RateLimitError
 from opentelemetry import trace as otel_trace
+from temporalio.exceptions import ApplicationError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -13,8 +14,13 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from temporalio.exceptions import ApplicationError
-
+from src.extraction.constants import (
+    GPT_CALL_TIMEOUT_SECONDS,
+    GPT_RETRY_MAX_ATTEMPTS,
+    GPT_RETRY_WAIT_MAX_SECONDS,
+    GPT_RETRY_WAIT_MIN_SECONDS,
+    GPT_RETRY_WAIT_MULTIPLIER,
+)
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
 from src.metrics import (
@@ -73,8 +79,12 @@ class ExtractionService:
 
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
-        stop=stop_after_attempt(4),
-        wait=wait_random_exponential(multiplier=1, min=1, max=60),
+        stop=stop_after_attempt(GPT_RETRY_MAX_ATTEMPTS),
+        wait=wait_random_exponential(
+            multiplier=GPT_RETRY_WAIT_MULTIPLIER,
+            min=GPT_RETRY_WAIT_MIN_SECONDS,
+            max=GPT_RETRY_WAIT_MAX_SECONDS,
+        ),
     )
     async def _call_with_retry(self, user_message: str) -> tuple[ExtractionResult, Any]:
         completion = await self._client.beta.chat.completions.parse(
@@ -84,7 +94,7 @@ class ExtractionService:
                 {"role": "user", "content": user_message},
             ],
             response_format=ExtractionResult,
-            timeout=30.0,
+            timeout=GPT_CALL_TIMEOUT_SECONDS,
         )
         parsed = completion.choices[0].message.parsed
         if parsed is None:
