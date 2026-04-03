@@ -72,7 +72,7 @@ Plans:
 **Goal:** Normalize the database schema to strict 3NF by removing transitively-determined redundant user_id columns from job and work_goal, dropping the incompatible UNIQUE(user_id, created_at) constraint on rate_limit, and adding a CHECK constraint to enforce the audit_log message_sid invariant
 **Requirements**: 3NF-01, 3NF-02, 3NF-03, 3NF-04, 3NF-05, 3NF-06
 **Depends on:** Phase 2
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 02.14-01-PLAN.md — Drop job.user_id/work_goal.user_id, remove rate_limit unique constraint, add audit_log check; update models/schemas/repositories/handlers/tests
