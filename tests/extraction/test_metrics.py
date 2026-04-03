@@ -32,10 +32,10 @@ def test_pinecone_sync_queue_depth_settable():
     assert any(s.value == 42 for s in samples)
 
 
-def test_inngest_queue_depth_settable():
-    from src.metrics import inngest_queue_depth
+def test_temporal_queue_depth_settable():
+    from src.metrics import temporal_queue_depth
     # Should not raise
-    inngest_queue_depth.set(0)
+    temporal_queue_depth.set(0)
 
 
 # ── Task 2: ExtractionService instrumentation tests ─────────────────────────

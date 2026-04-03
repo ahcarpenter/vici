@@ -117,7 +117,7 @@ async def test_job_branch_commits_once():
     assert out.message_type == "job_posting"
     job_repo.create.assert_awaited_once()
     session.commit.assert_awaited_once()
-    # Work request repo must NOT be called
+    # Work goal repo must NOT be called
     wr_repo.create.assert_not_awaited()
 
 

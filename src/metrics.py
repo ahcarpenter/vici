@@ -34,14 +34,14 @@ pinecone_sync_queue_depth = Gauge(
     "Number of rows in pinecone_sync_queue with status=pending",
 )
 
-inngest_queue_depth = Gauge(
-    "inngest_queue_depth",
-    "Stub gauge — Inngest dev server exposes no public metrics API",
+temporal_queue_depth = Gauge(
+    "temporal_queue_depth",
+    "Stub gauge — Temporal task queue depth not yet instrumented",
 )
-# inngest_queue_depth always reads 0; placeholder for future instrumentation
+# temporal_queue_depth always reads 0; placeholder for future instrumentation
 
 pipeline_failures_total = Counter(
     "pipeline_failures_total",
-    "Total number of process-message Inngest function permanent failures",
+    "Total number of process-message Temporal workflow permanent failures",
     ["function"],
 )
