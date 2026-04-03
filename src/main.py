@@ -37,7 +37,7 @@ from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return
 from src.sms.router import router as sms_router
 from src.temporal.constants import WORKER_SHUTDOWN_TIMEOUT_SECONDS
 from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
-from src.work_requests.repository import WorkRequestRepository
+from src.work_goals.repository import WorkGoalRepository
 
 _GAUGE_POLL_INTERVAL_SECONDS: int = 15
 _GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
@@ -147,7 +147,7 @@ async def lifespan(app: FastAPI):
             extraction_service=extraction_service,
         ),
         WorkerGoalHandler(
-            work_request_repo=WorkRequestRepository(),
+            work_goal_repo=WorkGoalRepository(),
             audit_repo=audit_repo,
         ),
         UnknownMessageHandler(

@@ -10,4 +10,4 @@ OTEL_ATTR_DB_OPERATION: str = "db.operation.name"
 OTEL_ATTR_DB_VECTOR_JOB_ID: str = "db.vector.job_id"
 
 # Application-specific attribute keys
-OTEL_ATTR_WORK_REQUEST_USER_ID: str = "app.work_request.user_id"
+OTEL_ATTR_WORK_GOAL_USER_ID: str = "app.work_goal.user_id"

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class WorkRequestCreate(BaseModel):
+class WorkGoalCreate(BaseModel):
     user_id: int = Field(gt=0)
     message_id: int = Field(gt=0)
     target_earnings: float = Field(gt=0)

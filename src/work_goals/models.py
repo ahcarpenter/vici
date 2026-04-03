@@ -6,11 +6,11 @@ from sqlalchemy import CheckConstraint
 from sqlmodel import Field, SQLModel
 
 
-class WorkRequest(SQLModel, table=True):
-    __tablename__ = "work_request"
+class WorkGoal(SQLModel, table=True):
+    __tablename__ = "work_goal"
     __table_args__ = (
         CheckConstraint(
-            "target_earnings > 0", name="ck_work_request_target_earnings_positive"
+            "target_earnings > 0", name="ck_work_goal_target_earnings_positive"
         ),
     )
 
