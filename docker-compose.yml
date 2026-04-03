@@ -1,10 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    env_file: .env.postgres.development
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vici"]
       interval: 5s
@@ -15,10 +12,7 @@ services:
 
   opensearch:
     image: opensearchproject/opensearch:2.19.4
-    environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    env_file: .env.opensearch.development
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -47,8 +41,7 @@ services:
   jaeger-query:
     image: jaegertracing/jaeger:2.16.0
     command: --config /etc/jaeger/query-config.yaml
-    environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:4317
+    env_file: .env.jaeger-query.development
     volumes:
       - ./jaeger/query-config.yaml:/etc/jaeger/query-config.yaml
     ports:
@@ -68,17 +61,7 @@ services:
         condition: service_started
       temporal:
         condition: service_healthy
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://vici:vici@postgres:5432/vici
-      TEMPORAL_ADDRESS: temporal:7233
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger-collector:4317
-      OTEL_SERVICE_NAME: vici
-      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:8000}
-      GIT_SHA: ${GIT_SHA:-dev}
-      SMS_RATE_LIMIT_WINDOW_SECONDS: ${SMS_RATE_LIMIT_WINDOW_SECONDS:-60}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-vici-queue}
-      CRON_SCHEDULE_PINECONE_SYNC: ${CRON_SCHEDULE_PINECONE_SYNC:-*/5 * * * *}
+    env_file: .env.app.development
     volumes:
       - ./src:/app/src
     ports:
@@ -88,12 +71,7 @@ services:
 
   temporal:
     image: temporalio/auto-setup:1.26.2
-    environment:
-      - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=postgres
+    env_file: .env.temporal.development
     ports:
       - "7233:7233"
     depends_on:
@@ -108,8 +86,7 @@ services:
 
   temporal-ui:
     image: temporalio/ui:latest
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
+    env_file: .env.temporal-ui.development
     ports:
       - "8080:8080"
     depends_on:
@@ -131,11 +108,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    env_file: .env.grafana.development
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
