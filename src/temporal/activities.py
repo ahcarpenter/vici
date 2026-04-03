@@ -10,7 +10,7 @@ from temporalio.exceptions import ApplicationError
 
 from src.config import get_settings
 from src.database import get_sessionmaker
-from src.extraction.pinecone_client import write_job_embedding
+from src.extraction.utils import write_job_embedding
 from src.sms.models import Message
 from src.sms.service import hash_phone
 

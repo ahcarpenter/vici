@@ -27,7 +27,7 @@ from src.pipeline.handlers.job_posting import JobPostingHandler
 from src.pipeline.handlers.unknown import UnknownMessageHandler
 from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 from src.pipeline.orchestrator import PipelineOrchestrator
-from src.extraction.pinecone_client import write_job_embedding
+from src.extraction.utils import write_job_embedding
 from src.extraction.service import ExtractionService
 from src.jobs.repository import JobRepository
 from src.sms.audit_repository import AuditLogRepository
