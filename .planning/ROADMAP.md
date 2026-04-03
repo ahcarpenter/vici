@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.11: you're a FAANG level distinguished engineer. For all existing features, find and account for all edge cases, ensuring they're handled gracefully (INSERTED)
+
+**Goal:** Harden all existing features against 13 identified edge cases — fail-fast config validation, GPT None guard, correct Temporal error signaling, caught Twilio/Pinecone failures, rolling rate limit, graceful shutdown, webhook field validation, hash guard, datetime warning, and gauge staleness detection
+**Requirements**: HARDENING-01
+**Depends on:** Phase 02.10
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02.11-01-PLAN.md — All 13 edge-case fixes across config, extraction, activities, handlers, sms, jobs, and main
+
 ### Phase 02.10: be sure the temporal flows leverage distributed tracing via jaeger (INSERTED)
 
 **Goal:** Wire Temporal's built-in OTel TracingInterceptor so that workflow and activity execution produces spans in Jaeger, with manual spans for sync_pinecone_queue_activity
