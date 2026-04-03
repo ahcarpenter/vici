@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: Completed 02.12-01-PLAN.md
-last_updated: "2026-04-03T05:44:33.658Z"
+last_updated: "2026-04-03T06:12:51Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 17
@@ -41,11 +41,12 @@ The app is production-ready from the infrastructure and domain-logic perspective
 - ✅ 3NF schema (User / Message / Job / WorkRequest / RateLimit / AuditLog / PineconeSyncQueue)
 - ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
 - ✅ PipelineOrchestrator: full pipeline (GPT → storage → Pinecone), single commit per branch
-- ✅ Pinecone embedding write with `text-embedding-3-small`; failed writes queued + retried via Inngest cron
-- ✅ Full observability: structlog JSON, OTel → Jaeger v2 (OpenSearch), Prometheus → Grafana
-- ✅ Inngest: `process-message` (3 retries, on_failure handler), `sync-pinecone-queue` (cron sweep)
+- ✅ Pinecone embedding write with `text-embedding-3-small`; failed writes queued + retried via Temporal cron
+- ✅ Full observability: structlog JSON, OTel → Jaeger v2 (OpenSearch), Prometheus → Grafana, TracingInterceptor on Temporal
+- ✅ Temporal: ProcessMessageWorkflow (4 attempts, on_failure activity), SyncPineconeQueueWorkflow (cron sweep)
+- ✅ Pipeline handler pattern (Chain of Responsibility): JobPostingHandler, WorkerGoalHandler, UnknownMessageHandler
 - ✅ Multi-stage Dockerfile (non-root, HEALTHCHECK), render.yaml Blueprint, GitHub Actions CI
-- ✅ Unknown-message graceful SMS reply implemented in PipelineOrchestrator
+- ✅ Edge-case hardening: config validation, GPT None guard, rate limit rolling window, graceful shutdown
 
 ### Not Started
 
@@ -60,14 +61,22 @@ src/
 ├── config.py                  # Nested Pydantic Settings (4 sub-models)
 ├── database.py                # Async SQLAlchemy engine + sessionmaker
 ├── models.py                  # Central SQLModel aggregator
-├── inngest_client.py          # process-message + sync-pinecone-queue Inngest functions
+├── repository.py              # Base repository class
 ├── metrics.py                 # Prometheus metric singletons
 ├── exceptions.py              # Custom exceptions
 ├── sms/                       # Webhook route, MessageRepository, AuditLogRepository
-├── extraction/                # ExtractionService (GPT-only), PipelineOrchestrator, schemas, Pinecone client
+├── extraction/                # ExtractionService (GPT-only), schemas, Pinecone client
+├── pipeline/                  # PipelineOrchestrator + handler registry
+│   ├── orchestrator.py        #   Classify → audit → dispatch
+│   ├── context.py             #   PipelineContext dataclass
+│   └── handlers/              #   base.py, job_posting.py, worker_goal.py, unknown.py
+├── temporal/                  # Workflow orchestration
+│   ├── workflows.py           #   ProcessMessageWorkflow, SyncPineconeQueueWorkflow
+│   ├── activities.py          #   Activity implementations
+│   └── worker.py              #   Client (TracingInterceptor), worker, cron scheduling
 ├── jobs/                      # JobRepository, Job SQLModel
 ├── work_requests/             # WorkRequestRepository, WorkRequest SQLModel
-├── users/                     # User SQLModel
+├── users/                     # UserRepository, User SQLModel
 └── matches/                   # Match SQLModel (placeholder, Phase 3)
 ```
 
@@ -75,13 +84,15 @@ src/
 
 ```
 AsyncOpenAI → wrap_openai (Braintrust) → ExtractionService
-ExtractionService + repos + pinecone_client + TwilioClient → PipelineOrchestrator
-PipelineOrchestrator → inngest_client._orchestrator (module var)
-wrap_openai → inngest_client._openai_client (module var)
+Repos (JobRepository, WorkRequestRepository, AuditLogRepository) → instantiated
+Handlers [JobPostingHandler, WorkerGoalHandler, UnknownMessageHandler] → built with repos
+ExtractionService + AuditLogRepository + handlers → PipelineOrchestrator
+PipelineOrchestrator → app.state (accessed by Temporal activities)
+Temporal client (TracingInterceptor) → worker task in lifespan
 ```
 
-**Docker Compose (local dev, 8 services):**
-postgres | opensearch | jaeger-collector | jaeger-query | app | inngest | prometheus | grafana
+**Docker Compose (local dev, 9 services):**
+postgres | opensearch | jaeger-collector | jaeger-query | app | temporal | temporal-ui | prometheus | grafana
 
 **Deployment (production):**
 Render.com — render.yaml Blueprint (web service + PostgreSQL 16 basic-256mb)

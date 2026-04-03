@@ -12,11 +12,11 @@ Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters tex
 - SQLModel + Alembic (PostgreSQL 16)
 - OpenAI GPT via [Braintrust](https://braintrust.dev) (LLM observability + evals)
 - Pinecone (vector store for job/worker embeddings)
-- Inngest (background jobs, retries, cron sweeps)
+- Temporal (workflow orchestration, retries, cron sweeps)
 - Twilio (inbound + outbound SMS)
-- OpenTelemetry -> Jaeger v2 (OpenSearch backend)
+- OpenTelemetry -> Jaeger v2 (OpenSearch backend), TracingInterceptor on Temporal
 - Prometheus + Grafana
-- Docker Compose (local dev, 8 services)
+- Docker Compose (local dev, 9 services)
 - Render.com (production)
 
 ## Prerequisites
@@ -24,7 +24,7 @@ Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters tex
 - Docker and Docker Compose
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/) (`pip install uv`)
 - Accounts with API keys for: Twilio, OpenAI, Pinecone, Braintrust
-- (Optional) Inngest Cloud account — only needed for production; local dev uses the bundled Inngest Dev Server
+- Temporal server (included in Docker Compose for local dev)
 
 ## Local Setup
 
@@ -41,13 +41,13 @@ Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters tex
    cp .env.example .env
    ```
 
-3. Start the full stack (Postgres, OpenSearch, Jaeger, Prometheus, Grafana, Inngest Dev Server, and the API)
+3. Start the full stack (Postgres, OpenSearch, Jaeger, Temporal, Prometheus, Grafana, and the API)
 
    ```bash
    docker compose up
    ```
 
-   The API is available at http://localhost:8000. The Inngest Dev Server UI is at http://localhost:8288.
+   The API is available at http://localhost:8000. The Temporal UI is at http://localhost:8233.
 
 4. Apply database migrations (first time and after schema changes)
 
@@ -72,11 +72,7 @@ All required variables are documented in `.env.example`. Copy it to `.env` and f
 | `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console -> Phone Numbers |
 | `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your Render URL in production |
 | `ENV` | Yes | Runtime environment | `development` locally, `production` on Render |
-| `INNGEST_DEV` | Yes | `1` enables Inngest Dev Server mode (no signing key needed) | Set to `1` locally, `0` in production |
-| `INNGEST_BASE_URL` | Yes | Inngest server URL | `http://localhost:8288` locally, `https://inn.gs` in production |
-| `INNGEST_APP_URL` | Yes | URL Docker uses to register the app with Inngest Dev Server | `http://app:8000` (matches docker-compose service name) |
-| `INNGEST_SIGNING_KEY` | Prod only | Verifies Inngest webhook signatures in production | Inngest Cloud dashboard -> your app -> Signing Key |
-| `INNGEST_EVENT_KEY` | Prod only | Authenticates event sends in production | Inngest Cloud -> Manage -> Event Keys -> Create Key |
+| `TEMPORAL_ADDRESS` | No | Temporal server address | `localhost:7233` (default, matches Docker Compose) |
 | `OPENAI_API_KEY` | Yes | GPT classification and embedding calls | platform.openai.com -> API Keys |
 | `PINECONE_API_KEY` | Yes | Vector upsert and query | Pinecone Console -> API Keys |
 | `PINECONE_INDEX_HOST` | Yes | Your Pinecone index endpoint | Pinecone Console -> your index -> Host |
@@ -91,7 +87,7 @@ All required variables are documented in `.env.example`. Copy it to `.env` and f
 uv run pytest
 ```
 
-Tests use SQLite + aiosqlite — no Postgres dependency. Inngest HTTP calls are automatically mocked. To run with coverage:
+Tests use SQLite + aiosqlite — no Postgres dependency. Temporal activities are mocked in tests. To run with coverage:
 
 ```bash
 uv run pytest --cov=src --cov-report=term-missing
@@ -112,16 +108,24 @@ src/
 ├── config.py            # Nested Pydantic Settings (db, twilio, openai, observability)
 ├── database.py          # Async SQLAlchemy engine and sessionmaker
 ├── models.py            # Central SQLModel aggregator
-├── inngest_client.py    # Inngest function definitions (process-message, sync-pinecone-queue)
+├── repository.py        # Base repository class
 ├── metrics.py           # Prometheus metric singletons
 ├── exceptions.py        # Custom exceptions
 ├── sms/                 # Twilio webhook route, MessageRepository, AuditLogRepository
-├── extraction/          # ExtractionService (GPT), PipelineOrchestrator, Pinecone client
+├── extraction/          # ExtractionService (GPT), Pinecone client, schemas
+├── pipeline/            # PipelineOrchestrator + handler registry (Chain of Responsibility)
+│   ├── orchestrator.py  #   Classify -> audit -> dispatch to handler
+│   ├── context.py       #   PipelineContext dataclass
+│   └── handlers/        #   base.py, job_posting.py, worker_goal.py, unknown.py
+├── temporal/            # Temporal workflow orchestration
+│   ├── workflows.py     #   ProcessMessageWorkflow, SyncPineconeQueueWorkflow
+│   ├── activities.py    #   Activity implementations
+│   └── worker.py        #   Client (TracingInterceptor), worker, cron scheduling
 ├── jobs/                # JobRepository, Job model
 ├── work_requests/       # WorkRequestRepository, WorkRequest model
-├── users/               # User model
+├── users/               # UserRepository, User model
 └── matches/             # Match model (Phase 3 - not yet implemented)
-docker-compose.yml       # Full local stack (8 services)
+docker-compose.yml       # Full local stack (9 services)
 Dockerfile               # Multi-stage production image
 render.yaml              # Render.com Blueprint IaC
 pyproject.toml           # Python dependencies managed by uv
@@ -143,5 +147,5 @@ The project deploys to Render.com via the `render.yaml` Blueprint:
 
 1. Push to `main` triggers a Render deploy (web service + managed PostgreSQL)
 2. Set all production env vars in the Render dashboard (see [Environment Variables](#environment-variables) table above)
-3. Set `INNGEST_DEV=0` and configure `INNGEST_SIGNING_KEY` / `INNGEST_EVENT_KEY` from Inngest Cloud
+3. Configure `TEMPORAL_ADDRESS` to point to your Temporal Cloud or self-hosted instance
 4. Render runs migrations automatically on startup via the Dockerfile CMD
