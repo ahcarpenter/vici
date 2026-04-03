@@ -1,7 +1,10 @@
+# Environment files — secrets
 .env
 .env.*
-!.env.example
-!.env.development
+
+# Allow committed development defaults and examples
+!.env.*.development
+!.env.*.example
 
 # Python bytecode
 __pycache__/
