@@ -1,30 +1,16 @@
 # Vici
 
-Vici is an SMS-driven job matching platform — workers text an earnings goal and receive a ranked list of jobs that let them hit that goal in the shortest possible time.
+An SMS-driven platform for the gig economy
 
 ## How It Works
 
-Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters text in a job listing with a pay rate and duration. GPT classifies each inbound message and extracts structured data from both. The system then matches workers to jobs using earnings math and replies to both parties via Twilio SMS.
-
-## Tech Stack
-
-- Python 3.12, FastAPI
-- SQLModel + Alembic (PostgreSQL 16)
-- OpenAI GPT via [Braintrust](https://braintrust.dev) (LLM observability + evals)
-- Pinecone (vector store for job/worker embeddings)
-- Temporal (workflow orchestration, retries, cron sweeps)
-- Twilio (inbound + outbound SMS)
-- OpenTelemetry -> Jaeger v2 (OpenSearch backend), TracingInterceptor on Temporal
-- Prometheus + Grafana
-- Docker Compose (local dev, 9 services)
-- Render.com (production)
+Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters text in a job listing with a pay rate and duration. GPT classifies each inbound message and extracts structured data from both. The system then matches workers to the jobs that will help them earn that the quickest.
 
 ## Prerequisites
 
 - Docker and Docker Compose
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/) (`pip install uv`)
 - Accounts with API keys for: Twilio, OpenAI, Pinecone, Braintrust
-- Temporal server (included in Docker Compose for local dev)
 
 ## Local Setup
 
@@ -98,39 +84,6 @@ uv run pytest --cov=src --cov-report=term-missing
 ```bash
 uv run ruff check .
 uv run ruff format .
-```
-
-## Project Structure
-
-```
-src/
-├── main.py              # FastAPI app and lifespan DI graph
-├── config.py            # Nested Pydantic Settings (db, twilio, openai, observability)
-├── database.py          # Async SQLAlchemy engine and sessionmaker
-├── models.py            # Central SQLModel aggregator
-├── repository.py        # Base repository class
-├── metrics.py           # Prometheus metric singletons
-├── exceptions.py        # Custom exceptions
-├── sms/                 # Twilio webhook route, MessageRepository, AuditLogRepository
-├── extraction/          # ExtractionService (GPT), Pinecone client, schemas
-├── pipeline/            # PipelineOrchestrator + handler registry (Chain of Responsibility)
-│   ├── orchestrator.py  #   Classify -> audit -> dispatch to handler
-│   ├── context.py       #   PipelineContext dataclass
-│   └── handlers/        #   base.py, job_posting.py, worker_goal.py, unknown.py
-├── temporal/            # Temporal workflow orchestration
-│   ├── workflows.py     #   ProcessMessageWorkflow, SyncPineconeQueueWorkflow
-│   ├── activities.py    #   Activity implementations
-│   └── worker.py        #   Client (TracingInterceptor), worker, cron scheduling
-├── jobs/                # JobRepository, Job model
-├── work_goals/       # WorkGoalRepository, WorkGoal model
-├── users/               # UserRepository, User model
-└── matches/             # Match model (Phase 3 - not yet implemented)
-docker-compose.yml       # Full local stack (9 services)
-Dockerfile               # Multi-stage production image
-render.yaml              # Render.com Blueprint IaC
-pyproject.toml           # Python dependencies managed by uv
-alembic/                 # Database migrations
-.github/workflows/       # GitHub Actions CI
 ```
 
 ## Observability (Local)
