@@ -151,7 +151,6 @@ async def make_job(async_session, make_user, make_message):
         if message is None:
             message = await make_message(user=user)
         job = Job(
-            user_id=kwargs.get("user_id", user.id),
             message_id=kwargs.get("message_id", message.id),
             description=kwargs.get("description", "Test job description"),
             pay_rate=kwargs.get("pay_rate", 25.0),
@@ -174,7 +173,6 @@ async def make_work_goal(async_session, make_user, make_message):
         if message is None:
             message = await make_message(user=user)
         work_goal = WorkGoal(
-            user_id=kwargs.get("user_id", user.id),
             message_id=kwargs.get("message_id", message.id),
             target_earnings=kwargs.get("target_earnings", 500.0),
             target_timeframe=kwargs.get("target_timeframe", "this week"),

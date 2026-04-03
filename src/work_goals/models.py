@@ -15,11 +15,6 @@ class WorkGoal(SQLModel, table=True):
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(
-        sa_column=sa.Column(
-            sa.Integer, sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
-        )
-    )
     message_id: int = Field(
         sa_column=sa.Column(
             sa.Integer,

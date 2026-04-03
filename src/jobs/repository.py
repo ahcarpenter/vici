@@ -24,7 +24,6 @@ class JobRepository(BaseRepository):
                 ideal_dt = None
 
         job = Job(
-            user_id=job_create.user_id,
             message_id=job_create.message_id,
             description=job_create.description,
             location=job_create.location,

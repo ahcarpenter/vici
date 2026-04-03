@@ -30,6 +30,7 @@ class MessageRepository(BaseRepository):
         # in the rate_limit table is needed before deploying this rolling-window change.
         window = datetime.now(UTC) - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
 
+        # Insert one row per event (rolling-window pattern — no upsert needed)
         await session.execute(
             text(
                 """

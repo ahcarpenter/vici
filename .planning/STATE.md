@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.13.1-01-PLAN.md
-last_updated: "2026-04-03T08:11:10.963Z"
-last_activity: "2026-04-03 - Completed quick task 260403-6m6: rename WorkRequest domain to WorkGoal"
+stopped_at: Completed 02.14-01-PLAN.md
+last_updated: "2026-04-03T09:15:19.832Z"
+last_activity: "2026-04-03 - Completed Phase 02.14: 3NF normalization — removed user_id from Job/WorkGoal models"
 progress:
   total_phases: 19
   completed_phases: 16
@@ -155,6 +155,7 @@ Recent decisions affecting current work:
 - [Phase 02.11]: Rate limit uses Python datetime.now(UTC) bound param instead of NOW() SQL function for SQLite test compatibility
 - [Phase 02.13.1]: All OTel attribute key strings defined as constants in src/pipeline/constants.py per AGENTS.md no-magic-strings rule
 - [Phase 02.13.1]: router.py enriches FastAPI auto-instrumented span via get_current_span() — no new span started
+- [Phase 02.14]: Removed transitive user_id from Job/WorkGoal; rate_limit uses rolling-window INSERT pattern
 
 ### Roadmap Evolution
 
@@ -193,7 +194,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T08:11:10.960Z
-Stopped at: Completed 02.13.1-01-PLAN.md
+Last session: 2026-04-03T09:15:19.829Z
+Stopped at: Completed 02.14-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`

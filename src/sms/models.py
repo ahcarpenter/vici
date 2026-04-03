@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -27,10 +26,6 @@ class Message(SQLModel, table=True):
 
 class RateLimit(SQLModel, table=True):
     __tablename__ = "rate_limit"
-    __table_args__ = (
-        UniqueConstraint("user_id", "created_at", name="uq_rate_limit_user_window"),
-    )
-
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(
         sa_column=sa.Column(
