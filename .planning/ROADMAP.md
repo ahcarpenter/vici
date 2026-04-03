@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.12: simplify architecture — distill app essence and map domains canonically (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 2
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] TBD (run /gsd:plan-phase 02.12 to break down) (completed 2026-04-03)
+
 ### Phase 02.11: you're a FAANG level distinguished engineer. For all existing features, find and account for all edge cases, ensuring they're handled gracefully (INSERTED)
 
 **Goal:** Harden all existing features against 13 identified edge cases — fail-fast config validation, GPT None guard, correct Temporal error signaling, caught Twilio/Pinecone failures, rolling rate limit, graceful shutdown, webhook field validation, hash guard, datetime warning, and gauge staleness detection
