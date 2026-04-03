@@ -41,16 +41,16 @@ A worker who texts their earnings goal must receive a ranked list of jobs that l
 ```
 SMS Webhook (POST /webhook/sms)
   └── 5-gate security chain (signature → idempotency → user → rate-limit → persist)
-        └── Inngest event emit (message.received) → HTTP 200 to Twilio
+        └── Temporal workflow start (ProcessMessageWorkflow) → HTTP 200 to Twilio
 
-Inngest process-message function (async, 3 retries, on_failure handler)
-  └── PipelineOrchestrator.run()
+Temporal ProcessMessageWorkflow (4 total attempts, failure handler activity on exhaustion)
+  └── process_message_activity → PipelineOrchestrator.run()
         ├── ExtractionService (gpt-5.3-chat-latest classify+extract, Braintrust-wrapped)
         ├── JobRepository / WorkRequestRepository (flush-only, single commit per branch)
         └── write_job_embedding() → Pinecone (fire-and-forget; failure enqueued to pinecone_sync_queue)
 
-Inngest sync-pinecone-queue cron (*/5 * * * *)
-  └── Sweeps pinecone_sync_queue, retries failed embeddings
+Temporal SyncPineconeQueueWorkflow cron (*/5 * * * *)
+  └── sync_pinecone_queue_activity — sweeps pinecone_sync_queue, retries failed embeddings
 ```
 
 ### Key Modules
@@ -62,7 +62,9 @@ Inngest sync-pinecone-queue cron (*/5 * * * *)
 | `src/extraction/service.py` | ExtractionService: GPT-only, returns discriminated union |
 | `src/extraction/orchestrator.py` | PipelineOrchestrator: full pipeline (GPT → storage → Pinecone) |
 | `src/extraction/schemas.py` | `ExtractionResult = JobExtraction \| WorkerExtraction \| UnknownMessage` |
-| `src/inngest_client.py` | Inngest functions: process-message, sync-pinecone-queue |
+| `src/temporal/activities.py` | Temporal activities: process_message, sync_pinecone_queue, handle failure |
+| `src/temporal/workflows.py` | ProcessMessageWorkflow, SyncPineconeQueueWorkflow |
+| `src/temporal/worker.py` | Worker runner, client factory, cron registration |
 | `src/config.py` | Nested Pydantic Settings (4 sub-models via model_validator) |
 | `src/metrics.py` | Prometheus metric singletons |
 
