@@ -4,7 +4,11 @@ An SMS-driven platform for the gig economy
 
 ## How It Works
 
-Workers text in an earnings goal (e.g. "I need $500 this week"). Job posters text in a job listing with a pay rate and duration. GPT classifies each inbound message and extracts structured data from both. The system then matches workers to the jobs that will help them earn that the quickest.
+Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with a pay rate and duration. GPT classifies each inbound message and extracts structured data from both. The system then matches workers to the jobs that will help them earn that the quickest.
+
+## Roadmap
+
+See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) for the current roadmap, and progress.
 
 ## Prerequisites
 
@@ -115,33 +119,6 @@ Each service has its own env file. The `.example` files document all required va
 |---|---|---|
 | `GF_SECURITY_ADMIN_USER` | Yes | Grafana admin username |
 | `GF_SECURITY_ADMIN_PASSWORD` | Yes | Grafana admin password |
-
-## Project Structure
-
-```
-src/
-├── main.py                    # FastAPI app + lifespan DI graph
-├── config.py                  # Nested Pydantic Settings (4 sub-models)
-├── database.py                # Async SQLAlchemy engine + sessionmaker
-├── models.py                  # Central SQLModel aggregator
-├── repository.py              # Base repository class (Template Method)
-├── metrics.py                 # Prometheus metric singletons
-├── exceptions.py              # Custom exceptions
-├── sms/                       # Webhook route, MessageRepository, AuditLogRepository
-├── extraction/                # ExtractionService (GPT-only), schemas, Pinecone utils
-├── pipeline/                  # PipelineOrchestrator + handler registry
-│   ├── orchestrator.py        #   Classify -> audit -> dispatch
-│   ├── context.py             #   PipelineContext dataclass
-│   └── handlers/              #   base.py, job_posting.py, worker_goal.py, unknown.py
-├── temporal/                  # Workflow orchestration (replaced Inngest)
-│   ├── workflows.py           #   ProcessMessageWorkflow, SyncPineconeQueueWorkflow
-│   ├── activities.py          #   Activity implementations
-│   └── worker.py              #   Client (TracingInterceptor), worker, cron scheduling
-├── jobs/                      # JobRepository, Job SQLModel
-├── work_goals/                # WorkGoalRepository, WorkGoal SQLModel
-├── users/                     # UserRepository, User SQLModel
-└── matches/                   # Match SQLModel (placeholder, Phase 3)
-```
 
 ## Running Tests
 
