@@ -73,9 +73,13 @@ async def test_process_message_emits_temporal_span(span_exporter):
     temporal_span = next(
         s for s in spans if s.name == "temporal.process_message"
     )
+    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+
     attrs = dict(temporal_span.attributes)
     assert attrs.get("temporal.event") == "message.received"
     assert attrs.get("temporal.function") == "process-message"
+    assert attrs.get(OTEL_ATTR_MESSAGE_ID) == "SMtest123"
+    assert attrs.get(OTEL_ATTR_PHONE_HASH) == "hashed"
 
 
 @pytest.mark.asyncio

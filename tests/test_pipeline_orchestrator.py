@@ -266,7 +266,7 @@ async def test_job_branch_emits_pinecone_span():
         pinecone_span = next(s for s in spans if s.name == "pinecone.upsert")
         attrs = dict(pinecone_span.attributes)
         assert attrs.get("db.system") == "pinecone"
-        assert attrs.get("db.operation") == "upsert"
+        assert attrs.get("db.operation.name") == "upsert"
         assert "db.vector.job_id" in attrs
     finally:
         job_handler_module.tracer = original_tracer
@@ -306,10 +306,52 @@ async def test_unknown_branch_emits_twilio_span():
 
         twilio_span = next(s for s in spans if s.name == "twilio.send_sms")
         attrs = dict(twilio_span.attributes)
+        from src.sms.service import hash_phone as _hash_phone
+
         assert attrs.get("messaging.system") == "twilio"
-        assert attrs.get("messaging.destination") == "+15550001111"
+        assert "messaging.destination" not in attrs
+        assert attrs.get("messaging.destination.name") == _hash_phone("+15550001111")
     finally:
         unknown_handler_module.tracer = original_tracer
+        exporter.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_emits_pipeline_span():
+    """PipelineOrchestrator.run() emits a pipeline.orchestrate span with message and phone attrs."""
+    import src.pipeline.orchestrator as orch_module
+    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+
+    exporter, test_tracer = _span_exporter_for_orchestrator()
+    original_tracer = orch_module.tracer
+    orch_module.tracer = test_tracer
+
+    try:
+        worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
+        result = ExtractionResult(message_type="worker_goal", worker=worker)
+        orchestrator, _, _, _, _, _ = _make_orchestrator(result)
+        session = _make_session()
+
+        await orchestrator.run(
+            session=session,
+            sms_text="I need $200 today",
+            phone_hash="hash123",
+            message_id=1,
+            user_id=10,
+            message_sid="SMtest",
+            from_number="+15551234567",
+        )
+
+        spans = exporter.get_finished_spans()
+        span_names = [s.name for s in spans]
+        assert "pipeline.orchestrate" in span_names, f"Expected pipeline.orchestrate span. Got: {span_names}"
+
+        orch_span = next(s for s in spans if s.name == "pipeline.orchestrate")
+        attrs = dict(orch_span.attributes)
+        assert attrs.get(OTEL_ATTR_MESSAGE_ID) == "SMtest"
+        assert attrs.get(OTEL_ATTR_PHONE_HASH) == "hash123"
+    finally:
+        orch_module.tracer = original_tracer
         exporter.shutdown()
 
 
