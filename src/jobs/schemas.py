@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 
 class JobCreate(BaseModel):
-    user_id: int
     message_id: int
     description: str
     location: str

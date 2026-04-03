@@ -66,7 +66,6 @@ class PipelineOrchestrator:
         # 3. Branch by message_type
         if result.message_type == "job_posting" and result.job:
             job_create = JobCreate(
-                user_id=user_id,
                 message_id=message_id,
                 description=result.job.description,
                 location=result.job.location,
@@ -127,7 +126,6 @@ class PipelineOrchestrator:
 
         elif result.message_type == "worker_goal" and result.worker:
             wr_create = WorkRequestCreate(
-                user_id=user_id,
                 message_id=message_id,
                 target_earnings=result.worker.target_earnings,
                 target_timeframe=result.worker.target_timeframe,

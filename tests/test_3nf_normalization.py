@@ -1,7 +1,6 @@
 """Tests for 3NF normalization: user_id removal from Job and WorkRequest models."""
 
 import pytest
-from pydantic import ValidationError
 
 from src.jobs.models import Job
 from src.jobs.schemas import JobCreate
@@ -22,27 +21,13 @@ class TestUserIdRemoved:
         wr = WorkRequest(message_id=1, target_earnings=100.0, target_timeframe="week")
         assert not hasattr(wr, "user_id") or "user_id" not in WorkRequest.model_fields
 
-    def test_job_create_rejects_user_id(self):
-        """JobCreate(user_id=1, ...) raises ValidationError."""
-        with pytest.raises(ValidationError):
-            JobCreate(
-                user_id=1,
-                message_id=1,
-                description="test",
-                location="here",
-                raw_sms="test sms",
-            )
+    def test_job_create_has_no_user_id_field(self):
+        """JobCreate schema has no user_id field defined."""
+        assert "user_id" not in JobCreate.model_fields
 
-    def test_work_request_create_rejects_user_id(self):
-        """WorkRequestCreate(user_id=1, ...) raises ValidationError."""
-        with pytest.raises(ValidationError):
-            WorkRequestCreate(
-                user_id=1,
-                message_id=1,
-                target_earnings=100.0,
-                target_timeframe="week",
-                raw_sms="test sms",
-            )
+    def test_work_request_create_has_no_user_id_field(self):
+        """WorkRequestCreate schema has no user_id field defined."""
+        assert "user_id" not in WorkRequestCreate.model_fields
 
 
 @pytest.mark.asyncio

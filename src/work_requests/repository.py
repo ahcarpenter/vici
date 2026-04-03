@@ -12,7 +12,6 @@ class WorkRequestRepository:
         session: AsyncSession, wr_create: WorkRequestCreate
     ) -> WorkRequest:
         wr = WorkRequest(
-            user_id=wr_create.user_id,
             message_id=wr_create.message_id,
             target_earnings=wr_create.target_earnings,
             target_timeframe=wr_create.target_timeframe,
