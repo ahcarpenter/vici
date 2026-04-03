@@ -132,3 +132,25 @@ async def test_tenacity_retry_on_rate_limit():
 
     assert result.message_type == "job_posting"
     assert mock_client.beta.chat.completions.parse.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_gpt_none_parsed_raises():
+    """When GPT returns parsed=None, ExtractionService.process raises ApplicationError."""
+    from temporalio.exceptions import ApplicationError
+
+    mock_message = MagicMock()
+    mock_message.parsed = None
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_completion = MagicMock()
+    mock_completion.choices = [mock_choice]
+    mock_completion.usage = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.beta.chat.completions.parse = AsyncMock(return_value=mock_completion)
+
+    service = _make_service(mock_client)
+
+    with pytest.raises(ApplicationError):
+        await service.process("Hello", "hash123")

@@ -64,6 +64,24 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @model_validator(mode="after")
+    def _validate_required_credentials(self) -> "Settings":
+        """Fail fast at startup if required credentials are empty."""
+        missing = []
+        if not self.database_url:
+            missing.append("database_url")
+        if not self.twilio_auth_token:
+            missing.append("twilio_auth_token")
+        if not self.openai_api_key:
+            missing.append("openai_api_key")
+        if not self.pinecone_api_key:
+            missing.append("pinecone_api_key")
+        if missing:
+            raise ValueError(
+                f"Required credentials are missing or empty: {', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _build_sub_models(self) -> "Settings":
         """Remap flat env var fields into nested sub-models."""
         self.sms = SmsSettings(

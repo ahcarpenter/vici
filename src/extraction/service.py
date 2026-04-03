@@ -12,6 +12,8 @@ from tenacity import (
     wait_random_exponential,
 )
 
+from temporalio.exceptions import ApplicationError
+
 from src.extraction.constants import GPT_MODEL
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
@@ -82,5 +84,11 @@ class ExtractionService:
                 {"role": "user", "content": user_message},
             ],
             response_format=ExtractionResult,
+            timeout=30.0,
         )
-        return completion.choices[0].message.parsed, completion.usage
+        parsed = completion.choices[0].message.parsed
+        if parsed is None:
+            raise ApplicationError(
+                "GPT returned unparseable response", non_retryable=False
+            )
+        return parsed, completion.usage

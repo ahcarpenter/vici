@@ -145,7 +145,9 @@ async def test_process_message_unknown():
 
 @pytest.mark.asyncio
 async def test_message_not_found():
-    """Message row missing: returns ok without calling orchestrator."""
+    """Message row missing: raises ApplicationError(non_retryable=True)."""
+    from temporalio.exceptions import ApplicationError
+
     inp = _make_input(message_sid="SM_missing")
 
     mock_session, mock_sessionmaker = _setup_session_mock()
@@ -160,11 +162,12 @@ async def test_message_not_found():
             "src.temporal.activities.get_sessionmaker",
             return_value=mock_sessionmaker,
         ):
-            result = await process_message_activity(inp)
+            with pytest.raises(ApplicationError) as exc_info:
+                await process_message_activity(inp)
+        assert exc_info.value.non_retryable is True
     finally:
         acts._orchestrator = original
 
-    assert result == "ok"
     mock_orchestrator.run.assert_not_awaited()
 
 
@@ -232,6 +235,7 @@ async def test_sync_pinecone_queue_success_path():
 
     mock_sessionmaker = MagicMock(side_effect=make_session)
 
+    mock_settings = MagicMock()
     original = acts._openai_client
     acts._openai_client = mock_openai
     try:
@@ -243,6 +247,10 @@ async def test_sync_pinecone_queue_success_path():
             patch(
                 "src.temporal.activities.write_job_embedding",
                 mock_write,
+            ),
+            patch(
+                "src.temporal.activities.get_settings",
+                return_value=mock_settings,
             ),
         ):
             result = await sync_pinecone_queue_activity()
@@ -292,6 +300,7 @@ async def test_sync_pinecone_queue_failure_path():
 
     mock_sessionmaker = MagicMock(side_effect=make_session)
 
+    mock_settings = MagicMock()
     original = acts._openai_client
     acts._openai_client = mock_openai
     try:
@@ -303,6 +312,10 @@ async def test_sync_pinecone_queue_failure_path():
             patch(
                 "src.temporal.activities.write_job_embedding",
                 mock_write,
+            ),
+            patch(
+                "src.temporal.activities.get_settings",
+                return_value=mock_settings,
             ),
         ):
             result = await sync_pinecone_queue_activity()
@@ -397,6 +410,7 @@ async def test_sync_pinecone_queue_mixed_rows():
 
     mock_sessionmaker = MagicMock(side_effect=make_session)
 
+    mock_settings = MagicMock()
     original = acts._openai_client
     acts._openai_client = mock_openai
     try:
@@ -408,6 +422,10 @@ async def test_sync_pinecone_queue_mixed_rows():
             patch(
                 "src.temporal.activities.write_job_embedding",
                 mock_write,
+            ),
+            patch(
+                "src.temporal.activities.get_settings",
+                return_value=mock_settings,
             ),
         ):
             result = await sync_pinecone_queue_activity()

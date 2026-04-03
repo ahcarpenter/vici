@@ -6,6 +6,7 @@ from opentelemetry import trace as otel_trace
 from sqlalchemy import text
 from sqlmodel import select
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from src.config import get_settings
 from src.database import get_sessionmaker
@@ -53,11 +54,10 @@ async def process_message_activity(input: ProcessMessageInput) -> str:
             )
             message = row.scalar_one_or_none()
             if message is None:
-                logger.error(
-                    "process_message: message row not found",
-                    message_sid=message_sid,
+                raise ApplicationError(
+                    f"process_message: message row not found for sid={message_sid}",
+                    non_retryable=True,
                 )
-                return "ok"
 
             message_id = message.id
             user_id = message.user_id
