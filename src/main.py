@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
     from src.metrics import pinecone_sync_queue_depth
 
     async def _update_gauges():
+        consecutive_failures = 0
         while True:
             try:
                 async with get_sessionmaker()() as session:
@@ -129,20 +130,30 @@ async def lifespan(app: FastAPI):
                         )
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
+                    consecutive_failures = 0
             except Exception as exc:
-                structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed"
-                    " — metric stale",
-                    error=str(exc),
-                )
+                consecutive_failures += 1
+                if consecutive_failures > 5:
+                    structlog.get_logger().critical(
+                        "gauge_updater: repeated DB failures, metric unreliable",
+                        consecutive_failures=consecutive_failures,
+                        error=str(exc),
+                    )
+                    pinecone_sync_queue_depth.set(-1)
+                else:
+                    structlog.get_logger().warning(
+                        "gauge_updater: pinecone_sync_queue depth read failed"
+                        " — metric stale",
+                        error=str(exc),
+                    )
             await asyncio.sleep(15)
 
     _gauge_task = asyncio.create_task(_update_gauges())
     yield
     _worker_task.cancel()
     try:
-        await _worker_task
-    except asyncio.CancelledError:
+        await asyncio.wait_for(_worker_task, timeout=10)
+    except (asyncio.CancelledError, asyncio.TimeoutError):
         pass
     _gauge_task.cancel()
     provider.force_flush()

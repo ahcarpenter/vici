@@ -44,6 +44,8 @@ def _test_env():
     os.environ.setdefault("TWILIO_AUTH_TOKEN", "test_twilio_auth_token")
     os.environ.setdefault("TWILIO_ACCOUNT_SID", "AC_test")
     os.environ.setdefault("WEBHOOK_BASE_URL", "http://localhost:8000")
+    os.environ.setdefault("OPENAI_API_KEY", "sk-test")
+    os.environ.setdefault("PINECONE_API_KEY", "pc-test")
 
     # Clear caches in case tests are re-run in-process.
     get_settings.cache_clear()

@@ -45,8 +45,15 @@ def _public_request_url(request: Request) -> str:
 
 
 async def validate_twilio_request(request: Request) -> dict:
+    from fastapi import HTTPException
+
     settings = get_settings()
     form_data = dict(await request.form())
+    if not form_data.get("MessageSid") or not form_data.get("From"):
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required fields: MessageSid, From",
+        )
     if settings.env == "development":
         return form_data
     validator = RequestValidator(settings.sms.auth_token)

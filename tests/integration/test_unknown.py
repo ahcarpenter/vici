@@ -57,72 +57,34 @@ async def test_unknown_twilio_failure_does_not_raise():
 
 
 @pytest.mark.asyncio
-async def test_webhook_missing_message_sid_returns_400(test_engine, async_session):
+async def test_webhook_missing_message_sid_returns_400(async_session, client):
     """POST /webhook/sms with missing MessageSid returns HTTP 400."""
-    from httpx import ASGITransport, AsyncClient
-
-    from src.database import get_session
-    from src.main import create_app
-
-    app = create_app()
-
-    async def override_get_session():
-        yield async_session
-
-    app.dependency_overrides[get_session] = override_get_session
-
-    try:
-        with patch("twilio.request_validator.RequestValidator.validate", return_value=True):
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test",
-            ) as client:
-                form = {
-                    "From": "+13125551234",
-                    "Body": "Hello",
-                    "AccountSid": "AC_test",
-                }
-                response = await client.post(
-                    "/webhook/sms",
-                    data=form,
-                    headers={"X-Twilio-Signature": "valid"},
-                )
-                assert response.status_code == 400
-    finally:
-        app.dependency_overrides.clear()
+    with patch("twilio.request_validator.RequestValidator.validate", return_value=True):
+        form = {
+            "From": "+13125551234",
+            "Body": "Hello",
+            "AccountSid": "AC_test",
+        }
+        response = await client.post(
+            "/webhook/sms",
+            data=form,
+            headers={"X-Twilio-Signature": "valid"},
+        )
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_webhook_missing_from_returns_400(test_engine, async_session):
+async def test_webhook_missing_from_returns_400(async_session, client):
     """POST /webhook/sms with missing From returns HTTP 400."""
-    from httpx import ASGITransport, AsyncClient
-
-    from src.database import get_session
-    from src.main import create_app
-
-    app = create_app()
-
-    async def override_get_session():
-        yield async_session
-
-    app.dependency_overrides[get_session] = override_get_session
-
-    try:
-        with patch("twilio.request_validator.RequestValidator.validate", return_value=True):
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test",
-            ) as client:
-                form = {
-                    "MessageSid": "SMtest",
-                    "Body": "Hello",
-                    "AccountSid": "AC_test",
-                }
-                response = await client.post(
-                    "/webhook/sms",
-                    data=form,
-                    headers={"X-Twilio-Signature": "valid"},
-                )
-                assert response.status_code == 400
-    finally:
-        app.dependency_overrides.clear()
+    with patch("twilio.request_validator.RequestValidator.validate", return_value=True):
+        form = {
+            "MessageSid": "SMtest",
+            "Body": "Hello",
+            "AccountSid": "AC_test",
+        }
+        response = await client.post(
+            "/webhook/sms",
+            data=form,
+            headers={"X-Twilio-Signature": "valid"},
+        )
+    assert response.status_code == 400

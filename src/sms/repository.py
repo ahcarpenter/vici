@@ -34,10 +34,10 @@ class MessageRepository(BaseRepository):
             text(
                 """
                 INSERT INTO rate_limit (user_id, created_at, count)
-                VALUES (:user_id, NOW(), 1)
+                VALUES (:user_id, :now, 1)
                 """
             ),
-            {"user_id": user_id},
+            {"user_id": user_id, "now": datetime.now(UTC)},
         )
         # Count messages in the last 60 seconds for this user.
         count_result = await session.execute(
