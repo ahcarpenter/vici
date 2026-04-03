@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02.12-01-PLAN.md
-last_updated: "2026-04-03T06:51:40.102Z"
-last_activity: 2026-04-03
+stopped_at: Completed 02.13.1-01-PLAN.md
+last_updated: "2026-04-03T08:11:10.963Z"
+last_activity: "2026-04-03 - Completed quick task 260403-4ps: per-service env file restructure for docker-compose"
 progress:
-  total_phases: 18
-  completed_phases: 15
-  total_plans: 29
-  completed_plans: 29
+  total_phases: 19
+  completed_phases: 16
+  total_plans: 30
+  completed_plans: 30
   percent: 82
 ---
 
@@ -153,6 +153,8 @@ Recent decisions affecting current work:
 - [Phase 02.10]: Wire TracingInterceptor on Client.connect only — worker inherits interceptors from client automatically
 - [Phase 02.11]: Settings._validate_required_credentials fires before _build_sub_models since both are mode=after validators executed in declaration order
 - [Phase 02.11]: Rate limit uses Python datetime.now(UTC) bound param instead of NOW() SQL function for SQLite test compatibility
+- [Phase 02.13.1]: All OTel attribute key strings defined as constants in src/pipeline/constants.py per AGENTS.md no-magic-strings rule
+- [Phase 02.13.1]: router.py enriches FastAPI auto-instrumented span via get_current_span() — no new span started
 
 ### Roadmap Evolution
 
@@ -167,6 +169,7 @@ Recent decisions affecting current work:
 - Phase 02.10 inserted after Phase 2: be sure the temporal flows leverage distributed tracing via jaeger (INSERTED)
 - Phase 02.12 inserted after Phase 2: simplify architecture — distill app essence and map domains canonically (INSERTED)
 - Phase 02.13 inserted after Phase 2: ruthlessly refactor this codebase where appropriate in light of the latest revisions to AGENTS.md (URGENT)
+- Phase 02.13.1 inserted after Phase 02.13: cover all distributed tracing gaps — asyncio.to_thread() context propagation, Temporal→HTTP trace linking, Pinecone/OpenAI instrumentation, deferred sync causality (URGENT)
 
 ### Pending Todos
 
@@ -189,7 +192,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T05:44:33.655Z
-Stopped at: Completed 02.12-01-PLAN.md
+Last session: 2026-04-03T08:11:10.960Z
+Stopped at: Completed 02.13.1-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`

@@ -82,10 +82,10 @@ Plans:
 **Goal:** Close all OTel span coverage gaps so Jaeger shows complete, PII-safe request traces from Twilio webhook receipt through Temporal workflow completion — pipeline.orchestrate, pipeline.handle_worker_goal, enriched SMS router span, enriched activity span, PII fix in unknown handler, and semconv fix in job_posting handler
 **Requirements**: TRACING-GAP-01, TRACING-GAP-02, TRACING-GAP-03, TRACING-GAP-04, TRACING-GAP-05, TRACING-GAP-06
 **Depends on:** Phase 02.13
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 02.13.1-01-PLAN.md — OTel constants module, orchestrator/handler/router/activity span enrichment, PII fix, semconv fix, span assertion tests
+- [x] 02.13.1-01-PLAN.md — OTel constants module, orchestrator/handler/router/activity span enrichment, PII fix, semconv fix, span assertion tests
 
 ### Phase 02.12: simplify architecture — distill app essence and map domains canonically (INSERTED)
 
