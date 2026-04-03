@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,30 +26,28 @@ class MessageRepository(BaseRepository):
         Upsert a count for (user_id, window). Raise RateLimitExceeded if over
         MAX_MESSAGES_PER_WINDOW. Returns current count if within limit.
         """
-        window = datetime.now(UTC).replace(second=0, microsecond=0)
+        # TODO: A migration to drop the UNIQUE constraint on (user_id, created_at)
+        # in the rate_limit table is needed before deploying this rolling-window change.
+        window = datetime.now(UTC) - timedelta(seconds=60)
 
         await session.execute(
             text(
                 """
                 INSERT INTO rate_limit (user_id, created_at, count)
-                VALUES (:user_id, :created_at, 1)
-                ON CONFLICT (user_id, created_at)
-                DO UPDATE SET count = rate_limit.count + 1
+                VALUES (:user_id, NOW(), 1)
                 """
             ),
-            {"user_id": user_id, "created_at": window},
+            {"user_id": user_id},
         )
-        # Use raw SQL for the read so SQLAlchemy's ORM identity cache doesn't
-        # return the stale pre-upsert value across multiple calls in one session.
+        # Count messages in the last 60 seconds for this user.
         count_result = await session.execute(
             text(
-                "SELECT count FROM rate_limit "
-                "WHERE user_id = :user_id AND created_at = :created_at"
+                "SELECT COUNT(*) FROM rate_limit "
+                "WHERE user_id = :user_id AND created_at >= :window"
             ),
-            {"user_id": user_id, "created_at": window},
+            {"user_id": user_id, "window": window},
         )
-        row = count_result.one_or_none()
-        count = row[0] if row is not None else 1
+        count = count_result.scalar_one()
         if count > MAX_MESSAGES_PER_WINDOW:
             raise RateLimitExceeded(f"user_id={user_id} count={count}")
         return count

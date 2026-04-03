@@ -34,12 +34,20 @@ class UnknownMessageHandler(MessageHandler):
         with tracer.start_as_current_span("twilio.send_sms") as span:
             span.set_attribute("messaging.system", "twilio")
             span.set_attribute("messaging.destination", ctx.from_number)
-            await asyncio.to_thread(
-                self._twilio_client.messages.create,
-                to=ctx.from_number,
-                from_=settings.sms.from_number,
-                body=UNKNOWN_REPLY_TEXT,
-            )
+            try:
+                await asyncio.to_thread(
+                    self._twilio_client.messages.create,
+                    to=ctx.from_number,
+                    from_=settings.sms.from_number,
+                    body=UNKNOWN_REPLY_TEXT,
+                )
+            except Exception as exc:
+                log.error(
+                    "unknown_reply_failed",
+                    message_sid=ctx.message_sid,
+                    error=str(exc),
+                )
+                return
         log.info(
             "unknown_reply_sent",
             message_sid=ctx.message_sid,

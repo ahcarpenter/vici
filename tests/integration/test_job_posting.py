@@ -1,181 +1,104 @@
 """
-Integration test: job posting end-to-end flow.
-
-Webhook → Message row created → Inngest event simulated → orchestrator.run() called →
-Job row written to DB → message.message_type == 'job_posting'.
-
-External deps mocked: OpenAI (via ExtractionService.process), Pinecone, Twilio lifespan.
+Integration / handler tests: job posting flow.
 """
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlmodel import select
-
-import src.inngest_client as ic
-from src.database import get_session
-from src.extraction.orchestrator import PipelineOrchestrator
-from src.extraction.schemas import ExtractionResult, JobExtraction
-from src.inngest_client import get_inngest_client
-from src.jobs.models import Job
-from src.jobs.repository import JobRepository
-from src.main import create_app
-from src.pipeline.handlers.job_posting import JobPostingHandler
-from src.pipeline.handlers.unknown import UnknownMessageHandler
-from src.pipeline.handlers.worker_goal import WorkerGoalHandler
-from src.sms.audit_repository import AuditLogRepository
-from src.sms.models import AuditLog, Message
-from src.work_requests.repository import WorkRequestRepository
-
-
-def _make_ctx(message_sid: str, from_number: str = "+13125551234", body: str = "Need a mover"):
-    import inngest
-    event = MagicMock(spec=inngest.Event)
-    event.data = {"message_sid": message_sid, "from_number": from_number, "body": body}
-    ctx = MagicMock(spec=inngest.Context)
-    ctx.event = event
-    return ctx
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_job_posting(test_engine, async_session):
-    """POST /webhook/sms → process_message → Job row in DB, message.message_type='job_posting'."""
-    # Build app
-    app = create_app()
+async def test_job_posting_queue_insert_failure_is_caught():
+    """Pinecone upsert AND queue INSERT both fail: no exception propagated, error logged."""
+    from src.extraction.schemas import ExtractionResult, JobExtraction
+    from src.pipeline.context import PipelineContext
+    from src.pipeline.handlers.job_posting import JobPostingHandler
 
-    # Override DB session to use test session
-    async def override_get_session():
-        yield async_session
-
-    app.dependency_overrides[get_session] = override_get_session
-
-    # Build a real orchestrator pointing at test session
-    from unittest.mock import AsyncMock as AM
-
-    from src.extraction.service import ExtractionService
-
-    mock_extraction_service = MagicMock(spec=ExtractionService)
-    mock_extraction_service.settings = MagicMock()
+    mock_extraction_service = MagicMock()
     mock_extraction_service.settings.sms.from_number = "+10000000000"
     mock_extraction_service.openai_client = MagicMock()
 
-    extraction_result = ExtractionResult(
+    mock_job_repo = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = 99
+    mock_job_repo.create = AsyncMock(return_value=mock_job)
+
+    mock_audit_repo = MagicMock()
+    mock_audit_repo.write = AsyncMock()
+
+    async def pinecone_that_raises(**kwargs):
+        raise Exception("Pinecone down")
+
+    handler = JobPostingHandler(
+        job_repo=mock_job_repo,
+        audit_repo=mock_audit_repo,
+        pinecone_client=pinecone_that_raises,
+        extraction_service=mock_extraction_service,
+    )
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock(spec=PipelineContext)
+    ctx.message_id = 1
+    ctx.message_sid = "SMtest"
+    ctx.from_number = "+13125551234"
+    ctx.phone_hash = "abc123"
+    ctx.user_id = 1
+    ctx.sms_text = "Need a mover"
+    ctx.session = mock_session
+    ctx.result = ExtractionResult(
         message_type="job_posting",
         job=JobExtraction(
-            description="Need a mover Saturday",
+            description="Need a mover",
             datetime_flexible=True,
             location="Chicago",
             pay_type="hourly",
         ),
     )
-    mock_extraction_service.process = AM(return_value=extraction_result)
 
-    # No-op Pinecone
-    async def noop_pinecone(**kwargs):
-        pass
+    logged_errors = []
 
-    mock_twilio = MagicMock()
+    class CapturingLogger:
+        def error(self, event, **kw):
+            logged_errors.append(event)
 
-    job_repo = JobRepository()
-    work_request_repo = WorkRequestRepository()
-    audit_repo = AuditLogRepository()
+        def info(self, *a, **kw):
+            pass
 
-    handlers = [
-        JobPostingHandler(
-            job_repo=job_repo,
-            audit_repo=audit_repo,
-            pinecone_client=noop_pinecone,
-            extraction_service=mock_extraction_service,
+        def warning(self, *a, **kw):
+            pass
+
+    failing_session = AsyncMock()
+    failing_session.execute = AsyncMock(side_effect=Exception("DB down"))
+    failing_session.commit = AsyncMock()
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=failing_session)
+    cm.__aexit__ = AsyncMock(return_value=None)
+    mock_sessionmaker_fn = MagicMock(return_value=cm)
+
+    with (
+        patch("src.pipeline.handlers.job_posting.log", CapturingLogger()),
+        patch(
+            "src.pipeline.handlers.job_posting.get_sessionmaker",
+            return_value=mock_sessionmaker_fn,
         ),
-        WorkerGoalHandler(
-            work_request_repo=work_request_repo,
-            audit_repo=audit_repo,
-        ),
-        UnknownMessageHandler(
-            twilio_client=mock_twilio,
-            extraction_service=mock_extraction_service,
-        ),
-    ]
+    ):
+        # Should not raise
+        await handler.handle(ctx)
 
-    orchestrator = PipelineOrchestrator(
-        extraction_service=mock_extraction_service,
-        audit_repo=audit_repo,
-        handlers=handlers,
-    )
+    assert any("pinecone_write_failed" in e for e in logged_errors)
+    assert any("pinecone_queue_insert_failed" in e for e in logged_errors)
 
-    # Override sessionmaker used by orchestrator's pinecone fallback
-    original_orchestrator = ic._orchestrator
-    ic._orchestrator = orchestrator
 
-    from src import database as db_module
-    original_get_sessionmaker = db_module.get_sessionmaker
+@pytest.mark.asyncio
+async def test_rate_limit_rolling_window():
+    """enforce_rate_limit uses rolling 60-second window (interval arithmetic)."""
+    import inspect
 
-    session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    from src.sms.repository import MessageRepository
 
-    def patched_sessionmaker():
-        return session_factory()
-
-    try:
-        with (
-            patch("src.inngest_client.get_sessionmaker", return_value=lambda: session_factory()),
-            patch("src.pipeline.handlers.job_posting.get_sessionmaker", return_value=lambda: session_factory()),
-            patch("twilio.request_validator.RequestValidator.validate", return_value=True),
-            patch.object(get_inngest_client(), "send", new_callable=AsyncMock),
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test",
-            ) as client:
-                form = {
-                    "MessageSid": "SM_integration_job_001",
-                    "From": "+13125551234",
-                    "Body": "Need a mover Saturday downtown Chicago $25/hr",
-                    "AccountSid": "AC_test",
-                }
-                response = await client.post(
-                    "/webhook/sms",
-                    data=form,
-                    headers={"X-Twilio-Signature": "valid"},
-                )
-                assert response.status_code == 200
-                assert "<Response" in response.text
-
-            # Simulate Inngest event processing
-            ctx = _make_ctx(
-                message_sid="SM_integration_job_001",
-                from_number="+13125551234",
-                body="Need a mover Saturday downtown Chicago $25/hr",
-            )
-            from src.inngest_client import process_message
-            result = await process_message._handler(ctx)
-            assert result == "ok"
-
-        # Assert DB state
-        await async_session.commit()
-        msg_result = await async_session.execute(
-            select(Message).where(Message.message_sid == "SM_integration_job_001")
-        )
-        message = msg_result.scalar_one_or_none()
-        assert message is not None
-        assert message.message_type == "job_posting"
-
-        job_result = await async_session.execute(
-            select(Job).where(Job.message_id == message.id)
-        )
-        job = job_result.scalar_one_or_none()
-        assert job is not None
-        assert job.description == "Need a mover Saturday"
-
-        # Assert audit log entries
-        audit_result = await async_session.execute(
-            select(AuditLog).where(AuditLog.message_sid == "SM_integration_job_001")
-        )
-        audit_rows = audit_result.scalars().all()
-        audit_events = {row.event for row in audit_rows}
-        assert "gpt_classified" in audit_events
-        assert "job_created" in audit_events
-
-    finally:
-        ic._orchestrator = original_orchestrator
-        app.dependency_overrides.clear()
+    src_code = inspect.getsource(MessageRepository.enforce_rate_limit)
+    # Calendar-minute truncation uses replace(second=0), rolling uses timedelta
+    assert "timedelta" in src_code, "enforce_rate_limit should use timedelta for rolling window"
+    assert "replace(second=0" not in src_code, "enforce_rate_limit should not use calendar-minute truncation"

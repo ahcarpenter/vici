@@ -82,13 +82,20 @@ class JobPostingHandler(MessageHandler):
                 )
         except Exception as e:
             log.error("pinecone_write_failed", job_id=job.id, error=str(e))
-            async with get_sessionmaker()() as s2:
-                await s2.execute(
-                    sa_text(
-                        "INSERT INTO pinecone_sync_queue "
-                        "(job_id, status, attempts, created_at) "
-                        "VALUES (:job_id, 'pending', 0, :created_at)"
-                    ),
-                    {"job_id": job.id, "created_at": datetime.now(UTC)},
+            try:
+                async with get_sessionmaker()() as s2:
+                    await s2.execute(
+                        sa_text(
+                            "INSERT INTO pinecone_sync_queue "
+                            "(job_id, status, attempts, created_at) "
+                            "VALUES (:job_id, 'pending', 0, :created_at)"
+                        ),
+                        {"job_id": job.id, "created_at": datetime.now(UTC)},
+                    )
+                    await s2.commit()
+            except Exception as queue_exc:
+                log.error(
+                    "pinecone_queue_insert_failed",
+                    job_id=job.id,
+                    error=str(queue_exc),
                 )
-                await s2.commit()
