@@ -39,7 +39,7 @@ The app is production-ready from the infrastructure and domain-logic perspective
 ### Complete
 
 - ✅ Async FastAPI skeleton, 5-gate Twilio webhook security chain
-- ✅ 3NF schema (User / Message / Job / WorkRequest / RateLimit / AuditLog / PineconeSyncQueue)
+- ✅ 3NF schema (User / Message / Job / WorkGoal / RateLimit / AuditLog / PineconeSyncQueue)
 - ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
 - ✅ PipelineOrchestrator: full pipeline (GPT → storage → Pinecone), single commit per branch
 - ✅ Pinecone embedding write with `text-embedding-3-small`; failed writes queued + retried via Temporal cron
@@ -76,7 +76,7 @@ src/
 │   ├── activities.py          #   Activity implementations
 │   └── worker.py              #   Client (TracingInterceptor), worker, cron scheduling
 ├── jobs/                      # JobRepository, Job SQLModel
-├── work_requests/             # WorkRequestRepository, WorkRequest SQLModel
+├── work_goals/             # WorkGoalRepository, WorkGoal SQLModel
 ├── users/                     # UserRepository, User SQLModel
 └── matches/                   # Match SQLModel (placeholder, Phase 3)
 ```
@@ -85,7 +85,7 @@ src/
 
 ```
 AsyncOpenAI → wrap_openai (Braintrust) → ExtractionService
-Repos (JobRepository, WorkRequestRepository, AuditLogRepository) → instantiated
+Repos (JobRepository, WorkGoalRepository, AuditLogRepository) → instantiated
 Handlers [JobPostingHandler, WorkerGoalHandler, UnknownMessageHandler] → built with repos
 ExtractionService + AuditLogRepository + handlers → PipelineOrchestrator
 PipelineOrchestrator → app.state (accessed by Temporal activities)
@@ -113,11 +113,11 @@ Recent decisions affecting current work:
 - [Phase 01-02]: register_phone raw SQL includes created_at explicitly — SQLModel default_factory does not fire for raw SQL inserts
 - [Phase 01-03]: inngest_client uses is_production=not settings.inngest_dev — INNGEST_DEV=1 in .env enables dev mode without signing key
 - [Phase 01-03]: autouse _auto_mock_inngest_send fixture in conftest prevents real Inngest HTTP calls from corrupting async event loop in all tests
-- [Phase 01.1]: User/Message/WorkRequest replace Phone/InboundMessage/Worker with integer FKs — eliminates phone_hash string pseudo-FKs
+- [Phase 01.1]: User/Message/WorkGoal replace Phone/InboundMessage/Worker with integer FKs — eliminates phone_hash string pseudo-FKs
 - [Phase 01.1]: ON CONFLICT (user_id, created_at) column list syntax used for SQLite/PG compatibility in rate_limit upsert
 - [Phase 02-gpt-extraction-service]: patch target is src.extraction.service.wrap_openai (not braintrust.wrap_openai) — service.py uses a direct import
 - [Phase 02-gpt-extraction-service]: ExtractionService.process() keeps minimal signature (sms_text, phone_hash) — message_id and db_session added in Plan 02-02 when storage is wired
-- [Phase 02-gpt-extraction-service]: WorkRequestRepository (not WorkerRepository) — 3NF schema uses work_request table
+- [Phase 02-gpt-extraction-service]: WorkGoalRepository (not WorkerRepository) — 3NF schema uses work_goal table
 - [Phase 02-gpt-extraction-service]: ExtractionService.process() backward-compatible with session=None for existing tests
 - [Phase 02-gpt-extraction-service]: PineconeSyncQueue SQLModel in src/extraction/models.py registered via src/models.py
 - [Phase 02-gpt-extraction-service]: Call process_message._handler(ctx) in tests — Inngest Function wrapper is not directly callable

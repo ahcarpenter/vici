@@ -16,7 +16,7 @@
 
 | Store | Technology | Purpose |
 |-------|-----------|---------|
-| Primary DB | PostgreSQL 16 | 3NF schema: User, Message, Job, WorkRequest, RateLimit, AuditLog, PineconeSyncQueue |
+| Primary DB | PostgreSQL 16 | 3NF schema: User, Message, Job, WorkGoal, RateLimit, AuditLog, PineconeSyncQueue |
 | Vector Store | Pinecone | Job embeddings via text-embedding-3-small |
 | Test DB | SQLite + aiosqlite | No Postgres dependency in tests |
 

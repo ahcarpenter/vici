@@ -7,11 +7,11 @@
 ### Phase 01: Foundation
 - [x] Async FastAPI skeleton with lifespan DI
 - [x] 5-gate Twilio webhook security chain (signature, rate limit, user lookup, message save, workflow dispatch)
-- [x] 3NF schema: User, Message, Job, WorkRequest, RateLimit, AuditLog, PineconeSyncQueue
+- [x] 3NF schema: User, Message, Job, WorkGoal, RateLimit, AuditLog, PineconeSyncQueue
 - [x] Alembic async migrations
 
 ### Phase 01.1: Schema Revision
-- [x] User/Message/WorkRequest replace Phone/InboundMessage/Worker with integer FKs
+- [x] User/Message/WorkGoal replace Phone/InboundMessage/Worker with integer FKs
 
 ### Phase 02: GPT Extraction
 - [x] ExtractionService: GPT classify+extract via beta.chat.completions.parse (discriminated union)

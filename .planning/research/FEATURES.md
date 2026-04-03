@@ -149,7 +149,7 @@ Features that go beyond baseline and deliver the core value proposition better.
 
 **New module:** `src/matches/service.py` — MatchService. Placeholder `src/matches/` directory already exists with Match SQLModel stub.
 
-**Integration point:** PipelineOrchestrator WorkRequest branch — after `WorkRequestRepository.create()` flush and `session.commit()`, call `MatchService.find_and_format()`, send result via `asyncio.to_thread(twilio_client.messages.create)`.
+**Integration point:** PipelineOrchestrator WorkGoal branch — after `WorkGoalRepository.create()` flush and `session.commit()`, call `MatchService.find_and_format()`, send result via `asyncio.to_thread(twilio_client.messages.create)`.
 
 **NULL handling policy:** jobs with NULL `pay_rate` or NULL `estimated_duration` are excluded from match results (can't verify earnings goal).
 

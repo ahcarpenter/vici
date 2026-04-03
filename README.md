@@ -122,7 +122,7 @@ src/
 │   ├── activities.py    #   Activity implementations
 │   └── worker.py        #   Client (TracingInterceptor), worker, cron scheduling
 ├── jobs/                # JobRepository, Job model
-├── work_requests/       # WorkRequestRepository, WorkRequest model
+├── work_goals/       # WorkGoalRepository, WorkGoal model
 ├── users/               # UserRepository, User model
 └── matches/             # Match model (Phase 3 - not yet implemented)
 docker-compose.yml       # Full local stack (9 services)

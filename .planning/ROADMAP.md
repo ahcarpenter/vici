@@ -13,7 +13,7 @@ Vici is built in phases that follow a strict dependency order: infrastructure be
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Infrastructure Foundation** - Async API skeleton, schema migrations, security gates, observability, and Inngest event wiring (completed 2026-03-06)
-- [x] **Phase 01.1: Apply revised 3NF schema** - Normalize schema to User/Message/WorkRequest with integer FKs (completed 2026-03-07)
+- [x] **Phase 01.1: Apply revised 3NF schema** - Normalize schema to User/Message/WorkGoal with integer FKs (completed 2026-03-07)
 - [x] **Phase 2: GPT Extraction Service** - Single-call GPT classify+extract pipeline with Pydantic schemas, Pinecone write, and storage (completed ~2026-03-08)
 - [x] **Phase 02.1: Refactor persistence layer and service boundaries** - Clean DI graph, PipelineOrchestrator, flush-only repositories (completed 2026-03-08)
 - [x] **Phase 02.3: Migrate Jaeger to v2 and optimize tracing setup** - Jaeger v2 + OpenSearch, ALWAYS_ON sampler, manual spans (completed ~2026-03-08)
@@ -44,14 +44,14 @@ Plans:
 
 ### Phase 01.1: Apply revised 3NF schema and propagate throughout app (INSERTED)
 
-**Goal:** Replace Phone/InboundMessage/Worker with User/Message/WorkRequest using integer FKs; eliminate phone_hash string pseudo-FKs throughout the app
+**Goal:** Replace Phone/InboundMessage/Worker with User/Message/WorkGoal using integer FKs; eliminate phone_hash string pseudo-FKs throughout the app
 **Requirements**: IDN-01 (schema normalization), all repositories updated
 **Depends on:** Phase 1
 **Status**: Complete (2026-03-07)
 **Plans:** 2/2 complete
 
 Plans:
-- [x] 01.1-01-PLAN.md — Alembic migration, User/Message/WorkRequest SQLModels, updated repositories
+- [x] 01.1-01-PLAN.md — Alembic migration, User/Message/WorkGoal SQLModels, updated repositories
 - [x] 01.1-02-PLAN.md — Propagate schema changes through all services, tests, and fixtures
 
 ### Phase 2: GPT Extraction Service
@@ -63,7 +63,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Pydantic extraction schemas, ExtractionService with Braintrust-wrapped OpenAI client, static system prompt with few-shot examples, tenacity retry, test scaffold
-- [x] 02-02-PLAN.md — Alembic migration (PineconeSyncQueue table), JobRepository, WorkRequestRepository, Pinecone embedding write with fire-and-forget fallback, lifespan singleton
+- [x] 02-02-PLAN.md — Alembic migration (PineconeSyncQueue table), JobRepository, WorkGoalRepository, Pinecone embedding write with fire-and-forget fallback, lifespan singleton
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 

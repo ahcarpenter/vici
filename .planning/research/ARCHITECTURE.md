@@ -42,8 +42,8 @@
 │  │  PipelineOrchestrator.run()                                     │   │
 │  │  ├── Job branch: ExtractionService → JobRepository flush        │   │
 │  │  │                → write_job_embedding() → Pinecone            │   │
-│  │  ├── WorkRequest branch: ExtractionService                      │   │
-│  │  │                → WorkRequestRepository flush → commit         │   │
+│  │  ├── WorkGoal branch: ExtractionService                      │   │
+│  │  │                → WorkGoalRepository flush → commit         │   │
 │  │  └── Unknown branch: asyncio.to_thread(twilio.messages.create) │   │
 │  └────────────────────────────────────────────────────────────────┘   │
 │  ┌────────────────────────────────────────────────────────────────┐   │
@@ -57,7 +57,7 @@
 │                          DATA LAYER                                    │
 │  ┌────────────────────────────────────────────────────────────────┐   │
 │  │  PostgreSQL 16 (plain)                                          │   │
-│  │  Tables: users, messages, jobs, work_requests,                  │   │
+│  │  Tables: users, messages, jobs, work_goals,                  │   │
 │  │          rate_limit, audit_log, matches, pinecone_sync_queue    │   │
 │  │  No vector column — Pinecone is the external vector store       │   │
 │  └────────────────────────────────────────────────────────────────┘   │
@@ -69,13 +69,13 @@
 | Component | Responsibility | Actual Module |
 |-----------|----------------|---------------|
 | Webhook route | 5-gate security chain (sig validate, idempotency, user, rate limit, persist), Inngest event emit, return HTTP 200 | `src/sms/router.py` |
-| PipelineOrchestrator | Full pipeline (Job / WorkRequest / Unknown branches), single commit per branch, Pinecone write, graceful unknown reply | `src/extraction/pipeline.py` |
+| PipelineOrchestrator | Full pipeline (Job / WorkGoal / Unknown branches), single commit per branch, Pinecone write, graceful unknown reply | `src/extraction/pipeline.py` |
 | ExtractionService | Single GPT call via `beta.chat.completions.parse` returning `JobExtraction | WorkerExtraction | UnknownMessage` discriminated union | `src/extraction/service.py` |
 | MatchService | ⏳ Phase 3 — earnings math SQL + ranked SMS formatter (placeholder exists) | `src/matches/` |
 | MessageRepository | get-or-create user by phone_hash, persist message, dedup check | `src/sms/repository.py` |
 | AuditLogRepository | Store raw SMS body + raw GPT response per message | `src/sms/repository.py` |
 | JobRepository | CRUD for job records + ⏳ Phase 3 matching query | `src/jobs/repository.py` |
-| WorkRequestRepository | CRUD for work_request records | `src/work_requests/repository.py` |
+| WorkGoalRepository | CRUD for work_goal records | `src/work_goals/repository.py` |
 | inngest_client | `process-message` function (3 retries, on_failure) + `sync-pinecone-queue` cron; module-level `_orchestrator` var set by lifespan | `src/inngest_client.py` |
 | metrics | Prometheus metric singletons (imported lazily inside functions to avoid circular imports) | `src/metrics.py` |
 | Alembic migrations | Schema versioning — asyncio.run() pattern in env.py | `alembic/` |
@@ -96,7 +96,7 @@ src/
 ├── sms/                       # Webhook route, MessageRepository, AuditLogRepository
 ├── extraction/                # ExtractionService, PipelineOrchestrator, schemas, pinecone_client
 ├── jobs/                      # JobRepository, Job SQLModel
-├── work_requests/             # WorkRequestRepository, WorkRequest SQLModel
+├── work_goals/             # WorkGoalRepository, WorkGoal SQLModel
 ├── users/                     # User SQLModel
 └── matches/                   # Match SQLModel (placeholder, Phase 3)
 
@@ -115,9 +115,9 @@ tests/
 
 ### Structure Rationale
 
-- **src/ (flat domain modules):** Each domain (sms, extraction, jobs, work_requests, users, matches) owns its router, repository, and SQLModel. No api/v1/routes/ indirection — the single webhook is the only HTTP surface.
+- **src/ (flat domain modules):** Each domain (sms, extraction, jobs, work_goals, users, matches) owns its router, repository, and SQLModel. No api/v1/routes/ indirection — the single webhook is the only HTTP surface.
 - **src/inngest_client.py:** Module-level `_orchestrator` and `_openai_client` vars set by FastAPI lifespan — cleanest circular import avoidance pattern for Inngest functions that need DI-injected objects.
-- **src/extraction/pipeline.py:** PipelineOrchestrator owns all pipeline logic (Job/WorkRequest/Unknown branches); ExtractionService owns GPT-only logic. Clean separation.
+- **src/extraction/pipeline.py:** PipelineOrchestrator owns all pipeline logic (Job/WorkGoal/Unknown branches); ExtractionService owns GPT-only logic. Clean separation.
 - **src/models.py:** Central SQLModel aggregator — imports all ORM models so Alembic autogenerate sees the full schema in one import.
 
 ## Architectural Patterns
@@ -269,7 +269,7 @@ emit_message_received_event(message_id) → Inngest
 PipelineOrchestrator.run(message_id)
     ├── ExtractionService.process() → OpenAI beta.chat.completions.parse
     │       └── Returns WorkerExtraction (discriminated union)
-    ├── WorkRequestRepository.create(work_request) → session.flush()
+    ├── WorkGoalRepository.create(work_goal) → session.flush()
     ├── session.commit()
     └── ⏳ Phase 3: MatchService.find_matches() → ranked SMS reply via Twilio
 ```
@@ -420,7 +420,7 @@ Implemented observability stack:
 
 All infrastructure and extraction phases (01–02.5) are complete:
 - ✅ Phase 01: Schema, migrations, webhook security chain
-- ✅ Phase 01.1: 3NF schema refactor (User/Message/Job/WorkRequest)
+- ✅ Phase 01.1: 3NF schema refactor (User/Message/Job/WorkGoal)
 - ✅ Phase 02: GPT extraction service, PipelineOrchestrator, Pinecone
 - ✅ Phase 02.1: Service boundary refactor, DI graph, Inngest functions
 - ✅ Phase 02.3: OTel → Jaeger v2, OpenSearch

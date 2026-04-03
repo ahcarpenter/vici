@@ -50,9 +50,9 @@ src/
 │   ├── models.py                  #   Job SQLModel
 │   ├── repository.py              #   JobRepository
 │   └── schemas.py                 #   JobPosting Pydantic schema
-├── work_requests/                 # Work request domain
-│   ├── models.py                  #   WorkRequest SQLModel
-│   ├── repository.py              #   WorkRequestRepository
+├── work_goals/                 # Work request domain
+│   ├── models.py                  #   WorkGoal SQLModel
+│   ├── repository.py              #   WorkGoalRepository
 │   └── schemas.py                 #   WorkerGoal Pydantic schema
 ├── users/                         # User domain
 │   ├── models.py                  #   User SQLModel
@@ -65,12 +65,12 @@ src/
 
 ```
 AsyncOpenAI -> wrap_openai (Braintrust) -> ExtractionService
-JobRepository, WorkRequestRepository, AuditLogRepository -> instantiated from sessionmaker
+JobRepository, WorkGoalRepository, AuditLogRepository -> instantiated from sessionmaker
 ExtractionService + AuditLogRepository -> PipelineOrchestrator
   PipelineOrchestrator receives handlers list:
     [JobPostingHandler, WorkerGoalHandler, UnknownMessageHandler]
       JobPostingHandler(JobRepository, write_job_embedding, AuditLogRepository)
-      WorkerGoalHandler(WorkRequestRepository, AuditLogRepository)
+      WorkerGoalHandler(WorkGoalRepository, AuditLogRepository)
       UnknownMessageHandler(TwilioClient, settings, AuditLogRepository)
 PipelineOrchestrator -> stored in app.state for Temporal activities to access
 Temporal client (with TracingInterceptor) -> worker task started in lifespan

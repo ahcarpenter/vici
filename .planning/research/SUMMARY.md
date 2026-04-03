@@ -9,7 +9,7 @@
 
 Vici is an SMS-first gig labor marketplace that matches workers to jobs based on earnings math rather than search. As of Phase 02.5, the full extraction and storage pipeline is production-ready: a single Twilio webhook endpoint validates requests through a 5-gate security chain, emits an Inngest event, and returns HTTP 200 to Twilio immediately. The Inngest `process-message` function then runs `PipelineOrchestrator.run()` — which calls `ExtractionService` (GPT classify+extract via `beta.chat.completions.parse` with a discriminated union schema), stores results in PostgreSQL, and writes job embeddings to Pinecone. The complete observability stack is in place: structlog JSON, OTel → Jaeger v2 (OpenSearch), Prometheus → Grafana. Production infrastructure is ready: multi-stage Dockerfile, render.yaml Blueprint IaC, GitHub Actions CI.
 
-The key architectural decision is to return HTTP 200 to Twilio immediately after emitting an Inngest `message.received` event — all GPT processing, storage, and Pinecone writes happen inside the `process-message` Inngest function with 3 retries and an `on_failure` handler. This is the implemented pattern. FastAPI BackgroundTasks are NOT used for this purpose — Inngest provides better retry semantics, observability, and failure handling. The data schema is 3NF: `users` (phone_hash), `messages` (MessageSid idempotency), `jobs`, `work_requests`, `rate_limit`, `audit_log`, `matches` (Phase 3 placeholder), `pinecone_sync_queue`. PostgreSQL 16 plain image — no pgvector extension — Pinecone is the external vector store.
+The key architectural decision is to return HTTP 200 to Twilio immediately after emitting an Inngest `message.received` event — all GPT processing, storage, and Pinecone writes happen inside the `process-message` Inngest function with 3 retries and an `on_failure` handler. This is the implemented pattern. FastAPI BackgroundTasks are NOT used for this purpose — Inngest provides better retry semantics, observability, and failure handling. The data schema is 3NF: `users` (phone_hash), `messages` (MessageSid idempotency), `jobs`, `work_goals`, `rate_limit`, `audit_log`, `matches` (Phase 3 placeholder), `pinecone_sync_queue`. PostgreSQL 16 plain image — no pgvector extension — Pinecone is the external vector store.
 
 Phase 3 (next) adds `MatchService` in `src/matches/` — earnings math SQL (`pay_rate * estimated_duration >= target_earnings`), ranked SMS formatter (3–5 results, 160-char segments), and empty-match fallback reply. Phase 4 wires outbound SMS confirmation to job posters, STOP/START pass-through, and validates the first Render.com production deploy. The remaining gap is verifying the `gpt-5.3-chat-latest` model string against OpenAI's current model catalog before Phase 3 execution.
 
@@ -80,12 +80,12 @@ The implemented architecture is a five-layer async system: FastAPI webhook layer
 
 **Major components:**
 1. **Webhook route (`POST /webhook/sms`)** — 5-gate security chain (sig validate → idempotency → user get-or-create → rate limit → persist message), Inngest event emit, returns HTTP 200
-2. **PipelineOrchestrator** (`src/extraction/pipeline.py`) — orchestrates full pipeline: Job branch (ExtractionService → JobRepository flush → commit → Pinecone), WorkRequest branch (ExtractionService → WorkRequestRepository flush → commit), Unknown branch (asyncio.to_thread Twilio reply)
+2. **PipelineOrchestrator** (`src/extraction/pipeline.py`) — orchestrates full pipeline: Job branch (ExtractionService → JobRepository flush → commit → Pinecone), WorkGoal branch (ExtractionService → WorkGoalRepository flush → commit), Unknown branch (asyncio.to_thread Twilio reply)
 3. **ExtractionService** (`src/extraction/service.py`) — single GPT call via `beta.chat.completions.parse` returning `JobExtraction | WorkerExtraction | UnknownMessage` discriminated union; Braintrust-wrapped client
 4. **MatchService** (`src/matches/`) — ⏳ Phase 3 placeholder; will implement earnings math SQL + ranked SMS formatter
 5. **MessageRepository + AuditLogRepository** (`src/sms/repository.py`) — user get-or-create, message persist, dedup, raw audit storage
 6. **JobRepository** (`src/jobs/repository.py`) — CRUD + ⏳ Phase 3 earnings math query
-7. **WorkRequestRepository** (`src/work_requests/repository.py`) — CRUD for worker goals
+7. **WorkGoalRepository** (`src/work_goals/repository.py`) — CRUD for worker goals
 8. **inngest_client** (`src/inngest_client.py`) — `process-message` function (3 retries, on_failure handler → pipeline_failures_total) + `sync-pinecone-queue` cron; module-level `_orchestrator` var set by lifespan
 9. **Alembic migrations** (`alembic/`) — asyncio.run() + conn.run_sync() pattern; 3NF schema; no pgvector extension
 
@@ -120,7 +120,7 @@ See `.planning/research/PITFALLS.md` for full detail including phase-to-pitfall 
 
 ### Phase 3: Earnings Math Matching
 
-Deterministic SQL matching query, ranked SMS formatter, empty-match handling. New module: `src/matches/service.py`. Integration point: PipelineOrchestrator WorkRequest branch. Key requirement: explicit NULL handling — exclude jobs with NULL pay_rate or NULL estimated_duration.
+Deterministic SQL matching query, ranked SMS formatter, empty-match handling. New module: `src/matches/service.py`. Integration point: PipelineOrchestrator WorkGoal branch. Key requirement: explicit NULL handling — exclude jobs with NULL pay_rate or NULL estimated_duration.
 
 ### Phase 4: End-to-End Integration & Deployment
 

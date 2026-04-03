@@ -46,7 +46,7 @@ SMS Webhook (POST /webhook/sms)
 Temporal ProcessMessageWorkflow (4 total attempts, failure handler activity on exhaustion)
   └── process_message_activity → PipelineOrchestrator.run()
         ├── ExtractionService (gpt-5.3-chat-latest classify+extract, Braintrust-wrapped)
-        ├── JobRepository / WorkRequestRepository (flush-only, single commit per branch)
+        ├── JobRepository / WorkGoalRepository (flush-only, single commit per branch)
         └── write_job_embedding() → Pinecone (fire-and-forget; failure enqueued to pinecone_sync_queue)
 
 Temporal SyncPineconeQueueWorkflow cron (*/5 * * * *)
@@ -79,9 +79,9 @@ jobs (id PK, user_id FK, description, ideal_datetime, flexibility,
       estimated_duration, location, pay_rate, created_at)
   └── pinecone_sync_queue (id PK, job_id FK, status, retry_count)
 
-work_requests (id PK, user_id FK, target_earnings, target_timeframe, created_at)
+work_goals (id PK, user_id FK, target_earnings, target_timeframe, created_at)
 
-matches (id PK, job_id FK, work_request_id FK, UNIQUE)
+matches (id PK, job_id FK, work_goal_id FK, UNIQUE)
 audit_log (id PK, message_id FK, raw_body, raw_gpt_response, created_at)
 ```
 

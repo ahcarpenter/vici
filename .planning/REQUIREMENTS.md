@@ -118,7 +118,7 @@
 | EXT-03 | Phase 2 | Complete | WorkerExtraction Pydantic schema + structured output prompt |
 | EXT-04 | Phase 2 | Complete | UnknownMessage branch — Twilio reply sent in PipelineOrchestrator |
 | STR-01 | Phase 2 | Complete | JobRepository.create() flush; PipelineOrchestrator commits per branch |
-| STR-02 | Phase 2 | Complete | WorkRequestRepository.create() flush; PipelineOrchestrator commits per branch |
+| STR-02 | Phase 2 | Complete | WorkGoalRepository.create() flush; PipelineOrchestrator commits per branch |
 | STR-03 | Phase 4 | Pending | Confirmation SMS wired in Inngest process-message function |
 | VEC-01 | Phase 2 | Complete | write_job_embedding() in pinecone_client.py; failure fallback to pinecone_sync_queue |
 | MATCH-01 | Phase 3 | Pending | Earnings math SQL query in JobRepository |
