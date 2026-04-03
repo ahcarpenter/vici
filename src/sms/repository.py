@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.repository import BaseRepository
-from src.sms.constants import MAX_MESSAGES_PER_WINDOW
+from src.sms.constants import MAX_MESSAGES_PER_WINDOW, RATE_LIMIT_WINDOW_SECONDS
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 from src.sms.models import Message
 
@@ -28,7 +28,7 @@ class MessageRepository(BaseRepository):
         """
         # TODO: A migration to drop the UNIQUE constraint on (user_id, created_at)
         # in the rate_limit table is needed before deploying this rolling-window change.
-        window = datetime.now(UTC) - timedelta(seconds=60)
+        window = datetime.now(UTC) - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
 
         await session.execute(
             text(

@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.development
 
 # Python bytecode
 __pycache__/

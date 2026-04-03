@@ -11,6 +11,7 @@ class SmsSettings(BaseModel):
     account_sid: str = ""
     from_number: str = ""
     rate_limit_max: int = 5
+    rate_limit_window_seconds: int = 60
 
 
 class ExtractionSettings(BaseModel):
@@ -25,17 +26,23 @@ class PineconeSettings(BaseModel):
 
 class ObservabilitySettings(BaseModel):
     braintrust_api_key: str = ""
-    otel_endpoint: str = "http://localhost:4317"
+    otel_endpoint: str = ""
     otel_service_name: str = "vici"
     service_version: str = "dev"  # populated from GIT_SHA env var
+
+
+class TemporalSettings(BaseModel):
+    address: str = ""
+    task_queue: str = "vici-queue"
+    cron_schedule_pinecone_sync: str = "*/5 * * * *"
 
 
 class Settings(BaseSettings):
     # Flat env vars (kept for backward compatibility — populated from env)
     database_url: str = ""
-    webhook_base_url: str = "http://localhost:8000"
-    env: str = "production"
-    temporal_address: str = "localhost:7233"
+    webhook_base_url: str = ""
+    env: str = ""
+    temporal_address: str = ""
 
     # Flat Twilio env vars (remapped into sms sub-model)
     twilio_auth_token: str = ""
@@ -43,7 +50,7 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
 
     # Flat observability env vars (remapped into observability sub-model)
-    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
+    otel_exporter_otlp_endpoint: str = ""
     otel_service_name: str = "vici"
 
     # Flat extraction env vars (remapped into extraction sub-model)
@@ -57,11 +64,23 @@ class Settings(BaseSettings):
     braintrust_api_key: str = ""
     git_sha: str = "dev"  # populated from GIT_SHA env var in docker-compose
 
+    # Flat Temporal env vars (remapped into temporal sub-model)
+    temporal_task_queue: str = "vici-queue"
+    cron_schedule_pinecone_sync: str = "*/5 * * * *"
+
+    # Flat SMS rate limiting env vars
+    sms_rate_limit_window_seconds: int = 60
+
+    # Flat Grafana env vars (used in docker-compose)
+    grafana_admin_user: str = "admin"
+    grafana_admin_password: str = "admin"
+
     # Nested sub-models (populated via model_validator below)
     sms: SmsSettings = SmsSettings()
     extraction: ExtractionSettings = ExtractionSettings()
     pinecone: PineconeSettings = PineconeSettings()
     observability: ObservabilitySettings = ObservabilitySettings()
+    temporal: TemporalSettings = TemporalSettings()
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -77,6 +96,12 @@ class Settings(BaseSettings):
             missing.append("openai_api_key")
         if not self.pinecone_api_key:
             missing.append("pinecone_api_key")
+        if not self.temporal_address:
+            missing.append("temporal_address")
+        if not self.webhook_base_url:
+            missing.append("webhook_base_url")
+        if not self.env:
+            missing.append("env")
         if missing:
             raise ValueError(
                 f"Required credentials are missing or empty: {', '.join(missing)}"
@@ -90,6 +115,7 @@ class Settings(BaseSettings):
             auth_token=self.twilio_auth_token,
             account_sid=self.twilio_account_sid,
             from_number=self.twilio_from_number,
+            rate_limit_window_seconds=self.sms_rate_limit_window_seconds,
         )
         self.extraction = ExtractionSettings(
             openai_api_key=self.openai_api_key,
@@ -103,6 +129,11 @@ class Settings(BaseSettings):
             otel_endpoint=self.otel_exporter_otlp_endpoint,
             otel_service_name=self.otel_service_name,
             service_version=self.git_sha,
+        )
+        self.temporal = TemporalSettings(
+            address=self.temporal_address,
+            task_queue=self.temporal_task_queue,
+            cron_schedule_pinecone_sync=self.cron_schedule_pinecone_sync,
         )
         return self
 
