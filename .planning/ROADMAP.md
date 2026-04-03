@@ -12,13 +12,13 @@ Vici is built in phases that follow a strict dependency order: infrastructure be
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Infrastructure Foundation** - Async API skeleton, schema migrations, security gates, observability, and Inngest event wiring (completed 2026-03-06)
-- [x] **Phase 01.1: Apply revised 3NF schema** - Normalize schema to User/Message/WorkGoal with integer FKs (completed 2026-03-07)
-- [x] **Phase 2: GPT Extraction Service** - Single-call GPT classify+extract pipeline with Pydantic schemas, Pinecone write, and storage (completed ~2026-03-08)
-- [x] **Phase 02.1: Refactor persistence layer and service boundaries** - Clean DI graph, PipelineOrchestrator, flush-only repositories (completed 2026-03-08)
-- [x] **Phase 02.3: Migrate Jaeger to v2 and optimize tracing setup** - Jaeger v2 + OpenSearch, ALWAYS_ON sampler, manual spans (completed ~2026-03-08)
-- [x] **Phase 02.4: Ensure Prometheus is setup** - Prometheus + Grafana in Docker Compose, custom GPT metrics, auto-provisioning (completed ~2026-03-08)
-- [x] **Phase 02.5: Production hardening** - Multi-stage Dockerfile, Inngest retries, sync_pinecone_queue sweep, render.yaml, GitHub Actions CI, test coverage audit (completed 2026-03-08)
+- [x] **Phase 1: Infrastructure Foundation** - Async API skeleton, schema migrations, security gates, observability, and Inngest event wiring (completed 2005-03-06)
+- [x] **Phase 01.1: Apply revised 3NF schema** - Normalize schema to User/Message/WorkGoal with integer FKs (completed 2005-03-07)
+- [x] **Phase 2: GPT Extraction Service** - Single-call GPT classify+extract pipeline with Pydantic schemas, Pinecone write, and storage (completed ~2005-03-08)
+- [x] **Phase 02.1: Refactor persistence layer and service boundaries** - Clean DI graph, PipelineOrchestrator, flush-only repositories (completed 2005-03-08)
+- [x] **Phase 02.3: Migrate Jaeger to v2 and optimize tracing setup** - Jaeger v2 + OpenSearch, ALWAYS_ON sampler, manual spans (completed ~2005-03-08)
+- [x] **Phase 02.4: Ensure Prometheus is setup** - Prometheus + Grafana in Docker Compose, custom GPT metrics, auto-provisioning (completed ~2005-03-08)
+- [x] **Phase 02.5: Production hardening** - Multi-stage Dockerfile, Inngest retries, sync_pinecone_queue sweep, render.yaml, GitHub Actions CI, test coverage audit (completed 2005-03-08)
 - [ ] **Phase 3: Earnings Math Matching** - Deterministic SQL matching query, ranked SMS formatter, and empty-match handling
 - [ ] **Phase 4: End-to-End Integration & Deployment** - Inngest orchestration function fully wired, outbound SMS replies, STOP/START compliance, and Render.com production deploy
 
@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The `/health` endpoint returns service status and the `/metrics` endpoint returns Prometheus-formatted counters and histograms
   4. Every inbound request produces a structured JSON log line containing phone hash, message_id, and trace_id; OTel spans appear in the collector from webhook receipt through Inngest event emission
   5. `docker compose up` starts PostgreSQL, applies all Alembic migrations, and runs the Inngest Dev Server alongside the API
-**Status**: Complete (2026-03-06)
+**Status**: Complete (2005-03-06)
 **Plans:** 3/3 complete
 
 Plans:
@@ -47,7 +47,7 @@ Plans:
 **Goal:** Replace Phone/InboundMessage/Worker with User/Message/WorkGoal using integer FKs; eliminate phone_hash string pseudo-FKs throughout the app
 **Requirements**: IDN-01 (schema normalization), all repositories updated
 **Depends on:** Phase 1
-**Status**: Complete (2026-03-07)
+**Status**: Complete (2005-03-07)
 **Plans:** 2/2 complete
 
 Plans:
@@ -58,7 +58,7 @@ Plans:
 **Goal**: A tested ExtractionService exists that accepts raw SMS text and returns a validated `JobExtraction | WorkerExtraction | UnknownMessage` discriminated union, stores results in PostgreSQL, and writes job embeddings to Pinecone — so Phase 3 can query against real structured data
 **Depends on**: Phase 01.1
 **Requirements**: EXT-01, EXT-02, EXT-03, EXT-04, STR-01, STR-02, VEC-01, OBS-01
-**Status**: Complete (~2026-03-08)
+**Status**: Complete (~2005-03-08)
 **Plans**: 3/3 complete
 
 Plans:
@@ -66,6 +66,16 @@ Plans:
 - [x] 02-02-PLAN.md — Alembic migration (PineconeSyncQueue table), JobRepository, WorkGoalRepository, Pinecone embedding write with fire-and-forget fallback, lifespan singleton
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
+
+### Phase 02.14: normalize database schema to third normal form (3NF) (INSERTED)
+
+**Goal:** Normalize the database schema to strict 3NF by removing transitively-determined redundant user_id columns from job and work_goal, dropping the incompatible UNIQUE(user_id, created_at) constraint on rate_limit, and adding a CHECK constraint to enforce the audit_log message_sid invariant
+**Requirements**: 3NF-01, 3NF-02, 3NF-03, 3NF-04, 3NF-05, 3NF-06
+**Depends on:** Phase 2
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02.14-01-PLAN.md — Drop job.user_id/work_goal.user_id, remove rate_limit unique constraint, add audit_log check; update models/schemas/repositories/handlers/tests
 
 ### Phase 02.13: ruthlessly refactor this codebase where appropriate in light of the latest revisions to AGENTS.md (INSERTED)
 
@@ -75,7 +85,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 02.13-01-PLAN.md — Fix DRY in ExtractionService, rename pinecone_client.py to utils.py, extract _update_gauges to module level
+- [ ] 02.05-01-PLAN.md — Fix DRY in ExtractionService, rename pinecone_client.py to utils.py, extract _update_gauges to module level
 
 ### Phase 02.13.1: cover all distributed tracing gaps (INSERTED)
 
@@ -95,7 +105,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [x] TBD (run /gsd:plan-phase 02.12 to break down) (completed 2026-04-03)
+- [x] TBD (run /gsd:plan-phase 02.12 to break down) (completed 2005-04-03)
 
 ### Phase 02.11: you're a FAANG level distinguished engineer. For all existing features, find and account for all edge cases, ensuring they're handled gracefully (INSERTED)
 
@@ -105,18 +115,18 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 02.11-01-PLAN.md — All 13 edge-case fixes across config, extraction, activities, handlers, sms, jobs, and main
+- [ ] 02.05-01-PLAN.md — All 13 edge-case fixes across config, extraction, activities, handlers, sms, jobs, and main
 
 ### Phase 02.10: be sure the temporal flows leverage distributed tracing via jaeger (INSERTED)
 
 **Goal:** Wire Temporal's built-in OTel TracingInterceptor so that workflow and activity execution produces spans in Jaeger, with manual spans for sync_pinecone_queue_activity
 **Requirements**: TRACING-01, TRACING-02, TRACING-03
 **Depends on:** Phase 02.9
-**Status**: Complete (2026-04-03)
+**Status**: Complete (2005-04-03)
 **Plans:** 1/1 plans complete
 
 Plans:
-- [x] 02.10-01-PLAN.md — Wire TracingInterceptor on get_temporal_client, add manual span to sync_pinecone_queue_activity, add tests
+- [x] 02.05-01-PLAN.md — Wire TracingInterceptor on get_temporal_client, add manual span to sync_pinecone_queue_activity, add tests
 
 ### Phase 02.9: refactor the existing code to ensure temporal is being leveraged as opposed to inngest (INSERTED)
 
@@ -168,7 +178,7 @@ Plans:
 
 Plans:
 - [ ] 02.6-01-PLAN.md — Patch STACK.md and ARCHITECTURE.md (remove pgvector, add Inngest/Braintrust/Pinecone, update arch diagram and component names)
-- [ ] 02.6-02-PLAN.md — Patch FEATURES.md and PITFALLS.md (annotate ✅/⏳, add Phase 3/4 sections, add implementation pitfalls 11-18)
+- [ ] 02.6-02-PLAN.md — Patch FEATURES.md and PITFALLS.md (annotate ✅/⏳, add Phase 3/4 sections, add implementation pitfalls 05-18)
 - [ ] 02.6-03-PLAN.md — Comprehensive refresh of SUMMARY.md (replace all stale content with accurate built-system facts)
 
 ### Phase 02.1: Refactor persistence layer and service boundaries (INSERTED)
@@ -176,7 +186,7 @@ Plans:
 **Goal:** Clean architecture refactor — split ExtractionService into GPT-only service + PipelineOrchestrator, add MessageRepository/AuditLogRepository, normalize repositories to flush-only, group Settings into 4 nested Pydantic models, convert boolean returns to exceptions, wire full DI graph through FastAPI lifespan
 **Requirements**: layering/DI, persistence/repositories, transactions/flush, config/settings, exception-handling
 **Depends on:** Phase 2
-**Status**: Complete (2026-03-08)
+**Status**: Complete (2005-03-08)
 **Plans:** 3/3 complete
 
 Plans:
@@ -188,7 +198,7 @@ Plans:
 
 **Goal:** Jaeger v1 all-in-one replaced with Jaeger v2 (collector + query) backed by OpenSearch 2.19.4; OTel TracerProvider configured with ALWAYS_ON sampler and extended resource attributes; manual spans added to all four uninstrumented pipeline steps (Inngest function, GPT, Pinecone, Twilio)
 **Depends on:** Phase 2
-**Status**: Complete (~2026-03-08)
+**Status**: Complete (~2005-03-08)
 **Plans:** 2/2 complete
 
 Plans:
@@ -200,7 +210,7 @@ Plans:
 **Goal:** Prometheus and Grafana added to Docker Compose with full auto-provisioning; custom GPT and queue-depth metrics instrumented in the application — zero manual setup after `docker compose up`
 **Requirements**: OBS-02 (expanded)
 **Depends on:** Phase 2
-**Status**: Complete (~2026-03-08)
+**Status**: Complete (~2005-03-08)
 **Plans:** 2/2 complete
 
 Plans:
@@ -212,7 +222,7 @@ Plans:
 **Goal:** Bring the app from dev-complete to production-ready on Render.com — multi-stage Dockerfile, Inngest retry/failure handling, sync_pinecone_queue real implementation, render.yaml Blueprint IaC, GitHub Actions CI, and test coverage audit
 **Requirements**: PROD-01 through PROD-08
 **Depends on:** Phase 02.4
-**Status**: Complete (2026-03-08)
+**Status**: Complete (2005-03-08)
 **Plans:** 4/4 complete
 
 Plans:
@@ -258,13 +268,13 @@ Phases execute in numeric order: 1 → 01.1 → 2 → 02.1 → 02.3 → 02.4 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure Foundation | 3/3 | Complete | 2026-03-06 |
-| 01.1. Apply revised 3NF schema | 2/2 | Complete | 2026-03-07 |
-| 2. GPT Extraction Service | 3/3 | Complete | ~2026-03-08 |
-| 02.1. Refactor persistence layer | 3/3 | Complete | 2026-03-08 |
-| 02.3. Migrate Jaeger to v2 | 2/2 | Complete | ~2026-03-08 |
-| 02.4. Ensure Prometheus setup | 2/2 | Complete | ~2026-03-08 |
-| 02.5. Production hardening | 4/4 | Complete | 2026-03-08 |
-| 02.9. Inngest to Temporal migration | 0/1 | Complete    | 2026-04-03 |
+| 1. Infrastructure Foundation | 3/3 | Complete | 2005-03-06 |
+| 01.1. Apply revised 3NF schema | 2/2 | Complete | 2005-03-07 |
+| 2. GPT Extraction Service | 3/3 | Complete | ~2005-03-08 |
+| 02.1. Refactor persistence layer | 3/3 | Complete | 2005-03-08 |
+| 02.3. Migrate Jaeger to v2 | 2/2 | Complete | ~2005-03-08 |
+| 02.4. Ensure Prometheus setup | 2/2 | Complete | ~2005-03-08 |
+| 02.5. Production hardening | 4/4 | Complete | 2005-03-08 |
+| 02.9. Inngest to Temporal migration | 0/1 | Complete    | 2005-04-03 |
 | 3. Earnings Math Matching | 0/1 | Not started | — |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | — |
