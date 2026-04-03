@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 03
 Plan: Not started
 Status: Executing Phase 02.13
-Last activity: 2026-04-03 - Completed quick task 260403-48b: constantize magic numbers + env files
+Last activity: 2026-04-03 - Completed quick task 260403-4ps: per-service env file restructure for docker-compose
 
 Progress: [████████░░] 82% (13 of 15 phases complete, all 27 plans complete)
 
@@ -180,6 +180,7 @@ None.
 | 2 | make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere | 2026-03-08 | 6f9e3d6 | [2-make-sure-any-strings-with-url-s-that-co](./quick/2-make-sure-any-strings-with-url-s-that-co/) |
 | 260403-30x | update all docs | 2026-04-03 | c69eb3d | [260403-30x-update-all-docs](./quick/260403-30x-update-all-docs/) |
 | 260403-48b | ensure all magic numbers are constantized. Ensure any values that would vary between environments, for all code across the repo, are in env files mapped to the current, and expected environments (specifically development, staging, production) use the following naming conventions: .env.development, .env.staging, and .env.production. Be sure all values that are stored as an env var are parameterized throughout the codebase to allow for substitution depending on the env file loaded | 2026-04-03 | 1e37f0c | [260403-48b-ensure-all-magic-numbers-are-constantize](./quick/260403-48b-ensure-all-magic-numbers-are-constantize/) |
+| 260403-4ps | be sure all environment variable key values are pulled from env variables with interpolation used, and values from other env vars reused if possible. Load env variables exclusively from .env files in the docker-compose file, with a separate env file per env for each service that uses env vars | 2026-04-03 | 8fac221 | [260403-4ps-be-sure-all-environment-variable-key-val](./quick/260403-4ps-be-sure-all-environment-variable-key-val/) |
 
 ### Blockers/Concerns
 
