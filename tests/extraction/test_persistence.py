@@ -1,6 +1,6 @@
 """
 Tests for Plan 02-02: persistence layer for extraction results.
-Tests: JobRepository.create, WorkRequestRepository.create.
+Tests: JobRepository.create, WorkGoalRepository.create.
 
 Note: Pinecone integration tests have moved to tests/test_pipeline_orchestrator.py
 as PipelineOrchestrator now owns all storage orchestration.
@@ -14,8 +14,8 @@ from src.jobs.repository import JobRepository
 from src.jobs.schemas import JobCreate
 from src.sms.models import Message
 from src.users.models import User
-from src.work_requests.repository import WorkRequestRepository
-from src.work_requests.schemas import WorkRequestCreate
+from src.work_goals.repository import WorkGoalRepository
+from src.work_goals.schemas import WorkGoalCreate
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -70,10 +70,10 @@ async def test_job_persistence(async_session, user_and_message):
 
 @pytest.mark.asyncio
 async def test_worker_persistence(async_session, user_and_message):
-    """WorkRequestRepository.create inserts a work_request row and returns it with id."""
+    """WorkGoalRepository.create inserts a work_goal row and returns it with id."""
     user, msg = user_and_message
 
-    # Need a separate message for work_request (message_id has unique constraint)
+    # Need a separate message for work_goal (message_id has unique constraint)
     msg2 = Message(
         message_sid=f"SM{hashlib.md5(b'worker_persistence_msg2').hexdigest()[:10]}",
         user_id=user.id,
@@ -82,17 +82,17 @@ async def test_worker_persistence(async_session, user_and_message):
     async_session.add(msg2)
     await async_session.flush()
 
-    wr_create = WorkRequestCreate(
+    wg_create = WorkGoalCreate(
         user_id=user.id,
         message_id=msg2.id,
         target_earnings=200.0,
         target_timeframe="today",
         raw_sms="I need $200 today",
     )
-    wr = await WorkRequestRepository().create(async_session, wr_create)
+    wg = await WorkGoalRepository().create(async_session, wg_create)
 
-    assert wr.id is not None
-    assert wr.target_earnings == 200.0
-    assert wr.target_timeframe == "today"
-    assert wr.user_id == user.id
-    assert wr.message_id == msg2.id
+    assert wg.id is not None
+    assert wg.target_earnings == 200.0
+    assert wg.target_timeframe == "today"
+    assert wg.user_id == user.id
+    assert wg.message_id == msg2.id

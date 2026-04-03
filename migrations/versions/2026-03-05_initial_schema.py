@@ -70,9 +70,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("message_id", name="uq_job_message_id"),
     )
 
-    # 4. work_request (depends on user, message)
+    # 4. work_goal (depends on user, message)
     op.create_table(
-        "work_request",
+        "work_goal",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("message_id", sa.Integer(), nullable=False),
@@ -80,25 +80,25 @@ def upgrade() -> None:
         sa.Column("target_timeframe", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "target_earnings > 0", name="ck_work_request_target_earnings_positive"
+            "target_earnings > 0", name="ck_work_goal_target_earnings_positive"
         ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["message_id"], ["message.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("message_id", name="uq_work_request_message_id"),
+        sa.UniqueConstraint("message_id", name="uq_work_goal_message_id"),
     )
 
-    # 5. match (depends on job, work_request)
+    # 5. match (depends on job, work_goal)
     op.create_table(
         "match",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("job_id", sa.Integer(), nullable=False),
-        sa.Column("work_request_id", sa.Integer(), nullable=False),
+        sa.Column("work_goal_id", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["job_id"], ["job.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["work_request_id"], ["work_request.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["work_goal_id"], ["work_goal.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("job_id", "work_request_id", name="uq_match_job_work_request"),
+        sa.UniqueConstraint("job_id", "work_goal_id", name="uq_match_job_work_goal"),
     )
 
     # 6. rate_limit (depends on user)
@@ -133,7 +133,7 @@ def downgrade() -> None:
     op.drop_table("audit_log")
     op.drop_table("rate_limit")
     op.drop_table("match")
-    op.drop_table("work_request")
+    op.drop_table("work_goal")
     op.drop_table("job")
     op.drop_table("message")
     op.drop_table("user")

@@ -16,7 +16,7 @@ from src.jobs.models import Job
 from src.main import create_app
 from src.sms.models import Message
 from src.users.models import User
-from src.work_requests.models import WorkRequest
+from src.work_goals.models import WorkGoal
 
 DATABASE_URL_TEST = "sqlite+aiosqlite:///:memory:"
 
@@ -165,22 +165,22 @@ async def make_job(async_session, make_user, make_message):
 
 
 @pytest_asyncio.fixture
-async def make_work_request(async_session, make_user, make_message):
-    async def _factory(**kwargs) -> WorkRequest:
+async def make_work_goal(async_session, make_user, make_message):
+    async def _factory(**kwargs) -> WorkGoal:
         user = kwargs.pop("user", None)
         if user is None:
             user = await make_user()
         message = kwargs.pop("message", None)
         if message is None:
             message = await make_message(user=user)
-        work_request = WorkRequest(
+        work_goal = WorkGoal(
             user_id=kwargs.get("user_id", user.id),
             message_id=kwargs.get("message_id", message.id),
             target_earnings=kwargs.get("target_earnings", 500.0),
             target_timeframe=kwargs.get("target_timeframe", "this week"),
         )
-        async_session.add(work_request)
+        async_session.add(work_goal)
         await async_session.flush()
-        return work_request
+        return work_goal
 
     return _factory

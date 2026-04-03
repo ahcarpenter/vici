@@ -64,7 +64,7 @@ def _make_orchestrator(
             extraction_service=mock_extraction_service,
         ),
         WorkerGoalHandler(
-            work_request_repo=mock_wr_repo,
+            work_goal_repo=mock_wr_repo,
             audit_repo=mock_audit_repo,
         ),
         UnknownMessageHandler(
@@ -123,7 +123,7 @@ async def test_job_branch_commits_once():
 
 @pytest.mark.asyncio
 async def test_worker_branch_commits_once():
-    """Worker branch: work_request_repo.create called, audit written, commit once."""
+    """Worker branch: work_goal_repo.create called, audit written, commit once."""
     worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
     result = ExtractionResult(message_type="worker_goal", worker=worker)
     orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
@@ -150,7 +150,7 @@ async def test_worker_branch_commits_once():
 
 @pytest.mark.asyncio
 async def test_unknown_branch():
-    """Unknown branch: commit called once, no job/work_request rows created."""
+    """Unknown branch: commit called once, no job/work_goal rows created."""
     unknown = UnknownMessage(reason="Greeting with no actionable content")
     result = ExtractionResult(message_type="unknown", unknown=unknown)
     orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)

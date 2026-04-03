@@ -23,7 +23,7 @@ async def test_worker_goal_handler_emits_span():
     """WorkerGoalHandler.handle() emits pipeline.handle_worker_goal span with message and user attrs."""
     import src.pipeline.handlers.worker_goal as wg_module
     from src.extraction.schemas import ExtractionResult, WorkerExtraction
-    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_WORK_REQUEST_USER_ID
+    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_WORK_GOAL_USER_ID
     from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 
@@ -44,7 +44,7 @@ async def test_worker_goal_handler_emits_span():
         mock_audit_repo.write = AsyncMock(return_value=None)
 
         handler = WorkerGoalHandler(
-            work_request_repo=mock_wr_repo,
+            work_goal_repo=mock_wr_repo,
             audit_repo=mock_audit_repo,
         )
 
@@ -77,7 +77,7 @@ async def test_worker_goal_handler_emits_span():
         wg_span = next(s for s in spans if s.name == "pipeline.handle_worker_goal")
         attrs = dict(wg_span.attributes)
         assert attrs.get(OTEL_ATTR_MESSAGE_ID) == test_message_sid
-        assert attrs.get(OTEL_ATTR_WORK_REQUEST_USER_ID) == str(test_user_id)
+        assert attrs.get(OTEL_ATTR_WORK_GOAL_USER_ID) == str(test_user_id)
     finally:
         wg_module.tracer = original_tracer
         exporter.shutdown()
