@@ -72,7 +72,7 @@ Plans:
 **Goal:** Harden all existing features against 13 identified edge cases — fail-fast config validation, GPT None guard, correct Temporal error signaling, caught Twilio/Pinecone failures, rolling rate limit, graceful shutdown, webhook field validation, hash guard, datetime warning, and gauge staleness detection
 **Requirements**: HARDENING-01
 **Depends on:** Phase 02.10
-**Plans:** 0/1 plans executed
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 02.11-01-PLAN.md — All 13 edge-case fixes across config, extraction, activities, handlers, sms, jobs, and main
