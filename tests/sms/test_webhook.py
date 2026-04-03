@@ -46,10 +46,11 @@ async def test_valid_signature_real(client: AsyncClient):
     settings = get_settings()
     token = settings.sms.auth_token
     url = f"{settings.webhook_base_url}/webhook/sms"
-    sig = RequestValidator(token).compute_signature(url, VALID_FORM)
+    form = {**VALID_FORM, "MessageSid": "SM_real_001", "From": "+15005550010"}
+    sig = RequestValidator(token).compute_signature(url, form)
     response = await client.post(
         "/webhook/sms",
-        data=VALID_FORM,
+        data=form,
         headers={"X-Twilio-Signature": sig},
     )
     assert response.status_code == 200
@@ -60,7 +61,7 @@ async def test_idempotency(
     mock_twilio_validator,
     async_session,
 ):
-    form = {**VALID_FORM, "MessageSid": "SM_idem_001"}
+    form = {**VALID_FORM, "MessageSid": "SM_idem_001", "From": "+15005550011"}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
     response = await client.post("/webhook/sms", data=form, headers=HEADERS)
     assert response.status_code == 200
@@ -72,7 +73,7 @@ async def test_idempotency(
 
 
 async def test_rate_limit(client: AsyncClient, mock_twilio_validator):
-    phone = "+15005550007"
+    phone = "+15005550020"
     for i in range(5):
         form = {**VALID_FORM, "MessageSid": f"SM_rl_{i:03d}", "From": phone}
         await client.post("/webhook/sms", data=form, headers=HEADERS)
