@@ -28,14 +28,14 @@ def test_configure_otel_resource_has_deployment_environment(mock_app):
     assert "service.version" in attrs
 
 
-def test_configure_otel_deployment_environment_is_development_when_inngest_dev(mock_app):
+def test_configure_otel_deployment_environment_reflects_env_setting(mock_app):
     with patch("src.main.OTLPSpanExporter"), patch("src.main.FastAPIInstrumentor"), \
          patch("src.main.SQLAlchemyInstrumentor"), patch("src.main.get_engine"):
-        # get_settings is cached — test uses conftest env with INNGEST_DEV=1 not set,
-        # so inngest_dev may be False. We test the value reflects the setting.
         provider = _configure_otel(mock_app)
     settings = get_settings()
-    expected_env = "development" if settings.inngest_dev else "production"
+    expected_env = (
+        "development" if settings.env != "production" else "production"
+    )
     assert provider.resource.attributes["deployment.environment"] == expected_env
 
 
