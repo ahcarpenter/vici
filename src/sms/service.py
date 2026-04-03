@@ -1,7 +1,6 @@
 import hashlib
 
-import inngest as inngest_module
-from opentelemetry.propagate import inject as otel_inject
+from temporalio.client import Client
 
 
 def hash_phone(e164_number: str) -> str:
@@ -10,26 +9,18 @@ def hash_phone(e164_number: str) -> str:
 
 
 async def emit_message_received_event(
-    client: inngest_module.Inngest,
+    client: Client,
     message_sid: str,
     from_number: str,
     body: str,
 ) -> None:
-    """
-    Fire-and-forget: emit message.received event to Inngest.
-    Injects W3C traceparent so the Inngest function can continue the trace.
-    """
-    carrier: dict = {}
-    otel_inject(carrier)  # {"traceparent": "00-<trace_id>-<span_id>-01"} or {}
+    """Fire-and-forget: start ProcessMessageWorkflow in Temporal."""
+    from src.temporal.worker import TASK_QUEUE
+    from src.temporal.workflows import ProcessMessageWorkflow
 
-    await client.send(
-        inngest_module.Event(
-            name="message.received",
-            data={
-                "message_sid": message_sid,
-                "from_number": from_number,
-                "body": body,
-                "otel": carrier,
-            },
-        )
+    await client.start_workflow(
+        ProcessMessageWorkflow.run,
+        args=[message_sid, from_number, body],
+        id=f"process-message-{message_sid}",
+        task_queue=TASK_QUEUE,
     )

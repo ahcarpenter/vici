@@ -3,7 +3,6 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-import inngest.fast_api
 import structlog
 from braintrust import wrap_openai
 from fastapi import FastAPI
@@ -27,14 +26,12 @@ from src.exceptions import twilio_signature_invalid_handler
 from src.extraction.orchestrator import PipelineOrchestrator
 from src.extraction.pinecone_client import write_job_embedding
 from src.extraction.service import ExtractionService
-from src.inngest_client import get_inngest_client, process_message, sync_pinecone_queue
 from src.jobs.repository import JobRepository
-from src.pipeline.handlers.job_posting import JobPostingHandler
-from src.pipeline.handlers.unknown import UnknownMessageHandler
-from src.pipeline.handlers.worker_goal import WorkerGoalHandler
 from src.sms.audit_repository import AuditLogRepository
-from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
+from src.sms.exceptions import TwilioSignatureInvalid
+from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
+from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
 from src.work_requests.repository import WorkRequestRepository
 
 
@@ -64,15 +61,13 @@ def _configure_structlog() -> None:
 
 def _configure_otel(app: FastAPI) -> TracerProvider:
     settings = get_settings()
-    resource = Resource(
-        attributes={
-            "service.name": settings.observability.otel_service_name,
-            "deployment.environment": (
-                "development" if settings.inngest_dev else "production"
-            ),
-            "service.version": settings.observability.service_version,
-        }
-    )
+    resource = Resource(attributes={
+        "service.name": settings.observability.otel_service_name,
+        "deployment.environment": (
+            "development" if settings.env != "production" else "production"
+        ),
+        "service.version": settings.observability.service_version,
+    })
     exporter = OTLPSpanExporter(endpoint=settings.observability.otel_endpoint)
     provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
     provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -92,47 +87,29 @@ async def lifespan(app: FastAPI):
     openai_client = wrap_openai(
         AsyncOpenAI(api_key=settings.extraction.openai_api_key, max_retries=0)
     )
-    extraction_service = ExtractionService(
-        openai_client=openai_client, settings=settings
-    )
+    extraction_service = ExtractionService(openai_client=openai_client, settings=settings)
     pinecone_client = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
-    # Build handler instances (repos are now instances, not class refs)
-    job_repo = JobRepository()
-    work_request_repo = WorkRequestRepository()
-    audit_repo = AuditLogRepository()
-
-    handlers = [
-        JobPostingHandler(
-            job_repo=job_repo,
-            audit_repo=audit_repo,
-            pinecone_client=pinecone_client,
-            extraction_service=extraction_service,
-        ),
-        WorkerGoalHandler(
-            work_request_repo=work_request_repo,
-            audit_repo=audit_repo,
-        ),
-        UnknownMessageHandler(
-            twilio_client=twilio_client,
-            extraction_service=extraction_service,
-        ),
-    ]
-
     orchestrator = PipelineOrchestrator(
         extraction_service=extraction_service,
-        audit_repo=audit_repo,
-        handlers=handlers,
+        job_repo=JobRepository,
+        work_request_repo=WorkRequestRepository,
+        message_repo=MessageRepository,
+        audit_repo=AuditLogRepository,
+        pinecone_client=pinecone_client,
+        twilio_client=twilio_client,
     )
 
     app.state.orchestrator = orchestrator
 
-    # Inject orchestrator and openai_client into inngest_client module
-    import src.inngest_client as ic
-
-    ic._orchestrator = orchestrator
-    ic._openai_client = openai_client
+    # Connect to Temporal and start the worker
+    temporal_client = await get_temporal_client(settings.temporal_address)
+    app.state.temporal_client = temporal_client
+    _worker_task = asyncio.create_task(
+        run_worker(temporal_client, orchestrator, openai_client)
+    )
+    await start_cron_if_needed(temporal_client)
 
     # Background gauge updater — polls pinecone_sync_queue every 15s
     from src.metrics import pinecone_sync_queue_depth
@@ -142,22 +119,23 @@ async def lifespan(app: FastAPI):
             try:
                 async with get_sessionmaker()() as session:
                     result = await session.execute(
-                        text(
-                            "SELECT COUNT(*) FROM pinecone_sync_queue "
-                            "WHERE status = 'pending'"
-                        )
+                        text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
             except Exception as exc:
                 structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed"
-                    " — metric stale",
+                    "gauge_updater: pinecone_sync_queue depth read failed — metric stale",
                     error=str(exc),
                 )
             await asyncio.sleep(15)
 
     _gauge_task = asyncio.create_task(_update_gauges())
     yield
+    _worker_task.cancel()
+    try:
+        await _worker_task
+    except asyncio.CancelledError:
+        pass
     _gauge_task.cancel()
     provider.force_flush()
 
@@ -168,17 +146,11 @@ def create_app() -> FastAPI:
     # Prometheus — expose /metrics endpoint
     Instrumentator().instrument(app).expose(app)
 
-    # Inngest — registers POST /api/inngest for Dev Server
-    inngest.fast_api.serve(
-        app, get_inngest_client(), [process_message, sync_pinecone_queue]
-    )
-
     # Exception handlers
     app.add_exception_handler(
         TwilioSignatureInvalid,
         twilio_signature_invalid_handler,
     )
-    app.add_exception_handler(EarlyReturn, early_return_handler)
 
     # Routers
     app.include_router(sms_router)

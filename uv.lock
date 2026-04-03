@@ -782,30 +782,6 @@ wheels = [
 ]
 
 [[package]]
-name = "inngest"
-version = "0.5.17"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "jcs" },
-    { name = "pydantic" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/36/8f/a74ee8e09c1d546ac07431dc071e059edd2c28931e7894bbff2e4ba3fcca/inngest-0.5.17.tar.gz", hash = "sha256:c6a0eaf34fe801c4b1e3324f0f51d2f4a97df03b9483f53c2720994572635edd", size = 94893, upload-time = "2026-03-03T16:53:41.213Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/81/3b6d8b9564fc046be61e300f2f597a040f34048736e2be27f212985c443d/inngest-0.5.17-py3-none-any.whl", hash = "sha256:6dd4d0b7ec42617d3ac9ace6abc2c5fdd3cc037ba0d2cb2d5a472f520b56e939", size = 143281, upload-time = "2026-03-03T16:53:39.564Z" },
-]
-
-[[package]]
-name = "jcs"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/47/e5/9d547f0d42ba00f68eec773aa7b2145e0c0335eb632cbaf519f480a429af/jcs-0.2.1.tar.gz", hash = "sha256:9f20360b2f3b0a410d65493b448f96306d80e37fb46283f3f4aa5db2c7c1472b", size = 6886, upload-time = "2022-04-10T14:41:24.904Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/d4/9a99bc15266a842bd14a1913afdb05182888ebab035666c1ce8a64537ca2/jcs-0.2.1-py3-none-any.whl", hash = "sha256:e23a3e1de60f832d33cd811bb9c3b3be79219cdf95f63b88f0972732c3fa8476", size = 7603, upload-time = "2022-04-10T14:41:23.207Z" },
-]
-
-[[package]]
 name = "jiter"
 version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1045,6 +1021,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0c/f7/addf1087b860ac60e6f382240f64fb99f8bfb532bb06f7c542b83c29ca61/multidict-6.7.1-cp314-cp314t-win_amd64.whl", hash = "sha256:497bde6223c212ba11d462853cfa4f0ae6ef97465033e7dc9940cdb3ab5b48e5", size = 53542, upload-time = "2026-01-26T02:46:08.809Z" },
     { url = "https://files.pythonhosted.org/packages/4c/81/4629d0aa32302ef7b2ec65c75a728cc5ff4fa410c50096174c1632e70b3e/multidict-6.7.1-cp314-cp314t-win_arm64.whl", hash = "sha256:2bbd113e0d4af5db41d5ebfe9ccaff89de2120578164f86a5d17d5a576d1e5b2", size = 44719, upload-time = "2026-01-26T02:46:11.146Z" },
     { url = "https://files.pythonhosted.org/packages/81/08/7036c080d7117f28a4af526d794aab6a84463126db031b007717c1a6676e/multidict-6.7.1-py3-none-any.whl", hash = "sha256:55d97cc6dae627efa6a6e548885712d4864b81110ac76fa4e534c03819fa4a56", size = 12319, upload-time = "2026-01-26T02:46:44.004Z" },
+]
+
+[[package]]
+name = "nexus-rpc"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/35/d5/cd1ffb202b76ebc1b33c1332a3416e55a39929006982adc2b1eb069aaa9b/nexus_rpc-1.4.0.tar.gz", hash = "sha256:3b8b373d4865671789cc43623e3dc0bcbf192562e40e13727e17f1c149050fba", size = 82367, upload-time = "2026-02-25T22:01:34.053Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/52/6327a5f4fda01207205038a106a99848a41c83e933cd23ea2cab3d2ebc6c/nexus_rpc-1.4.0-py3-none-any.whl", hash = "sha256:14c953d3519113f8ccec533a9efdb6b10c28afef75d11cdd6d422640c40b3a49", size = 29645, upload-time = "2026-02-25T22:01:33.122Z" },
 ]
 
 [[package]]
@@ -1936,6 +1924,25 @@ wheels = [
 ]
 
 [[package]]
+name = "temporalio"
+version = "1.24.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nexus-rpc" },
+    { name = "protobuf" },
+    { name = "types-protobuf" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a7/b1/7d9b3104ab7994e7d49e765b92495aaff44810b1e066c874c284a93ebd55/temporalio-1.24.0.tar.gz", hash = "sha256:e534e2e71b4a721193ec4ff3dae521146d093554bd47a64f5605d4ca33e56718", size = 2040485, upload-time = "2026-03-23T15:33:33.638Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/a9/30517c21d6155bce1c3dc0e420db48da0231230dbc683f40ab6d5fe22b37/temporalio-1.24.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7f11e7b4f4d09bafba499b43188353e23dc128b1fe3f3160014476e3dce70760", size = 12223918, upload-time = "2026-03-23T15:33:05.045Z" },
+    { url = "https://files.pythonhosted.org/packages/73/d0/11aa103bde794524008c1850a84e06cde98698395ca1f8b12e1bd2390aa8/temporalio-1.24.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:5cff75a0ca922575b808a7fca1b0de38f6eea061f49e026664b8be9d5bb06ab8", size = 11708887, upload-time = "2026-03-23T15:33:11.67Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/f4/774b56100e6bb94e3757ec96fb5c2bc62d42defc7d6de0ee35a12273827a/temporalio-1.24.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ee7c13b6724dd0c304aa846aecf6da72a8550f4ade40a0a7f6dcc1c92ef35710", size = 12028303, upload-time = "2026-03-23T15:33:18.022Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/91/c05d0e9c2432fe8b1ea0d6fae321866ee49a320ad5e494e6ec9424ca5c28/temporalio-1.24.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:aa71b9bfa42f951dd04ade97ce7f92ecedee8903047b4b41b122bb8cbd87a337", size = 12375155, upload-time = "2026-03-23T15:33:24.234Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/97/5c939e4609c164c8690a3b5a135eb828d531de8ef63ff447a2a439c0b0fb/temporalio-1.24.0-cp310-abi3-win_amd64.whl", hash = "sha256:52f6833647eceddbebcc376e2ea663a9f73b2b3a42675f503aeb27c98fd4daeb", size = 12720174, upload-time = "2026-03-23T15:33:30.826Z" },
+]
+
+[[package]]
 name = "tenacity"
 version = "9.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1978,6 +1985,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1c/a1/44cd8604eb69b1c5e7c0f07f0e4305b1884a3b75e23eb8d89350fe7bb982/twilio-9.10.2.tar.gz", hash = "sha256:f17d778870a7419a7278d5747b0e80a1c89e6f5ab14acf5456a004f8f2016bfa", size = 1618748, upload-time = "2026-02-18T04:40:44.279Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/ac/e1937f70544075f896bfcd6b23fa7c15cad945e4598bcfa7017b7c120ad8/twilio-9.10.2-py2.py3-none-any.whl", hash = "sha256:8722bb59bacf31fab5725d6f5d3fac2224265c669d38f653f53179165533da43", size = 2256481, upload-time = "2026-02-18T04:40:42.226Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "7.34.1.20260402"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/40/43/19261b537cfc8db9f39f92b31dba961462a034412aafafa630aa54191db7/types_protobuf-7.34.1.20260402.tar.gz", hash = "sha256:7270594b4bc28dfe85602d97849b28a2fe7905d77b1d91b418924ed6f83f857c", size = 68767, upload-time = "2026-04-02T04:18:25.025Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/34/9bc4fcb26be938a4d678a1e5364e6a6b36e84c1d9b6aaf4d6bb5082ad86a/types_protobuf-7.34.1.20260402-py3-none-any.whl", hash = "sha256:5a1094907ca0d19202f7bca6db06ff69779873db695ddd73f2dde718cd8df1fa", size = 86007, upload-time = "2026-04-02T04:18:23.673Z" },
 ]
 
 [[package]]
@@ -2076,7 +2092,6 @@ dependencies = [
     { name = "braintrust" },
     { name = "fastapi" },
     { name = "greenlet" },
-    { name = "inngest" },
     { name = "openai" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
@@ -2091,6 +2106,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "sqlmodel" },
     { name = "structlog" },
+    { name = "temporalio" },
     { name = "tenacity" },
     { name = "twilio" },
     { name = "uvicorn", extra = ["standard"] },
@@ -2113,7 +2129,6 @@ requires-dist = [
     { name = "braintrust", specifier = ">=0.0.100" },
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "greenlet", specifier = ">=3.3.2" },
-    { name = "inngest", specifier = ">=0.5.17" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "opentelemetry-api", specifier = ">=1.40.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.40.0" },
@@ -2128,6 +2143,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "sqlmodel", specifier = ">=0.0.37" },
     { name = "structlog", specifier = ">=25.5.0" },
+    { name = "temporalio", specifier = ">=1.24.0" },
     { name = "tenacity", specifier = ">=8.0.0" },
     { name = "twilio", specifier = ">=9.10.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },

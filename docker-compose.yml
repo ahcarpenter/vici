@@ -66,11 +66,12 @@ services:
         condition: service_healthy
       jaeger-collector:
         condition: service_started
+      temporal:
+        condition: service_healthy
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://vici:vici@postgres:5432/vici
-      INNGEST_DEV: "1"
-      INNGEST_BASE_URL: http://inngest:8288
+      TEMPORAL_ADDRESS: temporal:7233
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger-collector:4317
       OTEL_SERVICE_NAME: vici
       WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:8000}
@@ -82,13 +83,34 @@ services:
     command: >
       sh -c "uv run alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
 
-  inngest:
-    image: inngest/inngest:latest
-    command: "inngest dev -u ${INNGEST_APP_URL:-http://app:8000}/api/inngest"
+  temporal:
+    image: temporalio/auto-setup:1.26.2
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=postgres
     ports:
-      - "8288:8288"
+      - "7233:7233"
     depends_on:
-      - app
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    ports:
+      - "8080:8080"
+    depends_on:
+      - temporal
 
   prometheus:
     image: prom/prometheus:v3.1.0

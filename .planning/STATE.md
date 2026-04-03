@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02.8.1-01-PLAN.md
-last_updated: "2026-04-02T23:16:19.580Z"
-last_activity: 2026-04-02
+status: planning
+stopped_at: Completed 02.9-01-PLAN.md
+last_updated: "2026-04-03T02:38:16.975Z"
+last_activity: "2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere"
 progress:
-  total_phases: 13
-  completed_phases: 10
-  total_plans: 24
-  completed_plans: 24
+  total_phases: 11
+  completed_phases: 8
+  total_plans: 21
+  completed_plans: 21
   percent: 78
 ---
 
@@ -21,16 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
-**Current focus:** Phase 02.8.1 — refactor-the-code-as-appropriate-taking-solid-principles-into-account
+**Current focus:** Phase 3 — Earnings Math Matching (next to execute)
 
 ## Current Position
 
-Phase: 03
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-02
+Phase: Phase 3 — Earnings Math Matching (not yet started)
+Status: Ready to plan/execute Phase 3
+Last activity: 2026-03-08 - Completed quick task 2: make sure any strings with url's that could change across envs i.e. production v staging v dev, are extraced out into the .env file, and in turn have string interpolation used elsewhere
 
-Progress: [████████░░] 78% (7 of 8 phases complete, all 19 plans complete)
+Progress: [████████░░] 78% (7 of 9 phases complete, all 19 plans complete)
 
 ## What's Built
 
@@ -138,25 +137,18 @@ Recent decisions affecting current work:
 - [Phase 02.6-01]: STACK.md and ARCHITECTURE.md now reflect the actual built system (Phases 01–02.5) with 0 pgvector references, 2026-03-08 date, HIGH confidence sourced from STATE.md/PROJECT.md/REQUIREMENTS.md
 - [Phase 02.6]: FEATURES.md and PITFALLS.md patched with accurate ✅/⏳ status, Phase 3/4 forward-looking content, 8 new implementation pitfalls, zero pgvector references
 - [Phase 02.7-01]: README links to .env.example via explicit cp command; migrations step marked optional when using Docker
-- [Phase 02.8]: UserRepository owns user upsert; MessageRepository no longer calls user logic (D-08)
-- [Phase 02.8]: EarlyReturn base exception short-circuits Twilio webhook to HTTP 200; avoids Twilio retries on 4xx
-- [Phase 02.8]: check_idempotency wraps SELECT in session.begin() to prevent autobegin leak blocking downstream begin() calls
-- [Phase 02.8.1]: Chain of Responsibility handler pattern for PipelineOrchestrator — new message types require only new handler file + registration in main.py (OCP)
-- [Phase 02.8.1]: BaseRepository Template Method for _persist() — 4 repos share single flush implementation (DRY)
+- [Phase 02.9]: Replaced Inngest with Temporal: activities + workflows + worker in src/temporal/, RPCError for cron idempotency
 
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Apply revised 3NF schema (URGENT)
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
-- Phase 02.8.1 inserted after Phase 02.8: refactor the code as appropriate taking SOLID principles into account (URGENT)
 - Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 (URGENT)
 - Phase 02.4 inserted after Phase 2: Ensure Prometheus is setup (URGENT)
 - Phase 02.2 removed: consolidated into Phase 02.4
 - Phase 02.5 inserted after Phase 02.4: Production hardening to staff engineer standards (INSERTED)
 - Phase 02.6 inserted after Phase 2: Ensure research docs are current (URGENT)
 - Phase 02.7 inserted after Phase 2: flesh out the README.md to also include instructions for getting setup locally (URGENT)
-- Phase 02.8 inserted after Phase 2: review all existing code, and refactor being sure to take CLAUDE.md (INSERTED)
-- Phase 02.8 inserted after Phase 2: review all existing code and refactor taking into account the standards in .claude/AGENTS.md (URGENT)
 
 ### Pending Todos
 
@@ -176,7 +168,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T23:13:44.418Z
-Stopped at: Completed 02.8.1-01-PLAN.md
+Last session: 2026-04-03T02:38:16.972Z
+Stopped at: Completed 02.9-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 3` or `/gsd:execute-phase 3`

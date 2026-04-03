@@ -1,11 +1,11 @@
-from functools import lru_cache
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import inngest
 import structlog
 from opentelemetry import trace as otel_trace
 from sqlalchemy import text
 from sqlmodel import select
+from temporalio import activity
 
 from src.config import get_settings
 from src.database import get_sessionmaker
@@ -18,55 +18,33 @@ tracer = otel_trace.get_tracer(__name__)
 if TYPE_CHECKING:
     from src.extraction.orchestrator import PipelineOrchestrator
 
-# Module-level singletons set by lifespan in main.py
+# Module-level singletons set by worker.run_worker() before the worker starts
 _orchestrator: "PipelineOrchestrator | None" = None
 _openai_client = None
 
 
-@lru_cache(maxsize=1)
-def get_inngest_client() -> inngest.Inngest:
-    settings = get_settings()
-    return inngest.Inngest(
-        app_id="vici",
-        is_production=not settings.inngest_dev,
-        event_api_base_url=settings.inngest_base_url,
-    )
+@dataclass
+class ProcessMessageInput:
+    message_sid: str
+    from_number: str
+    body: str
 
 
-async def _handle_process_message_failure(ctx: inngest.Context) -> None:
-    """Called by Inngest after retries exhausted. Logs error and increments counter."""
+@activity.defn
+async def process_message_activity(input: ProcessMessageInput) -> str:
+    """Wire SMS body through PipelineOrchestrator."""
     logger = structlog.get_logger()
-    logger.error(
-        "process_message: permanent failure after retries exhausted",
-        message_sid=ctx.event.data.get("message_sid"),
-        attempt=ctx.attempt,
-    )
-    from src.metrics import pipeline_failures_total
-
-    pipeline_failures_total.labels(function="process-message").inc()
-
-
-@get_inngest_client().create_function(
-    fn_id="process-message",
-    trigger=inngest.TriggerEvent(event="message.received"),
-    retries=3,
-    on_failure=_handle_process_message_failure,
-)
-async def process_message(ctx: inngest.Context) -> str:
-    """Wire SMS body through PipelineOrchestrator; orchestrator owns pipeline logic."""
-    logger = structlog.get_logger()
-    data = ctx.event.data
-    message_sid: str = data.get("message_sid", "")
-    from_number: str = data.get("from_number", "")
-    body: str = data.get("body", "")
+    message_sid = input.message_sid
+    from_number = input.from_number
+    body = input.body
 
     logger.info("message.received consumed", message_sid=message_sid)
 
     phone_hash = hash_phone(from_number)
 
-    with tracer.start_as_current_span("inngest.process_message") as span:
-        span.set_attribute("inngest.event", "message.received")
-        span.set_attribute("inngest.function", "process-message")
+    with tracer.start_as_current_span("temporal.process_message") as span:
+        span.set_attribute("temporal.event", "message.received")
+        span.set_attribute("temporal.function", "process-message")
 
         # Resolve message_id and user_id from the DB row written by the webhook handler
         async with get_sessionmaker()() as session:
@@ -98,11 +76,23 @@ async def process_message(ctx: inngest.Context) -> str:
     return "ok"
 
 
-@get_inngest_client().create_function(
-    fn_id="sync-pinecone-queue",
-    trigger=inngest.TriggerCron(cron="*/5 * * * *"),
-)
-async def sync_pinecone_queue(ctx: inngest.Context) -> str:
+@activity.defn
+async def handle_process_message_failure_activity(
+    input: ProcessMessageInput,
+) -> None:
+    """Called after retries are exhausted. Logs error and increments failure counter."""
+    logger = structlog.get_logger()
+    logger.error(
+        "process_message: permanent failure after retries exhausted",
+        message_sid=input.message_sid,
+    )
+    from src.metrics import pipeline_failures_total
+
+    pipeline_failures_total.labels(function="process-message").inc()
+
+
+@activity.defn
+async def sync_pinecone_queue_activity() -> str:
     """Sweeps pinecone_sync_queue for pending rows and upserts to Pinecone."""
     logger = structlog.get_logger()
     logger.info("sync-pinecone-queue: starting sweep")
@@ -110,11 +100,8 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
     async with get_sessionmaker()() as session:
         result = await session.execute(
             text(
-                "SELECT q.id, q.job_id, j.description, u.phone_hash "
-                "FROM pinecone_sync_queue q "
-                "JOIN job j ON j.id = q.job_id "
-                "JOIN \"user\" u ON u.id = j.user_id "
-                "WHERE q.status = 'pending' LIMIT 50"
+                "SELECT id, job_id, description, phone_hash "
+                "FROM pinecone_sync_queue WHERE status = 'pending' LIMIT 50"
             )
         )
         rows = result.mappings().all()
@@ -147,8 +134,8 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
             async with get_sessionmaker()() as session:
                 await session.execute(
                     text(
-                        "UPDATE pinecone_sync_queue "
-                        "SET status='failed', attempts=attempts+1 WHERE id=:id"
+                        "UPDATE pinecone_sync_queue SET status='failed', "
+                        "retry_count=retry_count+1 WHERE id=:id"
                     ),
                     {"id": row["id"]},
                 )

@@ -1,4 +1,4 @@
-"""Tests for production hardening: pipeline_failures_total, Inngest retry config, gauge updater logging."""
+"""Tests for production hardening: pipeline_failures_total, Temporal retry config, gauge updater logging."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,43 +21,31 @@ def test_pipeline_failures_total_importable():
 
 @pytest.mark.asyncio
 async def test_on_failure_handler_increments_counter():
-    """After calling _handle_process_message_failure, counter increments by 1."""
-    from src.inngest_client import _handle_process_message_failure
+    """After calling handle_process_message_failure_activity, counter increments by 1."""
     from src.metrics import pipeline_failures_total
+    from src.temporal.activities import (
+        ProcessMessageInput,
+        handle_process_message_failure_activity,
+    )
 
-    # Read current value before
     before = pipeline_failures_total.labels(function="process-message")._value.get()
 
-    # Build a minimal Inngest context stub
-    event = MagicMock()
-    event.data = {"message_sid": "SMtest123"}
-    ctx = MagicMock()
-    ctx.event = event
-    ctx.attempt = 3
-
-    await _handle_process_message_failure(ctx)
+    inp = ProcessMessageInput(
+        message_sid="SMtest123", from_number="+15551234567", body="test"
+    )
+    await handle_process_message_failure_activity(inp)
 
     after = pipeline_failures_total.labels(function="process-message")._value.get()
     assert after == before + 1
 
 
-# ── Test 3: process_message has retries=3 in its inngest config ───────────────
+# ── Test 3: ProcessMessageWorkflow has maximum_attempts=4 retry policy ───────
 
-def test_process_message_has_retries_3():
-    """process_message function decorator has retries=3."""
-    from src.inngest_client import process_message
+def test_process_message_workflow_retry_policy():
+    """ProcessMessageWorkflow uses a retry policy with 4 maximum attempts."""
+    from src.temporal.workflows import PROCESS_MESSAGE_RETRY
 
-    # Inngest Function stores its opts in various attributes; check retries
-    # The function is wrapped by inngest; inspect the opts object
-    fn = process_message
-    # inngest.Function stores config as fn._opts or fn.opts
-    retries = None
-    if hasattr(fn, "_opts"):
-        retries = getattr(fn._opts, "retries", None)
-    elif hasattr(fn, "opts"):
-        retries = getattr(fn.opts, "retries", None)
-
-    assert retries == 3, f"Expected retries=3, got {retries}. Check process_message decorator."
+    assert PROCESS_MESSAGE_RETRY.maximum_attempts == 4
 
 
 # ── Test 4: _update_gauges calls structlog warning, not bare pass ─────────────

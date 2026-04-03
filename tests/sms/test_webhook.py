@@ -138,17 +138,14 @@ async def test_phone_created_at(
     assert row.created_at is not None
 
 
-async def test_inngest_event_emitted(
+async def test_temporal_workflow_started(
     client: AsyncClient,
     mock_twilio_validator,
-    mock_inngest_client,
+    _auto_mock_temporal_client,
 ):
-    form = {**VALID_FORM, "MessageSid": "SM_inngest_001"}
+    form = {**VALID_FORM, "MessageSid": "SM_temporal_001"}
     response = await client.post("/webhook/sms", data=form, headers=HEADERS)
     assert response.status_code == 200
-    mock_inngest_client.assert_called_once()
-    # Verify the event passed to send() has the right name and data
-    call_args = mock_inngest_client.call_args
-    event = call_args.args[0]  # first positional arg to send()
-    assert event.name == "message.received"
-    assert event.data["message_sid"] == "SM_inngest_001"
+    _auto_mock_temporal_client.start_workflow.assert_called_once()
+    call_kwargs = _auto_mock_temporal_client.start_workflow.call_args.kwargs
+    assert call_kwargs["id"] == "process-message-SM_temporal_001"

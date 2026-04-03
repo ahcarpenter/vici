@@ -5,7 +5,6 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.inngest_client import get_inngest_client
 from src.sms import service as sms_service
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.dependencies import enforce_rate_limit
@@ -42,7 +41,7 @@ async def receive_sms(
         )
 
     await sms_service.emit_message_received_event(
-        get_inngest_client(), message_sid, from_number, body
+        request.app.state.temporal_client, message_sid, from_number, body
     )
 
     return Response(content=EMPTY_TWIML, media_type="text/xml")
