@@ -67,6 +67,16 @@ Plans:
 - [x] 02-03-PLAN.md — AuditLogRepository, raw GPT response storage, Inngest event integration tests
 
 
+### Phase 02.10: be sure the temporal flows leverage distributed tracing via jaeger (INSERTED)
+
+**Goal:** Wire Temporal's built-in OTel TracingInterceptor so that workflow and activity execution produces spans in Jaeger, with manual spans for sync_pinecone_queue_activity
+**Requirements**: TRACING-01, TRACING-02, TRACING-03
+**Depends on:** Phase 02.9
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02.10-01-PLAN.md — Wire TracingInterceptor on get_temporal_client, add manual span to sync_pinecone_queue_activity, add tests
+
 ### Phase 02.9: refactor the existing code to ensure temporal is being leveraged as opposed to inngest (INSERTED)
 
 **Goal:** Replace all Inngest usage with Temporal so the app no longer depends on Inngest infrastructure. The observable behavior (SMS processing pipeline, Pinecone sync cron) must remain identical.
