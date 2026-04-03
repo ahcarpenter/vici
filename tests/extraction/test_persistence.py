@@ -50,7 +50,6 @@ async def test_job_persistence(async_session, user_and_message):
     user, msg = user_and_message
 
     job_create = JobCreate(
-        user_id=user.id,
         message_id=msg.id,
         description="Need a mover for Saturday",
         location="downtown Chicago",
@@ -64,7 +63,6 @@ async def test_job_persistence(async_session, user_and_message):
     assert job.id is not None
     assert job.description == "Need a mover for Saturday"
     assert job.pay_type == "hourly"
-    assert job.user_id == user.id
     assert job.message_id == msg.id
 
 
@@ -83,7 +81,6 @@ async def test_worker_persistence(async_session, user_and_message):
     await async_session.flush()
 
     wr_create = WorkRequestCreate(
-        user_id=user.id,
         message_id=msg2.id,
         target_earnings=200.0,
         target_timeframe="today",
@@ -94,5 +91,4 @@ async def test_worker_persistence(async_session, user_and_message):
     assert wr.id is not None
     assert wr.target_earnings == 200.0
     assert wr.target_timeframe == "today"
-    assert wr.user_id == user.id
     assert wr.message_id == msg2.id
