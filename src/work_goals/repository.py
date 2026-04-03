@@ -12,7 +12,6 @@ class WorkGoalRepository(BaseRepository):
         self, session: AsyncSession, wg_create: WorkGoalCreate
     ) -> WorkGoal:
         wg = WorkGoal(
-            user_id=wg_create.user_id,
             message_id=wg_create.message_id,
             target_earnings=wg_create.target_earnings,
             target_timeframe=wg_create.target_timeframe,
