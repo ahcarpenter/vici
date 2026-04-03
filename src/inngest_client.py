@@ -42,6 +42,7 @@ async def _handle_process_message_failure(ctx: inngest.Context) -> None:
         attempt=ctx.attempt,
     )
     from src.metrics import pipeline_failures_total
+
     pipeline_failures_total.labels(function="process-message").inc()
 
 
@@ -109,9 +110,11 @@ async def sync_pinecone_queue(ctx: inngest.Context) -> str:
     async with get_sessionmaker()() as session:
         result = await session.execute(
             text(
-                "SELECT id, job_id, description, phone_hash "
-                "FROM pinecone_sync_queue "
-                "WHERE status = 'pending' LIMIT 50"
+                "SELECT q.id, q.job_id, j.description, u.phone_hash "
+                "FROM pinecone_sync_queue q "
+                "JOIN job j ON j.id = q.job_id "
+                "JOIN \"user\" u ON u.id = j.user_id "
+                "WHERE q.status = 'pending' LIMIT 50"
             )
         )
         rows = result.mappings().all()

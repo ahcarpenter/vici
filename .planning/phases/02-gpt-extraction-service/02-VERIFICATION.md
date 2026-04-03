@@ -15,6 +15,8 @@ human_verification:
   - test: "Send a POST to /sms/incoming with a valid Twilio webhook payload for an unclassifiable message"
     expected: "Inngest fires process_message, ExtractionService returns unknown, Twilio outbound SMS is sent to the originating number containing UNKNOWN_REPLY_TEXT"
     why_human: "The full webhook->Inngest->ExtractionService->Twilio path requires a live Inngest Dev Server, real DB rows, and Twilio credentials. All unit-level wiring is confirmed but end-to-end runtime has not been exercised."
+    result: pass
+    verified: 2026-04-02
 ---
 
 # Phase 2: GPT Extraction Service Verification Report
