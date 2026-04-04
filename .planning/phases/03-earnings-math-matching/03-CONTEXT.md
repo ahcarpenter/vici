@@ -29,6 +29,7 @@ Total earnings per job:
   - Secondary objective: among all subsets that meet or approach the goal, minimize total `estimated_duration_hours`
 - **D-05:** If the full candidate set cannot reach `target_earnings`, return the subset that gets as close as possible (maximize earnings from available jobs) — never return an empty result when jobs exist
 - **D-06:** The DP operates over all available jobs (not capped pre-algorithm); NULL-field jobs are excluded from candidates before DP runs
+- **D-06a:** The candidate query must be written to filter on `job.status = 'available'` once a status column exists. The `Job` model does not yet have a status field — the planner should add it (`available` | `accepted` | `in_progress` | `completed`, default `available`) as part of this phase so the DP filter is wired correctly from the start rather than retrofitted
 
 ### NULL field policy
 - **D-04:** Jobs with NULL `pay_rate` or NULL `estimated_duration_hours` are excluded from results
@@ -112,6 +113,8 @@ No external spec documents for this phase — requirements are fully captured in
 - **Phone number privacy proxy** — Job poster's phone number appears in SMS replies in Phase 3 as-is. A proxy/masking layer (e.g., Twilio Proxy or a short alias) should be added before production to protect poster privacy. Add as a backlog todo.
 - **Follow-up clarification flow** — When a job has `pay_type='unknown'` or missing fields, send a follow-up SMS to the job poster requesting the missing info. This is a multi-turn conversation concern; deferred to a future phase.
 - **New-job follow-up notifications** — When a worker's goal was partially or fully unmet at match time, re-run the DP match when new jobs are posted and notify the worker via SMS if the new set better meets their goal. Requires a background trigger on job creation; deferred to a future phase (TODO captured).
+- **Job lifecycle status** — Jobs need a status field (`available` → `accepted` → `in_progress` → `completed`). Workers and posters should be able to transition status via SMS conversation flow. DP matching must exclude jobs that are `in_progress` or `completed`. Phase 3's candidate query should be written to filter on `status = 'available'` once the column exists — add the filter as a no-op stub or schema note so Phase 4+ can wire it cleanly. (TODO captured)
+- **Dual-party status updates** — Both the job poster and any worker with a confirmed match can mark a job as `in_progress` or `completed` via SMS. If the worker initiates the transition, send a verification SMS to the poster to confirm accuracy. Disputed transitions escalate to a customer support flow. Deferred to a future phase (TODO captured).
 
 </deferred>
 
