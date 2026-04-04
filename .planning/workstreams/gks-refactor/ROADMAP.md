@@ -57,10 +57,12 @@ Plans:
   2. Temporal UI is accessible within the cluster and shows registered namespaces
   3. A test workflow can be started and completed via `temporal-frontend.temporal.svc.cluster.local:7233`
   4. OpenSearch is healthy and Temporal workflow visibility search returns results
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md — Deploy OpenSearch single-node in observability namespace
+- [ ] 03-02-PLAN.md — Create Temporal schema migration Job and Temporal Helm release
+- [ ] 03-03-PLAN.md — Wire components into Pulumi entry point and verify deployment
 
 ### Phase 4: Observability Stack
 **Goal**: All application and infrastructure metrics, traces, and dashboards are operational so the first real request through the app generates observable telemetry
@@ -101,6 +103,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. GKE Cluster and Networking Baseline | 0/? | Not started | - |
 | 2. Database and Secrets Infrastructure | 0/? | Not started | - |
-| 3. Temporal In-Cluster | 0/? | Not started | - |
+| 3. Temporal In-Cluster | 0/3 | Planned | - |
 | 4. Observability Stack | 0/? | Not started | - |
 | 5. Application Deployment and CI/CD | 0/? | Not started | - |
