@@ -251,10 +251,10 @@ Plans:
   2. The SMS formatter produces a condensed ranked list of 3-5 jobs that fits within 160-character segment boundaries
   3. When no jobs match the worker goal, the system produces a graceful "no matches" reply message rather than an empty response
 **Status**: Not started
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: MatchService + JobRepository earnings math SQL query with explicit NULL handling, Python-level sort, SMS formatter, empty-match fallback
+- [ ] 03-01-PLAN.md — phone_e164 migration, job.status migration, DP MatchService, SMS formatter, MatchRepository, full test suite
 
 ### Phase 4: End-to-End Integration & Deployment
 **Goal**: The full message pipeline runs end-to-end through the Temporal `ProcessMessageWorkflow` — from SMS receipt through GPT extraction, storage, matching, and outbound Twilio SMS reply — and the system is deployed to Render.com with STOP/START compliance verified
@@ -266,7 +266,7 @@ Plans:
   3. Texting STOP or START results in the keyword being passed through to Twilio without the system attempting GPT classification or storage
   4. The Render.com deployment is live and reachable; Temporal workflows are registered and processing events
 **Status**: Not started
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 04-01: Temporal `ProcessMessageWorkflow` fully wired (matching + SMS reply + poster confirmation + STOP/START pass-through)
