@@ -1,6 +1,7 @@
 import structlog
 
 from src.matches.schemas import JobCandidate, MatchResult
+from src.money import cents_to_dollars
 
 SMS_SEGMENT_CHARS = 160
 MAX_JOBS_IN_SMS = 5
@@ -26,8 +27,9 @@ def format_match_sms(result: MatchResult) -> str:
         lines.append(line)
 
     if result.is_partial:
-        target = result.work_goal.target_earnings
-        lines.append(f"Best available: ${result.total_earnings:.0f} of ${target:.0f} goal")
+        earned = cents_to_dollars(result.total_earnings)
+        goal = cents_to_dollars(result.work_goal.target_earnings)
+        lines.append(f"Best available: ${earned:.0f} of ${goal:.0f} goal")
 
     text = "\n".join(lines)
 
@@ -47,4 +49,4 @@ def _format_job_line(rank: int, cand: JobCandidate) -> str:
     loc = (cand.job.location or "?")[:20]
     phone = cand.poster_phone or "N/A"
     dur_str = f"{cand.duration:.1f}h" if cand.duration else "flat"
-    return f"{rank}. {desc} @ {loc} | ${cand.earnings:.0f}/{dur_str} | {phone}"
+    return f"{rank}. {desc} @ {loc} | ${cents_to_dollars(cand.earnings):.0f}/{dur_str} | {phone}"

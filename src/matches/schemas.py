@@ -10,7 +10,7 @@ class JobCandidate:
     """A job eligible for DP selection, with pre-computed earnings and poster phone."""
 
     job: Job
-    earnings: float  # pay_rate * duration (hourly) or pay_rate (flat)
+    earnings: int  # cents — pay_rate * duration (hourly) or pay_rate (flat)
     duration: float  # estimated_duration_hours; 0.0 for flat jobs with no duration
     poster_phone: Optional[str]  # User.phone_e164, may be None for legacy users
 
@@ -21,7 +21,7 @@ class MatchResult:
 
     jobs: list[JobCandidate]
     work_goal: WorkGoal
-    total_earnings: float
+    total_earnings: int  # cents
     is_partial: bool  # True when total_earnings < work_goal.target_earnings
 
     @property

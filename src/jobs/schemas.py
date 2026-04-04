@@ -8,7 +8,7 @@ class JobCreate(BaseModel):
     message_id: int = Field(gt=0)
     description: str = Field(min_length=1, max_length=1000)
     location: str = Field(min_length=1, max_length=255)
-    pay_rate: Optional[float] = Field(default=None, gt=0)
+    pay_rate: Optional[int] = Field(default=None, gt=0)
     pay_type: str = Field(default="unknown", min_length=1, max_length=50)
     estimated_duration_hours: Optional[float] = Field(default=None, gt=0)
     raw_duration_text: Optional[str] = Field(default=None, max_length=255)

@@ -4,6 +4,7 @@ from opentelemetry import trace as otel_trace
 from sqlalchemy import text as sa_text
 
 from src.extraction.schemas import ExtractionResult
+from src.money import dollars_to_cents
 from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_WORK_GOAL_USER_ID
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
@@ -36,7 +37,7 @@ class WorkerGoalHandler(MessageHandler):
         result = ctx.result
         wg_create = WorkGoalCreate(
             message_id=ctx.message_id,
-            target_earnings=result.work_goal.target_earnings,
+            target_earnings=dollars_to_cents(result.work_goal.target_earnings),
             target_timeframe=result.work_goal.target_timeframe,
             raw_sms=ctx.sms_text,
         )

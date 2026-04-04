@@ -118,7 +118,7 @@ async def test_dp_meets_goal(async_session, make_job, make_work_goal):
     result = await svc.match(async_session, goal)
 
     assert not result.is_partial
-    assert result.total_earnings >= 40.0
+    assert result.total_earnings >= 4000  # $40.00 in cents
     assert any(c.job.id == job.id for c in result.jobs)
 
 
@@ -136,7 +136,7 @@ async def test_dp_meets_goal_flat(async_session, make_job, make_work_goal):
     assert not result.is_partial
     selected = [c for c in result.jobs if c.job.id == job.id]
     assert len(selected) == 1
-    assert selected[0].earnings == 200.0
+    assert selected[0].earnings == 20000  # $200.00 in cents
 
 
 @pytest.mark.asyncio
@@ -276,8 +276,8 @@ async def test_sms_format_empty():
     """Empty match returns graceful no-matches string (D-13)."""
     from src.work_goals.models import WorkGoal
 
-    wg = WorkGoal(id=1, message_id=1, target_earnings=100.0)
-    result = MatchResult(jobs=[], work_goal=wg, total_earnings=0.0, is_partial=True)
+    wg = WorkGoal(id=1, message_id=1, target_earnings=10000)  # $100.00 in cents
+    result = MatchResult(jobs=[], work_goal=wg, total_earnings=0, is_partial=True)
     sms = format_match_sms(result)
     assert len(sms) > 0
     assert "No matching" in sms

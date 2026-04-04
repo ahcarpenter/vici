@@ -31,7 +31,10 @@ class Job(SQLModel, table=True):
     )
     description: Optional[str] = None
     location: Optional[str] = None
-    pay_rate: Optional[float] = None
+    pay_rate: Optional[int] = Field(
+        default=None,
+        sa_column=sa.Column(sa.Integer, nullable=True),
+    )
     pay_type: str = Field(default="unknown")
     estimated_duration_hours: Optional[float] = None
     raw_duration_text: Optional[str] = None

@@ -32,7 +32,7 @@ class MatchService:
 
             if not raw_jobs:
                 return MatchResult(
-                    jobs=[], work_goal=work_goal, total_earnings=0.0, is_partial=True
+                    jobs=[], work_goal=work_goal, total_earnings=0, is_partial=True
                 )
 
             candidates = await self._build_candidates(session, raw_jobs)
@@ -83,7 +83,7 @@ class MatchService:
             poster_phone = user.phone_e164 if user else None
 
             if job.pay_type == "hourly":
-                earnings = job.pay_rate * job.estimated_duration_hours
+                earnings = int(round(job.pay_rate * job.estimated_duration_hours))
                 duration = job.estimated_duration_hours
             else:  # flat
                 earnings = job.pay_rate
@@ -100,25 +100,21 @@ class MatchService:
         return candidates
 
     def _dp_select(
-        self, candidates: list[JobCandidate], target: float
+        self, candidates: list[JobCandidate], target: int
     ) -> list[JobCandidate]:
         """
         0/1 knapsack DP.
         Primary objective: maximize total earnings toward target.
         Secondary objective: minimize total duration among goal-meeting subsets.
 
-        Quantizes earnings to cents (int) to use integer DP.
-        Caps capacity at min(target_cents, max_achievable_cents) to bound memory.
+        Earnings are integer cents throughout — no quantization step needed.
 
         Returns list of selected JobCandidates (unordered -- caller sorts).
         """
         if not candidates:
             return []
 
-        SCALE = 100
-        target_cents = int(round(target * SCALE))
-        max_possible_cents = sum(int(round(c.earnings * SCALE)) for c in candidates)
-        capacity = max_possible_cents
+        capacity = sum(c.earnings for c in candidates)
 
         if capacity == 0:
             return []
@@ -130,13 +126,13 @@ class MatchService:
         keep = [[False] * (capacity + 1) for _ in range(n)]
 
         for i, cand in enumerate(candidates):
-            e_cents = int(round(cand.earnings * SCALE))
+            e = cand.earnings
             dur = cand.duration
-            for w in range(capacity, e_cents - 1, -1):
-                prev_e, prev_neg_d = dp[w - e_cents]
+            for w in range(capacity, e - 1, -1):
+                prev_e, prev_neg_d = dp[w - e]
                 if prev_e == NEG_INF:
                     continue
-                candidate_val = (prev_e + e_cents, prev_neg_d - dur)
+                candidate_val = (prev_e + e, prev_neg_d - dur)
                 if candidate_val > dp[w]:
                     dp[w] = candidate_val
                     keep[i][w] = True
@@ -152,7 +148,7 @@ class MatchService:
         for i in range(n - 1, -1, -1):
             if keep[i][w]:
                 selected.append(candidates[i])
-                w -= int(round(candidates[i].earnings * SCALE))
+                w -= candidates[i].earnings
                 if w < 0:
                     break
         return selected

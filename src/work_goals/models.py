@@ -23,7 +23,10 @@ class WorkGoal(SQLModel, table=True):
             unique=True,
         )
     )
-    target_earnings: float = Field(gt=0)
+    target_earnings: int = Field(
+        gt=0,
+        sa_column=sa.Column(sa.Integer, nullable=False),
+    )
     target_timeframe: Optional[str] = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

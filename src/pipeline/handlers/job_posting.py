@@ -15,6 +15,7 @@ from src.pipeline.constants import (
     OTEL_ATTR_DB_SYSTEM,
     OTEL_ATTR_DB_VECTOR_JOB_ID,
 )
+from src.money import dollars_to_cents
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
@@ -46,7 +47,7 @@ class JobPostingHandler(MessageHandler):
             message_id=ctx.message_id,
             description=result.job.description,
             location=result.job.location,
-            pay_rate=result.job.pay_rate,
+            pay_rate=dollars_to_cents(result.job.pay_rate) if result.job.pay_rate is not None else None,
             pay_type=result.job.pay_type,
             estimated_duration_hours=result.job.estimated_duration_hours,
             raw_duration_text=result.job.raw_duration_text,
