@@ -14,6 +14,10 @@ class Job(SQLModel, table=True):
             "estimated_duration_hours IS NULL OR estimated_duration_hours > 0",
             name="ck_job_estimated_duration_positive",
         ),
+        CheckConstraint(
+            "status IN ('available', 'accepted', 'in_progress', 'completed')",
+            name="ck_job_status_valid",
+        ),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -38,6 +42,10 @@ class Job(SQLModel, table=True):
     raw_datetime_text: Optional[str] = None
     inferred_timezone: Optional[str] = None
     datetime_flexible: Optional[bool] = None
+    status: str = Field(
+        default="available",
+        sa_column=sa.Column(sa.String(), nullable=False, server_default="available"),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),
