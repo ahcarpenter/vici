@@ -118,12 +118,44 @@
 
 ## Traceability
 
-| REQ-ID | Phase |
-|--------|-------|
-| INFRA-01 – INFRA-07 | Phase 1 |
-| DB-01 – DB-05 | Phase 2 |
-| SECRETS-01 – SECRETS-05 | Phase 2 |
-| TEMPORAL-01 – TEMPORAL-06 | Phase 3 |
-| OBS-01 – OBS-05 | Phase 4 |
-| APP-01 – APP-06 | Phase 5 |
-| CD-01 – CD-05 | Phase 5 |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| INFRA-04 | Phase 1 | Pending |
+| INFRA-05 | Phase 1 | Pending |
+| INFRA-06 | Phase 1 | Pending |
+| INFRA-07 | Phase 1 | Pending |
+| DB-01 | Phase 2 | Pending |
+| DB-02 | Phase 2 | Pending |
+| DB-03 | Phase 2 | Pending |
+| DB-04 | Phase 2 | Pending |
+| DB-05 | Phase 2 | Pending |
+| SECRETS-01 | Phase 2 | Pending |
+| SECRETS-02 | Phase 2 | Pending |
+| SECRETS-03 | Phase 2 | Pending |
+| SECRETS-04 | Phase 2 | Pending |
+| SECRETS-05 | Phase 2 | Pending |
+| TEMPORAL-01 | Phase 3 | Pending |
+| TEMPORAL-02 | Phase 3 | Pending |
+| TEMPORAL-03 | Phase 3 | Pending |
+| TEMPORAL-04 | Phase 3 | Pending |
+| TEMPORAL-05 | Phase 3 | Pending |
+| TEMPORAL-06 | Phase 3 | Pending |
+| OBS-01 | Phase 4 | Pending |
+| OBS-02 | Phase 4 | Pending |
+| OBS-03 | Phase 4 | Pending |
+| OBS-04 | Phase 4 | Pending |
+| OBS-05 | Phase 4 | Pending |
+| APP-01 | Phase 5 | Pending |
+| APP-02 | Phase 5 | Pending |
+| APP-03 | Phase 5 | Pending |
+| APP-04 | Phase 5 | Pending |
+| APP-05 | Phase 5 | Pending |
+| APP-06 | Phase 5 | Pending |
+| CD-01 | Phase 5 | Pending |
+| CD-02 | Phase 5 | Pending |
+| CD-03 | Phase 5 | Pending |
+| CD-04 | Phase 5 | Pending |
+| CD-05 | Phase 5 | Pending |
