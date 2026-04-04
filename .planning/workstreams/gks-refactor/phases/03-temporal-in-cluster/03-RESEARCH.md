@@ -545,22 +545,16 @@ config:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Auth Proxy unix socket syntax for temporal-sql-tool**
-   - What we know: Auth Proxy creates sockets at `/cloudsql/<connection_name>`; `temporal-sql-tool` `--ep` normally takes a TCP host
-   - What's unclear: Whether postgres12 plugin supports `host=<socket_dir>` syntax or requires TCP
-   - Recommendation: Consider using Auth Proxy in TCP mode (`--port 5432` flag) to avoid unix socket complexity for the schema Job. This is a safe fallback — unix sockets are preferred for app pods but TCP mode works for Jobs.
+1. **Auth Proxy unix socket syntax for temporal-sql-tool** — RESOLVED
+   - **Resolution:** Use TCP mode for the Auth Proxy in the schema Job. `temporal-sql-tool --ep` takes a TCP `host:port`, not a unix socket path. Configure Auth Proxy with `--port=5432` and connect via `--ep localhost -p 5432`. This is safer, well-documented, and avoids unix socket path format ambiguity. The Temporal Helm release server pods also use TCP mode (`connectAddr: "127.0.0.1:5432"`).
 
-2. **Temporal Helm chart sidecar injection key**
-   - What we know: Existing `migration.py` uses `init_containers[].restart_policy = "Always"` for native sidecar
-   - What's unclear: The Temporal Helm chart manages its own pod specs; the correct `values.yaml` key for injecting sidecars (e.g., `server.sidecarContainers`, `server.additionalVolumes`, etc.) must be confirmed against the actual chart
-   - Recommendation: Read the chart's `values.yaml` via `helm show values temporal/temporal` before implementing
+2. **Temporal Helm chart sidecar injection key** — RESOLVED
+   - **Resolution:** The Temporal Helm chart (0.74.0) uses `server.sidecarContainers` to inject sidecar containers into all server component pods (frontend, history, matching, worker). This is a list of container specs appended to each server pod. Use this key to inject the Cloud SQL Auth Proxy sidecar with `--port=5432` TCP mode and `temporal_db_instance.connection_name`.
 
-3. **OpenSearch index template `number_of_replicas: 0`**
-   - What we know: Temporal creates the `temporal_visibility_v1` index on first startup; single-node OpenSearch requires `number_of_replicas: 0` to avoid yellow cluster state
-   - What's unclear: Whether Temporal's Helm chart exposes a values key for index settings, or whether a post-deploy index template API call is needed
-   - Recommendation: After deploying OpenSearch, apply an index template via a one-time K8s Job that sets `"number_of_replicas": 0` before Temporal starts (or configure via Temporal's dynamic config if available)
+3. **OpenSearch index template `number_of_replicas: 0`** — RESOLVED
+   - **Resolution:** Deliver the index template via a Kubernetes Job post-install hook in Plan 01. The Job uses `curlimages/curl:8.7.1` to POST an index template to OpenSearch that sets `number_of_replicas: 0` for all indices (`index_patterns: ["*"]`). This runs after OpenSearch is healthy and before Temporal creates its visibility index. Plan 01 already includes this Job (`opensearch-index-template`).
 
 ---
 
