@@ -11,6 +11,10 @@ from components.cluster import cluster  # noqa: F401 — registers cluster resou
 from components.identity import app_gsa, ci_push_sa, wi_binding  # noqa: F401
 from components.registry import registry, registry_url  # noqa: F401
 from components.namespaces import namespaces  # noqa: F401
+from components.database import app_db_instance, temporal_db_instance  # noqa: F401
+from components.iam import temporal_gsa, vici_app_ksa, temporal_app_ksa  # noqa: F401
+from components.secrets import eso_release, secret_stores, external_secrets  # noqa: F401
+from components.migration import migration_job  # noqa: F401
 
 # All pulumi.export() calls are in their respective component files.
 # Add cross-component exports here if needed in the future.
