@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 02.13: Refactor to AGENTS.md standards** - Fix DRY violations, rename files per domain conventions, extract SRP concerns (completed 2026-04-03)
 - [x] **Phase 02.13.1: Distributed tracing gap coverage** - OTel span coverage for orchestrator, handlers, router, activities; PII fix; semconv fix (completed 2026-04-03)
 - [x] **Phase 02.14: Normalize schema to 3NF** - Drop transitive user_id from Job/WorkGoal, fix rate_limit constraint, add audit_log check (completed 2026-04-03)
-- [x] **Phase 3: Earnings Math Matching** - Deterministic SQL matching query, ranked SMS formatter, and empty-match handling (completed 2026-04-04)
+- [ ] **Phase 3: Earnings Math Matching** - Deterministic SQL matching query, ranked SMS formatter, and empty-match handling
 - [ ] **Phase 4: End-to-End Integration & Deployment** - Temporal orchestration fully wired, outbound SMS replies, STOP/START compliance, and Render.com production deploy
 
 ## Phase Details
@@ -250,11 +250,11 @@ Plans:
   1. Given seeded job data, a worker goal query returns only jobs where `rate × estimated_duration >= target_earnings`, ordered by soonest available date then shortest duration
   2. The SMS formatter produces a condensed ranked list of 3-5 jobs that fits within 160-character segment boundaries
   3. When no jobs match the worker goal, the system produces a graceful "no matches" reply message rather than an empty response
-**Status**: Complete (2026-04-04)
-**Plans**: 1 plan
+**Status**: Not started
+**Plans**: TBD
 
 Plans:
-- [x] 03-01-PLAN.md — phone_e164 migration, job.status migration, DP MatchService, SMS formatter, MatchRepository, full test suite
+- [ ] 03-01: MatchService + JobRepository earnings math SQL query with explicit NULL handling, Python-level sort, SMS formatter, empty-match fallback
 
 ### Phase 4: End-to-End Integration & Deployment
 **Goal**: The full message pipeline runs end-to-end through the Temporal `ProcessMessageWorkflow` — from SMS receipt through GPT extraction, storage, matching, and outbound Twilio SMS reply — and the system is deployed to Render.com with STOP/START compliance verified
@@ -266,7 +266,7 @@ Plans:
   3. Texting STOP or START results in the keyword being passed through to Twilio without the system attempting GPT classification or storage
   4. The Render.com deployment is live and reachable; Temporal workflows are registered and processing events
 **Status**: Not started
-**Plans**: 1 plan
+**Plans**: TBD
 
 Plans:
 - [ ] 04-01: Temporal `ProcessMessageWorkflow` fully wired (matching + SMS reply + poster confirmation + STOP/START pass-through)
@@ -297,5 +297,5 @@ Plans:
 | 02.13. Refactor to AGENTS.md standards | 1/1 | Complete | 2026-04-03 |
 | 02.13.1. Distributed tracing gaps | 1/1 | Complete | 2026-04-03 |
 | 02.14. Normalize schema to 3NF | 1/1 | Complete | 2026-04-03 |
-| 3. Earnings Math Matching | 1/1 | Complete | 2026-04-04 |
+| 3. Earnings Math Matching | 0/1 | Not started | -- |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | -- |

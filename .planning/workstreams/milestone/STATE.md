@@ -2,17 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-active_workstream: gks-refactor
 status: executing
-stopped_at: Completed Phase 03 — earnings math matching verified
-last_updated: "2026-04-04T17:00:00.000Z"
-last_activity: 2026-04-04 -- Phase 03 verified complete
+stopped_at: Completed quick-260403-969
+last_updated: "2026-04-03T10:44:32.099Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 20
-  completed_phases: 19
-  total_plans: 32
-  completed_plans: 32
-  percent: 99
+  completed_phases: 17
+  total_plans: 31
+  completed_plans: 31
+  percent: 82
 ---
 
 # Project State
@@ -22,25 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
-**Current focus:** Phase 04 — End-to-End Integration & Deployment
+**Current focus:** Phase 02.13 — ruthlessly-refactor-this-codebase-where-appropriate-in-light-of-the-latest-revisions-to-agents-md
 
 ## Current Position
 
-Phase: 04 (end-to-end-integration-deployment) — NOT STARTED
-Plan: 0 of 2
-Status: Phase 03 complete — ready to plan Phase 04
-Last activity: 2026-04-04 -- Phase 03 verified complete
+Phase: 03
+Plan: Not started
+Status: Executing Phase 02.13
+Last activity: 2026-04-03
 
-Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
+Progress: [████████░░] 82% (13 of 15 phases complete, all 27 plans complete)
 
 ## What's Built
 
-The app is production-ready from the infrastructure and domain-logic perspective. Everything through earnings-math matching is implemented, tested, and hardened:
+The app is production-ready from the infrastructure and domain-logic perspective. Everything through extraction and storage is implemented, tested, and hardened:
 
 ### Complete
 
 - ✅ Async FastAPI skeleton, 5-gate Twilio webhook security chain
-- ✅ 3NF schema (User / Message / Job / WorkGoal / RateLimit / AuditLog / PineconeSyncQueue / Match)
+- ✅ 3NF schema (User / Message / Job / WorkGoal / RateLimit / AuditLog / PineconeSyncQueue)
 - ✅ gpt-5.3-chat-latest classify+extract via `beta.chat.completions.parse` (discriminated union)
 - ✅ PipelineOrchestrator: full pipeline (GPT → storage → Pinecone), single commit per branch
 - ✅ Pinecone embedding write with `text-embedding-3-small`; failed writes queued + retried via Temporal cron
@@ -49,10 +48,10 @@ The app is production-ready from the infrastructure and domain-logic perspective
 - ✅ Pipeline handler pattern (Chain of Responsibility): JobPostingHandler, WorkerGoalHandler, UnknownMessageHandler
 - ✅ Multi-stage Dockerfile (non-root, HEALTHCHECK), render.yaml Blueprint, GitHub Actions CI
 - ✅ Edge-case hardening: config validation, GPT None guard, rate limit rolling window, graceful shutdown
-- ✅ MatchService: 0/1 knapsack DP earnings matching, ranked SMS formatter, MatchRepository with savepoint idempotency (131 tests pass)
 
 ### Not Started
 
+- ⏳ Phase 3: MatchService (earnings math SQL, ranked SMS formatter, empty-match fallback)
 - ⏳ Phase 4: Outbound SMS for job posters and workers, STOP/START pass-through, Render.com deploy
 
 ## Architecture Snapshot
@@ -77,9 +76,9 @@ src/
 │   ├── activities.py          #   Activity implementations
 │   └── worker.py              #   Client (TracingInterceptor), worker, cron scheduling
 ├── jobs/                      # JobRepository, Job SQLModel
-├── work_goals/                # WorkGoalRepository, WorkGoal SQLModel
+├── work_goals/             # WorkGoalRepository, WorkGoal SQLModel
 ├── users/                     # UserRepository, User SQLModel
-└── matches/                   # MatchService, MatchRepository, formatter, schemas
+└── matches/                   # Match SQLModel (placeholder, Phase 3)
 ```
 
 **DI Graph (lifespan):**
@@ -158,9 +157,6 @@ Recent decisions affecting current work:
 - [Phase 02.13.1]: router.py enriches FastAPI auto-instrumented span via get_current_span() — no new span started
 - [Phase 02.14]: Removed transitive user_id from Job/WorkGoal; rate_limit uses rolling-window INSERT pattern
 - [Phase quick-260403-969]: Kept historical Inngest references in Phase 1/2 plan descriptions; only updated forward-looking references to Temporal
-- [Phase 03-01]: DP capacity uses max_possible_cents (not capped at target) to allow single items exceeding target to be selected
-- [Phase 03-01]: MatchRepository uses begin_nested() savepoint per insert for cross-dialect idempotency instead of full session rollback
-- [Phase 03-01]: make_user fixture uses incrementing counter for unique phone_hash to avoid UNIQUE constraint violations across multiple factory calls
 
 ### Roadmap Evolution
 
@@ -197,11 +193,12 @@ None.
 
 ### Blockers/Concerns
 
+- [Phase 3]: gpt-5.3-chat-latest model string should be verified against OpenAI model catalog before Phase 3 planning (can run `/gsd:research-phase 3` to confirm)
 - [Phase 4]: Render.com production deploy has not been executed yet — first deploy validation is part of Phase 4
 
 ## Session Continuity
 
-Last session: 2026-04-04T17:00:00.000Z
-Stopped at: Completed Phase 03 — earnings math matching verified
+Last session: 2026-04-04
+Stopped at: Session resumed, proceeding to execute Phase 03
 Resume file: None
-Next action: `/gsd:plan-phase 4` or `/gsd:execute-phase 4`
+Next action: `/gsd-execute-phase 3 --ws milestone`
