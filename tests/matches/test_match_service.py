@@ -14,7 +14,7 @@ import structlog.testing
 from src.jobs.repository import JobRepository
 from src.matches.formatter import format_match_sms
 from src.matches.repository import MatchRepository
-from src.matches.schemas import JobCandidate, MatchResult
+from src.matches.schemas import AvailableJob, MatchResult
 from src.matches.service import MatchService
 
 

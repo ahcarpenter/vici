@@ -8,7 +8,7 @@ from sqlmodel import select
 from src.jobs.models import Job
 from src.jobs.repository import JobRepository
 from src.matches.repository import MatchRepository
-from src.matches.schemas import JobCandidate, MatchResult
+from src.matches.schemas import AvailableJob, MatchResult
 from src.sms.models import Message
 from src.users.models import User
 from src.work_goals.models import WorkGoal
@@ -56,7 +56,7 @@ class MatchService:
 
     async def _build_candidates(
         self, session: AsyncSession, jobs: list[Job]
-    ) -> list[JobCandidate]:
+    ) -> list[AvailableJob]:
         """
         For each job, compute earnings and fetch poster phone via:
         job.message_id -> message.user_id -> user.phone_e164
@@ -90,7 +90,7 @@ class MatchService:
                 duration = job.estimated_duration_hours or 0.0
 
             candidates.append(
-                JobCandidate(
+                AvailableJob(
                     job=job,
                     earnings=earnings,
                     duration=duration,
@@ -100,8 +100,8 @@ class MatchService:
         return candidates
 
     def _dp_select(
-        self, candidates: list[JobCandidate], target: int
-    ) -> list[JobCandidate]:
+        self, candidates: list[AvailableJob], target: int
+    ) -> list[AvailableJob]:
         """
         0/1 knapsack DP.
         Primary objective: maximize total earnings toward target.
@@ -109,7 +109,7 @@ class MatchService:
 
         Earnings are integer cents throughout — no quantization step needed.
 
-        Returns list of selected JobCandidates (unordered -- caller sorts).
+        Returns list of selected AvailableJobs (unordered -- caller sorts).
         """
         if not candidates:
             return []
@@ -153,14 +153,14 @@ class MatchService:
                     break
         return selected
 
-    def _sort_results(self, candidates: list[JobCandidate]) -> list[JobCandidate]:
+    def _sort_results(self, candidates: list[AvailableJob]) -> list[AvailableJob]:
         """
         Sort by D-11/D-12: soonest ideal_datetime first, then shortest duration.
         NULL ideal_datetime sorts last (uses SENTINEL_DATETIME = datetime.max UTC).
         Normalize naive datetimes to UTC before comparison to avoid TypeError.
         """
 
-        def sort_key(c: JobCandidate):
+        def sort_key(c: AvailableJob):
             dt = c.job.ideal_datetime
             if dt is None:
                 dt = SENTINEL_DATETIME
