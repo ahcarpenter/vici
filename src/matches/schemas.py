@@ -6,8 +6,8 @@ from src.work_goals.models import WorkGoal
 
 
 @dataclass
-class AvailableJob:
-    """A job available for selection, with pre-computed earnings and poster phone."""
+class JobCandidate:
+    """A job eligible for DP selection, with pre-computed earnings and poster phone."""
 
     job: Job
     earnings: int  # cents — pay_rate * duration (hourly) or pay_rate (flat)
@@ -19,7 +19,7 @@ class AvailableJob:
 class MatchResult:
     """Output of MatchService.match(). jobs are sorted per D-11/D-12."""
 
-    jobs: list[AvailableJob]
+    jobs: list[JobCandidate]
     work_goal: WorkGoal
     total_earnings: int  # cents
     is_partial: bool  # True when total_earnings < work_goal.target_earnings

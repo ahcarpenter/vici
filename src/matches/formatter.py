@@ -1,6 +1,6 @@
 import structlog
 
-from src.matches.schemas import AvailableJob, MatchResult
+from src.matches.schemas import JobCandidate, MatchResult
 from src.money import cents_to_dollars
 
 SMS_SEGMENT_CHARS = 160
@@ -43,7 +43,7 @@ def format_match_sms(result: MatchResult) -> str:
     return text
 
 
-def _format_job_line(rank: int, cand: AvailableJob) -> str:
+def _format_job_line(rank: int, cand: JobCandidate) -> str:
     """Format a single job entry for SMS output."""
     desc = (cand.job.description or "Job")[:30]
     loc = (cand.job.location or "?")[:20]
