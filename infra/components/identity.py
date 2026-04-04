@@ -1,7 +1,9 @@
 import pulumi
 import pulumi_gcp as gcp
+from pulumi import ResourceOptions
 
 from config import PROJECT_ID
+from components.cluster import cluster
 
 # GCP Service Account for the Vici FastAPI application.
 # Pods annotated with this SA's email can call GCP APIs without key files.
@@ -42,6 +44,9 @@ wi_binding = gcp.serviceaccount.IAMBinding(
             ".svc.id.goog[vici/vici-app]",
         )
     ],
+    # WIF pool (<project>.svc.id.goog) is created by GKE during cluster provisioning.
+    # Must depend on cluster to avoid "Identity Pool does not exist" errors.
+    opts=ResourceOptions(depends_on=[cluster]),
 )
 
 # Export service account emails for downstream reference
