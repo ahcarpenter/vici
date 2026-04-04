@@ -18,9 +18,17 @@ Requirements in scope: MATCH-01, MATCH-02, MATCH-03.
 ## Implementation Decisions
 
 ### Earnings math by pay_type
-- **D-01:** `pay_type='hourly'` → `pay_rate × estimated_duration_hours >= target_earnings`
-- **D-02:** `pay_type='flat'` → `pay_rate >= target_earnings` (duration irrelevant for flat-rate jobs)
-- **D-03:** `pay_type='unknown'` → exclude from matches entirely (math is unverifiable)
+Total earnings per job:
+- **D-01:** `pay_type='hourly'` → `job_earnings = pay_rate × estimated_duration_hours`
+- **D-02:** `pay_type='flat'` → `job_earnings = pay_rate` (flat rate is the total pay; duration irrelevant)
+- **D-03:** `pay_type='unknown'` → exclude from candidate set entirely (math is unverifiable)
+
+### Matching algorithm (dynamic programming)
+- **D-04:** Use a DP knapsack-style algorithm to find the subset of jobs that **maximally meets the earnings goal in minimum total time**
+  - Primary objective: maximize total earnings, targeting `>= target_earnings`
+  - Secondary objective: among all subsets that meet or approach the goal, minimize total `estimated_duration_hours`
+- **D-05:** If the full candidate set cannot reach `target_earnings`, return the subset that gets as close as possible (maximize earnings from available jobs) — never return an empty result when jobs exist
+- **D-06:** The DP operates over all available jobs (not capped pre-algorithm); NULL-field jobs are excluded from candidates before DP runs
 
 ### NULL field policy
 - **D-04:** Jobs with NULL `pay_rate` or NULL `estimated_duration_hours` are excluded from results
@@ -28,9 +36,10 @@ Requirements in scope: MATCH-01, MATCH-02, MATCH-03.
 - Note: For flat-rate jobs (`pay_type='flat'`), NULL `estimated_duration_hours` is acceptable — only `pay_rate` is required
 
 ### SMS format per matched job
-- **D-06:** Each job entry includes: description, location, job poster's phone number, total earnings (computed: `pay_rate × duration` for hourly, `pay_rate` for flat), and duration
-- **D-07:** 3–5 jobs per reply; format must respect 160-character SMS segment boundaries
-- **D-08:** Job poster's phone number is included as-is in Phase 3 (privacy proxy is deferred — see Deferred Ideas)
+- **D-07:** Each job entry includes: description, location, job poster's phone number, total earnings (computed: `pay_rate × duration` for hourly, `pay_rate` for flat), and duration
+- **D-08:** Return all jobs in the DP-selected set; format must respect 160-character SMS segment boundaries (multi-segment SMS is acceptable)
+- **D-09:** When the set partially meets the goal, include a summary line indicating total earnings from the set vs. target (e.g., "Best available: $X of $Y goal")
+- **D-10:** Job poster's phone number is included as-is in Phase 3 (privacy proxy is deferred — see Deferred Ideas)
 
 ### Match persistence
 - **D-09:** `MatchService` persists each matched `(job_id, work_goal_id)` pair to the `match` table after computing results
@@ -102,6 +111,7 @@ No external spec documents for this phase — requirements are fully captured in
 
 - **Phone number privacy proxy** — Job poster's phone number appears in SMS replies in Phase 3 as-is. A proxy/masking layer (e.g., Twilio Proxy or a short alias) should be added before production to protect poster privacy. Add as a backlog todo.
 - **Follow-up clarification flow** — When a job has `pay_type='unknown'` or missing fields, send a follow-up SMS to the job poster requesting the missing info. This is a multi-turn conversation concern; deferred to a future phase.
+- **New-job follow-up notifications** — When a worker's goal was partially or fully unmet at match time, re-run the DP match when new jobs are posted and notify the worker via SMS if the new set better meets their goal. Requires a background trigger on job creation; deferred to a future phase (TODO captured).
 
 </deferred>
 
