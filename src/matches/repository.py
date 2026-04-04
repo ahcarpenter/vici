@@ -20,11 +20,13 @@ class MatchRepository(BaseRepository):
         """
         for job_id in job_ids:
             try:
-                match = Match(
-                    job_id=job_id,
-                    work_goal_id=work_goal_id,
-                    created_at=datetime.now(UTC),
-                )
-                await self._persist(session, match)
+                async with session.begin_nested():
+                    match = Match(
+                        job_id=job_id,
+                        work_goal_id=work_goal_id,
+                        created_at=datetime.now(UTC),
+                    )
+                    session.add(match)
+                    await session.flush()
             except sqlalchemy.exc.IntegrityError:
-                await session.rollback()
+                pass  # Duplicate (job_id, work_goal_id) — silently skip

@@ -112,10 +112,13 @@ def mock_twilio_validator():
 
 @pytest_asyncio.fixture
 async def make_user(async_session):
-    async def _factory(phone_hash: str | None = None) -> User:
+    _counter = {"n": 0}
+
+    async def _factory(phone_hash: str | None = None, phone_e164: str | None = None) -> User:
         if phone_hash is None:
-            phone_hash = hashlib.sha256(b"default_phone").hexdigest()
-        user = User(phone_hash=phone_hash)
+            _counter["n"] += 1
+            phone_hash = hashlib.sha256(f"phone_{_counter['n']}".encode()).hexdigest()
+        user = User(phone_hash=phone_hash, phone_e164=phone_e164)
         async_session.add(user)
         await async_session.flush()
         return user
@@ -153,8 +156,13 @@ async def make_job(async_session, make_user, make_message):
         job = Job(
             message_id=kwargs.get("message_id", message.id),
             description=kwargs.get("description", "Test job description"),
+            location=kwargs.get("location", None),
             pay_rate=kwargs.get("pay_rate", 25.0),
             pay_type=kwargs.get("pay_type", "hourly"),
+            estimated_duration_hours=kwargs.get("estimated_duration_hours", None),
+            ideal_datetime=kwargs.get("ideal_datetime", None),
+            datetime_flexible=kwargs.get("datetime_flexible", None),
+            status=kwargs.get("status", "available"),
         )
         async_session.add(job)
         await async_session.flush()

@@ -118,7 +118,7 @@ class MatchService:
         SCALE = 100
         target_cents = int(round(target * SCALE))
         max_possible_cents = sum(int(round(c.earnings * SCALE)) for c in candidates)
-        capacity = min(target_cents, max_possible_cents)
+        capacity = max_possible_cents
 
         if capacity == 0:
             return []
