@@ -1,0 +1,5 @@
+name: vici-infra
+description: Vici GKE infrastructure — all environments
+runtime: python
+backend:
+  url: gs://vici-app-pulumi-state-dev   # default for local dev; CI overrides via PULUMI_BACKEND_URL

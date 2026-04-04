@@ -1,0 +1,7 @@
+config:
+  gcp:project: vici-app-prod
+  gcp:region: us-central1
+  vici-infra:env: prod
+  vici-infra:cluster_name: vici-prod
+  vici-infra:registry_name: vici-images
+encryptionsalt: v1:GW7nju7Ccyc=:v1:PncZxhnWR4Y04ofm:jCG6fK+3nUsP6l5my9XcBPDJWLoW8w==

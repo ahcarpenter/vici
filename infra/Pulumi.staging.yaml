@@ -1,0 +1,7 @@
+config:
+  gcp:project: vici-app-staging
+  gcp:region: us-central1
+  vici-infra:env: staging
+  vici-infra:cluster_name: vici-staging
+  vici-infra:registry_name: vici-images
+encryptionsalt: v1:ebjOmizRDe8=:v1:8xBL08OwnzmF3msC:FSjC5yYIJ+1kWIHtOG46b1vqlBkYTw==
