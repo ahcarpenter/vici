@@ -14,8 +14,8 @@ from config import ENV
 
 _AUTH_PROXY_IMAGE = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1"
 _AUTH_PROXY_RUN_AS_USER = 65532
-# D-11: pin admin-tools to match Temporal server chart version
-_ADMIN_TOOLS_IMAGE = "temporalio/admin-tools:1.27.2"
+# D-11: pin admin-tools to match Temporal server chart version (chart 0.74.0 = server 1.29.1)
+_ADMIN_TOOLS_IMAGE = "temporalio/admin-tools:1.29.1-tctl-1.18"
 _SCHEMA_JOB_BACKOFF_LIMIT = 0  # D-12: fail fast, no retries
 _SCHEMA_JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
 
@@ -34,7 +34,10 @@ _OPENSEARCH_VISIBILITY_PORT = 9200
 # Auth Proxy runs in TCP mode (--port=5432); tool connects to localhost:5432.
 # No unix socket volume needed for TCP mode.
 
-_SQL_TOOL = "temporal-sql-tool --plugin postgres12 --ep localhost -p 5432"
+_TEMPORAL_DB_USER = "postgres"
+_TEMPORAL_DB_PASS = "JPfajtdjMqJBseAr3rOc6iE1KGkms7yUCEavQfBqd9k"
+
+_SQL_TOOL = f"temporal-sql-tool --plugin postgres12 --ep localhost -p 5432 -u {_TEMPORAL_DB_USER} --pw {_TEMPORAL_DB_PASS}"
 _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 
 _SCHEMA_COMMANDS = " && ".join(
@@ -75,6 +78,7 @@ temporal_schema_job = k8s.batch.v1.Job(
                         args=[
                             "--structured-logs",
                             "--port=5432",
+                            "--private-ip",
                             temporal_db_instance.connection_name,
                         ],
                         security_context=k8s.core.v1.SecurityContextArgs(
@@ -122,7 +126,9 @@ temporal_release = k8s.helm.v3.Release(
         create_namespace=False,
         values={
             # D-02: Disable all bundled sub-charts — we supply our own.
-            "cassandra": {"enabled": False},
+            # cassandra.config.ports.db must be set even when disabled;
+            # the chart template unconditionally references it at render time.
+            "cassandra": {"enabled": False, "config": {"ports": {"db": 9042}}},
             "elasticsearch": {"enabled": False},
             "prometheus": {"enabled": False},
             "grafana": {"enabled": False},
@@ -137,41 +143,34 @@ temporal_release = k8s.helm.v3.Release(
                                 "sql": {
                                     "pluginName": "postgres12",  # D-03
                                     "driverName": "postgres12",
-                                    "databaseName": "temporal",
+                                    "database": "temporal",
                                     # Auth Proxy TCP mode
-                                    "connectAddr": "127.0.0.1:5432",
+                                    "host": "127.0.0.1",
+                                    "port": 5432,
                                     "connectProtocol": "tcp",
-                                    # IAM DB user via Workload Identity
-                                    "user": temporal_gsa.email.apply(
-                                        lambda e: (
-                                            e.split("@")[0]
-                                            + "@"
-                                            + e.split("@")[1].replace(
-                                                ".iam.gserviceaccount.com",
-                                                ".iam",
-                                            )
-                                        )
-                                    ),
-                                }
+                                    "user": _TEMPORAL_DB_USER,
+                                    "password": _TEMPORAL_DB_PASS,
+                                },
                             },
                             "visibility": {
                                 "elasticsearch": {
                                     # OpenSearch 2.x exposes ES v7 compat API
                                     "version": "v7",
                                     "scheme": "http",
-                                    "host": (
-                                        f"{OPENSEARCH_SERVICE_HOST}"
-                                        f":{_OPENSEARCH_VISIBILITY_PORT}"
-                                    ),
+                                    "host": OPENSEARCH_SERVICE_HOST,
+                                    "port": _OPENSEARCH_VISIBILITY_PORT,
                                     "logLevel": "error",
-                                    "indices": {
-                                        "visibility": "temporal_visibility_v1",
-                                    },
-                                }
+                                    "visibilityIndex": "temporal_visibility_v1",
+                                    "username": "",
+                                    "password": "",
+                                },
                             },
                         },
                     },
                 },
+                # Use sprig configmap so our SQL persistence values are applied.
+                # The default "dockerize" template hardcodes mysql8 and ignores Helm values.
+                "configMapsToMount": "sprig",
                 # Inject Auth Proxy into all Temporal server component pods.
                 "sidecarContainers": [
                     {
@@ -180,6 +179,7 @@ temporal_release = k8s.helm.v3.Release(
                         "args": [
                             "--structured-logs",
                             "--port=5432",
+                            "--private-ip",
                             temporal_db_instance.connection_name,
                         ],
                         "securityContext": {
@@ -195,6 +195,12 @@ temporal_release = k8s.helm.v3.Release(
                 "service": {"type": "ClusterIP"},
             },
             "admintools": {"enabled": True},
+            # Disable chart's built-in schema jobs — we run our own.
+            "schema": {
+                "createDatabase": {"enabled": False},
+                "setup": {"enabled": False},
+                "update": {"enabled": False},
+            },
         },
     ),
     opts=ResourceOptions(
