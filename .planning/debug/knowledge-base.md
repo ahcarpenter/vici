@@ -12,3 +12,11 @@ Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypothe
 - **Files changed:** src/temporal/activities.py
 ---
 
+## sms-webhook-signature-403 — Twilio signature validation returns 403 in CI due to URL/token mismatch
+- **Date:** 2026-04-05
+- **Error patterns:** 403, TwilioSignatureInvalid, webhook, X-Twilio-Signature, RequestValidator, test_valid_signature_real
+- **Root cause:** test_valid_signature_real hardcoded the signing URL and/or token rather than reading from settings; conftest also lacked ENV and other env var defaults, so the URL/token used to compute the test signature could diverge from what the dependency reconstructed in CI.
+- **Fix:** Test reads settings.webhook_base_url and settings.sms.auth_token dynamically via get_settings(). Conftest _test_env sets ENV, WEBHOOK_BASE_URL, TWILIO_AUTH_TOKEN, and other required vars via setdefault before clearing the settings LRU cache.
+- **Files changed:** tests/sms/test_webhook.py, tests/conftest.py
+---
+
