@@ -15,6 +15,8 @@ from components.database import app_db_instance, temporal_db_instance  # noqa: F
 from components.iam import temporal_gsa, vici_app_ksa, temporal_app_ksa  # noqa: F401
 from components.secrets import eso_release, secret_stores, external_secrets  # noqa: F401
 from components.migration import migration_job  # noqa: F401
+from components.opensearch import opensearch_release  # noqa: F401
+from components.temporal import temporal_schema_job, temporal_release  # noqa: F401
 
 # All pulumi.export() calls are in their respective component files.
 # Add cross-component exports here if needed in the future.
