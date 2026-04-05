@@ -26,7 +26,7 @@ _SECRET_DEFINITIONS: list[tuple[str, str, str]] = [
     ("braintrust-api-key", "vici", "braintrust-api-key"),
     ("database-url", "vici", "database-url"),
     ("temporal-host", "vici", "temporal-host"),
-    ("otel-exporter-otlp-endpoint", "observability", "otel-exporter-otlp-endpoint"),
+    ("otel-exporter-otlp-endpoint", "vici", "otel-exporter-otlp-endpoint"),
     ("webhook-base-url", "vici", "webhook-base-url"),
 ]
 
