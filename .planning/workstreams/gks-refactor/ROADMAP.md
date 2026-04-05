@@ -76,9 +76,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Deploy Jaeger v2 collector and query as raw K8s Deployments
-- [ ] 04-02-PLAN.md — Deploy kube-prometheus-stack with Grafana dashboards and ServiceMonitor
-- [ ] 04-03-PLAN.md — Wire observability into Pulumi entry point and create OTEL ExternalSecret
+- [x] 04-01-PLAN.md — Deploy Jaeger v2 collector and query as raw K8s Deployments
+- [x] 04-02-PLAN.md — Deploy kube-prometheus-stack with Grafana dashboards and ServiceMonitor
+- [x] 04-03-PLAN.md — Wire observability into Pulumi entry point and create OTEL ExternalSecret
 
 ### Phase 5: Application Deployment and CI/CD
 **Goal**: FastAPI app serves traffic on environment-specific public hostnames with TLS, auto-scales under load, and deploys automatically via GitHub Actions

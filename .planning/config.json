@@ -13,10 +13,11 @@
     "ui_phase": false,
     "ui_safety_gate": false,
     "skip_discuss": false,
+    "use_worktrees": true,
     "_auto_chain_active": false
   },
   "git": {
-    "branching_strategy": "none",
+    "branching_strategy": "milestone",
     "quick_branch_template": null
   },
   "hooks": {
