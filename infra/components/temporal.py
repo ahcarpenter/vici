@@ -125,52 +125,55 @@ temporal_release = k8s.helm.v3.Release(
         namespace="temporal",
         create_namespace=False,
         values={
-            # D-02: Disable all bundled sub-charts — we supply our own.
-            # cassandra.config.ports.db must be set even when disabled;
-            # the chart template unconditionally references it at render time.
+            # D-02: Disable bundled sub-charts — we supply our own dependencies.
+            # cassandra.config.ports.db must be set even when disabled; chart references it.
             "cassandra": {"enabled": False, "config": {"ports": {"db": 9042}}},
-            "elasticsearch": {"enabled": False},
+            # OpenSearch exposes ES v7 compat API. Using elasticsearch.external=True
+            # causes the chart to wire visibility through the top-level elasticsearch
+            # block rather than needing a custom server.config.persistence.visibility.
+            "elasticsearch": {
+                "enabled": False,
+                "external": True,
+                "version": "v7",
+                "scheme": "http",
+                "host": OPENSEARCH_SERVICE_HOST,
+                "port": _OPENSEARCH_VISIBILITY_PORT,
+                "logLevel": "error",
+                "visibilityIndex": "temporal_visibility_v1",
+                "username": "",
+                "password": "",
+            },
             "prometheus": {"enabled": False},
             "grafana": {"enabled": False},
             "server": {
                 "config": {
+                    # numHistoryShards lives at config level, not under persistence.
+                    # D-05: PERMANENT — cannot change after first deploy.
+                    "numHistoryShards": _TEMPORAL_HISTORY_SHARDS,
                     "persistence": {
-                        "numHistoryShards": _TEMPORAL_HISTORY_SHARDS,
                         "defaultStore": "default",
                         "visibilityStore": "visibility",
-                        "datastores": {
-                            "default": {
-                                "sql": {
-                                    "pluginName": "postgres12",  # D-03
-                                    "driverName": "postgres12",
-                                    "database": "temporal",
-                                    # Auth Proxy TCP mode
-                                    "host": "127.0.0.1",
-                                    "port": 5432,
-                                    "connectProtocol": "tcp",
-                                    "user": _TEMPORAL_DB_USER,
-                                    "password": _TEMPORAL_DB_PASS,
-                                },
-                            },
-                            "visibility": {
-                                "elasticsearch": {
-                                    # OpenSearch 2.x exposes ES v7 compat API
-                                    "version": "v7",
-                                    "scheme": "http",
-                                    "host": OPENSEARCH_SERVICE_HOST,
-                                    "port": _OPENSEARCH_VISIBILITY_PORT,
-                                    "logLevel": "error",
-                                    "visibilityIndex": "temporal_visibility_v1",
-                                    "username": "",
-                                    "password": "",
-                                },
+                        # The chart's temporal.persistence.driver helper reads
+                        # server.config.persistence.<store>.driver (not datastores).
+                        # temporal.persistence.sql.driver reads sql.driver specifically.
+                        "default": {
+                            "driver": "sql",  # D-03
+                            "sql": {
+                                "driver": "postgres12",  # used by sql.driver helper
+                                "database": "temporal",
+                                "host": "127.0.0.1",  # Auth Proxy TCP mode
+                                "port": 5432,
+                                "user": _TEMPORAL_DB_USER,
+                                "password": _TEMPORAL_DB_PASS,
                             },
                         },
                     },
                 },
-                # Use sprig configmap so our SQL persistence values are applied.
-                # The default "dockerize" template hardcodes mysql8 and ignores Helm values.
+                # sprig configmap is rendered for Temporal server v1.30+.
+                # setConfigFilePath injects TEMPORAL_SERVER_CONFIG_FILE_PATH env var
+                # so the server loads the sprig configmap (required for v1.30.x).
                 "configMapsToMount": "sprig",
+                "setConfigFilePath": True,
                 # Inject Auth Proxy into all Temporal server component pods.
                 "sidecarContainers": [
                     {
