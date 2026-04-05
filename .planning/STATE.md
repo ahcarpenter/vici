@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 03 (temporal-in-cluster) — EXECUTING
 Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-05 - Completed quick task 260405-05t: Fix hardcoded Temporal DB credentials in temporal.py — pull from Secret Manager
+Last activity: 2026-04-05 - Completed quick task 260405-nbr: Upgrade ESO to v1 API and update all api_version references
 
 Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
 
@@ -195,6 +195,7 @@ None.
 | 260403-7kp | is there any language throughout the repo that could be revised to be more canonical | 2026-04-03 | d1aded7 | [260403-7kp-is-there-any-language-throughout-the-rep](./quick/260403-7kp-is-there-any-language-throughout-the-rep/) |
 | 260403-7r3 | fix remaining workgoal language gaps — rename worker_goal literal and worker field to work_goal | 2026-04-03 | 1009d61 | [260403-7r3-fix-remaining-workgoal-language-gaps-res](./quick/260403-7r3-fix-remaining-workgoal-language-gaps-res/) |
 | 260405-05t | Fix hardcoded Temporal DB credentials in temporal.py — pull from Secret Manager | 2026-04-05 | 4db2701 | [260405-05t-fix-hardcoded-temporal-db-credentials-in](./quick/260405-05t-fix-hardcoded-temporal-db-credentials-in/) |
+| 260405-nbr | Upgrade ESO to v1 API and update all api_version references | 2026-04-05 | fb89423 | [260405-nbr-upgrade-eso-to-v1-api-and-update-all-api](./quick/260405-nbr-upgrade-eso-to-v1-api-and-update-all-api/) |
 
 ### Blockers/Concerns
 
