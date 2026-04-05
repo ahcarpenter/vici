@@ -179,7 +179,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None.
+- Auto port-forward for in-cluster MCP servers on dev (area: tooling)
 
 ### Quick Tasks Completed
 
