@@ -73,10 +73,12 @@ Plans:
   2. Prometheus is scraping the FastAPI `/metrics` endpoint via ServiceMonitor
   3. Grafana is accessible and the existing FastAPI and Temporal dashboards are pre-provisioned
   4. `OTEL_EXPORTER_OTLP_ENDPOINT` secret resolves to the in-cluster Jaeger collector
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Deploy Jaeger v2 collector and query as raw K8s Deployments
+- [ ] 04-02-PLAN.md — Deploy kube-prometheus-stack with Grafana dashboards and ServiceMonitor
+- [ ] 04-03-PLAN.md — Wire observability into Pulumi entry point and create OTEL ExternalSecret
 
 ### Phase 5: Application Deployment and CI/CD
 **Goal**: FastAPI app serves traffic on environment-specific public hostnames with TLS, auto-scales under load, and deploys automatically via GitHub Actions
@@ -97,12 +99,12 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. GKE Cluster and Networking Baseline | 0/? | Not started | - |
 | 2. Database and Secrets Infrastructure | 0/? | Not started | - |
 | 3. Temporal In-Cluster | 0/3 | Planned | - |
-| 4. Observability Stack | 0/? | Not started | - |
+| 4. Observability Stack | 0/3 | Planned | - |
 | 5. Application Deployment and CI/CD | 0/? | Not started | - |
