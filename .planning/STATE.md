@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-temporal-in-cluster-03-01-PLAN.md
-last_updated: "2026-04-05T00:21:40.723Z"
+stopped_at: Completed 03-temporal-in-cluster-03-02-PLAN.md
+last_updated: "2026-04-05T00:24:44.448Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 20
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 03 (temporal-in-cluster) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-05
 
@@ -160,6 +160,7 @@ Recent decisions affecting current work:
 - [Phase 03-01]: DP capacity uses max_possible_cents (not capped at target) to allow single items exceeding target to be selected
 - [Phase 03-01]: MatchRepository uses begin_nested() savepoint per insert for cross-dialect idempotency instead of full session rollback
 - [Phase 03-01]: make_user fixture uses incrementing counter for unique phone_hash to avoid UNIQUE constraint violations across multiple factory calls
+- [Phase 03-temporal-in-cluster]: Auth Proxy TCP mode for schema Job; server.sidecarContainers for Helm release; numHistoryShards=512 permanent
 
 ### Roadmap Evolution
 
@@ -200,7 +201,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T00:21:40.720Z
-Stopped at: Completed 03-temporal-in-cluster-03-01-PLAN.md
+Last session: 2026-04-05T00:24:44.445Z
+Stopped at: Completed 03-temporal-in-cluster-03-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 4` or `/gsd:execute-phase 4`
