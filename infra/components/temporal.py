@@ -172,15 +172,19 @@ temporal_release = k8s.helm.v3.Release(
                     },
                 },
                 # sprig configmap is rendered for Temporal server v1.30+.
-                # setConfigFilePath injects TEMPORAL_SERVER_CONFIG_FILE_PATH env var
-                # so the server loads the sprig configmap (required for v1.30.x).
+                # setConfigFilePath sets TEMPORAL_SERVER_CONFIG_FILE_PATH env var which
+                # maps to --config-file; the server loads the mounted sprig configmap
+                # instead of the embedded config_template_embedded.yaml.
                 "configMapsToMount": "sprig",
                 "setConfigFilePath": True,
-                # Inject Auth Proxy into all Temporal server component pods.
-                "sidecarContainers": [
+                # Cloud SQL Auth Proxy as native sidecar (K8s 1.29+, restartPolicy=Always).
+                # Chart 0.74.0 does not support server.sidecarContainers — must use
+                # additionalInitContainers with restartPolicy=Always instead.
+                "additionalInitContainers": [
                     {
                         "name": "cloud-sql-proxy",
                         "image": _AUTH_PROXY_IMAGE,
+                        "restartPolicy": "Always",
                         "args": [
                             "--structured-logs",
                             "--port=5432",
@@ -193,6 +197,12 @@ temporal_release = k8s.helm.v3.Release(
                         },
                     },
                 ],
+            },
+            # D-14: chart uses top-level serviceAccount.name (not server.serviceAccountName).
+            # create=False because we provision the KSA via temporal_app_ksa in iam.py.
+            "serviceAccount": {
+                "create": False,
+                "name": "temporal-app",
             },
             # D-13/TEMPORAL-06: UI enabled as ClusterIP (no external Ingress yet)
             "web": {
