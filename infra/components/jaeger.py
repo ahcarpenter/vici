@@ -55,6 +55,7 @@ extensions:
   healthcheckv2:
     use_v2: true
     http:
+      endpoint: "0.0.0.0:13133"
 
   jaeger_storage:
     backends:
@@ -109,6 +110,7 @@ extensions:
   healthcheckv2:
     use_v2: true
     http:
+      endpoint: "0.0.0.0:13133"
 
   jaeger_query:
     storage:

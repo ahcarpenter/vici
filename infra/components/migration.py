@@ -49,6 +49,7 @@ migration_job = k8s.batch.v1.Job(
                         restart_policy="Always",  # Native sidecar (K8s 1.28+)
                         args=[
                             "--structured-logs",
+                            "--private-ip",
                             pulumi.Output.concat(
                                 "--unix-socket=",
                                 _SOCKET_MOUNT_PATH,
@@ -71,7 +72,7 @@ migration_job = k8s.batch.v1.Job(
                     k8s.core.v1.ContainerArgs(
                         name="alembic-migration",
                         image=pulumi.Output.concat(registry_url, "/vici:", ENV),
-                        command=["alembic", "upgrade", "head"],
+                        command=["uv", "run", "alembic", "upgrade", "head"],
                         env_from=[
                             k8s.core.v1.EnvFromSourceArgs(
                                 secret_ref=k8s.core.v1.SecretEnvSourceArgs(

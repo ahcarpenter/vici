@@ -10,7 +10,7 @@ from components.namespaces import k8s_provider, namespaces
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_ESO_CHART_VERSION = "1.0.5"
+_ESO_CHART_VERSION = "1.3.2"
 _ESO_REPO = "https://charts.external-secrets.io"
 _REFRESH_INTERVAL = "1h"
 
