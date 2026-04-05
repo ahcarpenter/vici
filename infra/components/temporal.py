@@ -6,7 +6,7 @@ from components.database import temporal_db_instance
 from components.iam import temporal_app_ksa, temporal_gsa
 from components.namespaces import k8s_provider, namespaces
 from components.opensearch import OPENSEARCH_SERVICE_HOST, opensearch_release
-from config import ENV
+from config import ENV, cfg
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -34,27 +34,29 @@ _OPENSEARCH_VISIBILITY_PORT = 9200
 # Auth Proxy runs in TCP mode (--port=5432); tool connects to localhost:5432.
 # No unix socket volume needed for TCP mode.
 
-_TEMPORAL_DB_USER = "postgres"
-_TEMPORAL_DB_PASS = "JPfajtdjMqJBseAr3rOc6iE1KGkms7yUCEavQfBqd9k"
+_TEMPORAL_DB_USER = cfg.require_secret("temporal_db_user")
+_TEMPORAL_DB_PASS = cfg.require_secret("temporal_db_password")
 
-_SQL_TOOL = f"temporal-sql-tool --plugin postgres12 --ep localhost -p 5432 -u {_TEMPORAL_DB_USER} --pw {_TEMPORAL_DB_PASS}"
+_SQL_TOOL_PREFIX = "temporal-sql-tool --plugin postgres12 --ep localhost -p 5432"
 _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 
-_SCHEMA_COMMANDS = " && ".join(
-    [
-        f"{_SQL_TOOL} --db temporal create-database || true",
-        f"{_SQL_TOOL} --db temporal setup-schema -v 0.0",
-        (
-            f"{_SQL_TOOL} --db temporal update-schema"
-            f" -d {_SCHEMA_BASE}/temporal/versioned"
-        ),
-        f"{_SQL_TOOL} --db temporal_visibility create-database || true",
-        f"{_SQL_TOOL} --db temporal_visibility setup-schema -v 0.0",
-        (
-            f"{_SQL_TOOL} --db temporal_visibility update-schema"
-            f" -d {_SCHEMA_BASE}/visibility/versioned"
-        ),
-    ]
+_SCHEMA_COMMANDS = pulumi.Output.all(_TEMPORAL_DB_USER, _TEMPORAL_DB_PASS).apply(
+    lambda creds: " && ".join(
+        [
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal create-database || true",
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal setup-schema -v 0.0",
+            (
+                f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal update-schema"
+                f" -d {_SCHEMA_BASE}/temporal/versioned"
+            ),
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility create-database || true",
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility setup-schema -v 0.0",
+            (
+                f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility update-schema"
+                f" -d {_SCHEMA_BASE}/visibility/versioned"
+            ),
+        ]
+    )
 )
 
 temporal_schema_job = k8s.batch.v1.Job(
