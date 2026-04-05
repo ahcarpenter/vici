@@ -3,14 +3,14 @@ import pulumi_gcp as gcp
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
-from config import ENV, PROJECT_ID
+from config import CLUSTER_NAME, ENV, PROJECT_ID, REGION
 from components.namespaces import k8s_provider, namespaces
 
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_ESO_CHART_VERSION = "0.10.7"
+_ESO_CHART_VERSION = "1.0.5"
 _ESO_REPO = "https://charts.external-secrets.io"
 _REFRESH_INTERVAL = "1h"
 
@@ -46,7 +46,7 @@ _KSA_BY_NAMESPACE: dict[str, str] = {
 
 sm_secrets: dict[str, gcp.secretmanager.Secret] = {}
 for _slug, _ns, _ in _SECRET_DEFINITIONS:
-    _secret_id = f"{ENV}/{_slug}"
+    _secret_id = f"{ENV}-{_slug}"
     sm_secrets[_slug] = gcp.secretmanager.Secret(
         f"sm-{_slug}",
         project=PROJECT_ID,
@@ -111,9 +111,11 @@ for _ns in _SECRETSTORE_NAMESPACES:
                     "projectID": PROJECT_ID,
                     "auth": {
                         "workloadIdentity": {
+                            "clusterLocation": REGION,
+                            "clusterName": CLUSTER_NAME,
                             "serviceAccountRef": {
                                 "name": _KSA_BY_NAMESPACE[_ns],
-                            }
+                            },
                         }
                     },
                 }
@@ -122,6 +124,7 @@ for _ns in _SECRETSTORE_NAMESPACES:
         opts=ResourceOptions(
             provider=k8s_provider,
             depends_on=[eso_release, namespaces[_ns]],
+            delete_before_replace=True,
         ),
     )
 
@@ -143,7 +146,7 @@ for _slug, _ns, _k8s_name in _SECRET_DEFINITIONS:
             "data": [
                 {
                     "secretKey": _slug.upper().replace("-", "_"),
-                    "remoteRef": {"key": f"{ENV}/{_slug}"},
+                    "remoteRef": {"key": f"{ENV}-{_slug}"},
                 }
             ],
         },
