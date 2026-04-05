@@ -21,3 +21,4 @@ __pycache__/
 .DS_Store
 .cursor/
 .claude/
+!.claude/skills/
