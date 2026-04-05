@@ -17,6 +17,8 @@ from components.secrets import eso_release, secret_stores, external_secrets  # n
 from components.migration import migration_job  # noqa: F401
 from components.opensearch import opensearch_release  # noqa: F401
 from components.temporal import temporal_schema_job, temporal_release  # noqa: F401
+from components.jaeger import jaeger_collector_deployment, jaeger_query_deployment  # noqa: F401
+from components.prometheus import kube_prometheus_release, fastapi_service_monitor  # noqa: F401
 
 # All pulumi.export() calls are in their respective component files.
 # Add cross-component exports here if needed in the future.
