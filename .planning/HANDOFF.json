@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-04-05T16:35:57.806Z",
+  "phase": "04",
+  "phase_name": "observability-stack",
+  "phase_dir": ".planning/workstreams/gks-refactor/phases/04-observability-stack",
+  "plan": 0,
+  "task": 0,
+  "total_tasks": 0,
+  "status": "paused",
+  "completed_tasks": [],
+  "remaining_tasks": [
+    {"id": 1, "name": "Research Phase 4", "status": "in_progress", "progress": "Researcher agent spawned, running in background"},
+    {"id": 2, "name": "Create VALIDATION.md", "status": "not_started"},
+    {"id": 3, "name": "Spawn planner agent", "status": "not_started"},
+    {"id": 4, "name": "Verify plans with plan-checker", "status": "not_started"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Jaeger v2 as raw K8s manifests via Pulumi (not Helm chart)", "rationale": "Jaeger v2 unified binary config not supported by v1 Helm chart", "phase": "04"},
+    {"decision": "Full kube-prometheus-stack Helm chart", "rationale": "Industry standard, includes ServiceMonitor CRDs, matches OBS-03", "phase": "04"},
+    {"decision": "Grafana dashboard via ConfigMap sidecar provisioning", "rationale": "Standard kube-prometheus-stack pattern, keeps dashboard JSON maintainable", "phase": "04"},
+    {"decision": "All UIs ClusterIP-only, Ingress deferred to Phase 5", "rationale": "Keeps Phase 4 focused on components, Phase 5 owns Ingress", "phase": "04"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Check if researcher agent completed and wrote 04-RESEARCH.md. If yes, continue plan-phase workflow from step 5.5 (validation strategy). If no, re-spawn researcher.",
+  "context_notes": "Running /gsd-plan-phase 4 --ws gks-refactor. CONTEXT.md was captured in prior discussion session. Researcher agent was spawned in background (gsd-phase-researcher, sonnet model). Workflow is at step 5 (research). After research completes: create VALIDATION.md, spawn planner (opus), then plan-checker (sonnet). Security threat model required (ASVS L1, block on high). Phase req IDs: OBS-01 through OBS-05."
+}
