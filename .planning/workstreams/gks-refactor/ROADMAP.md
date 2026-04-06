@@ -90,11 +90,13 @@ Plans:
   3. HPA scales the FastAPI Deployment between 1 and 3 replicas based on CPU
   4. Pushing to `main` triggers a GitHub Actions job that builds, pushes to Artifact Registry, and runs `pulumi up --stack dev` with no static GCP credentials
   5. `pulumi up --stack prod` requires manual workflow dispatch with environment approval gate
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
+- [ ] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
+- [ ] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
 
 ## Progress
 
@@ -107,4 +109,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Database and Secrets Infrastructure | 0/? | Not started | - |
 | 3. Temporal In-Cluster | 0/3 | Planned | - |
 | 4. Observability Stack | 3/3 | Validated | 2026-04-05 |
-| 5. Application Deployment and CI/CD | 0/? | Not started | - |
+| 5. Application Deployment and CI/CD | 0/3 | Planned | - |
