@@ -687,22 +687,13 @@ config:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`app_hostname` value for v1 TLS**
-   - What we know: D-01 uses auto-assigned IPs; D-02 stubs `getvici.ai` in config; Let's Encrypt requires a domain name
-   - What's unclear: Will DNS for `dev.getvici.ai` be pointed at the GKE IP immediately, or will `nip.io` be used as an interim?
-   - Recommendation: Planner should default to `<ip>.nip.io` pattern for dev/staging in v1, with `getvici.ai` subdomains in config as commented-out values. Operator replaces with real IP after first `pulumi up` and re-runs. Alternatively, planner can ask user before generating tasks.
+1. **`app_hostname` value for v1 TLS** — RESOLVED: Plan 01 Task 2 stubs `getvici.ai` subdomains per D-02. For v1 with auto-assigned IPs (D-01), operator updates `app_hostname` to `<ip>.nip.io` after first `pulumi up` and re-runs. The `gcp.secretmanager.SecretVersion` for `WEBHOOK_BASE_URL` in Plan 02 uses `APP_HOSTNAME`, so re-running `pulumi up` after updating the hostname automatically updates the secret value.
 
-2. **`vici-ci-push` SA scope for Pulumi**
-   - What we know: `vici-ci-push` SA has Artifact Registry write access (from `registry.py`). CD-01 requires `pulumi up --stack dev`
-   - What's unclear: Does this SA also need `roles/storage.objectAdmin` on the GCS Pulumi state bucket, and `roles/container.developer` on the GKE cluster for kubectl access?
-   - Recommendation: `cd.py` should grant `ci_push_sa` the following additional roles: `roles/storage.objectAdmin` (state bucket), `roles/container.developer` (cluster access for Pulumi K8s provider). Add these as explicit `IAMMember` resources in `cd.py`.
+2. **`vici-ci-push` SA scope for Pulumi** — RESOLVED: Plan 03 Task 1 grants `vici-ci-push` SA two additional roles in `cd.py`: `roles/storage.objectAdmin` (Pulumi state bucket) and `roles/container.developer` (GKE cluster access).
 
-3. **GitHub environment name for approval gate**
-   - What we know: D-10 requires GitHub environment approval gate for prod
-   - What's unclear: Does the GitHub repository have an environment named `prod` with required reviewers already configured, or must the planner include instructions to set it up?
-   - Recommendation: Include a Wave 0 manual step: create GitHub environment `prod` with required reviewer. This cannot be automated via Pulumi (GitHub env settings are repository settings, not IaC).
+3. **GitHub environment name for approval gate** — RESOLVED: Plan 03 `user_setup` section documents manual creation of GitHub Environment `prod` with required reviewers. This cannot be automated via Pulumi (GitHub env settings are repository settings, not IaC).
 
 ---
 
