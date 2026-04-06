@@ -94,9 +94,9 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
-- [ ] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
-- [ ] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
+- [x] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
+- [x] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
+- [x] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
 
 ## Progress
 
