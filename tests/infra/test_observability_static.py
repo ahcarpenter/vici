@@ -223,8 +223,7 @@ class TestOBS01JaegerDeployments:
     def test_both_deployments_have_health_probes_on_port_13133_path_status(
         self,
     ) -> None:
-        """Both collector and query must reference health
-        port 13133 and path /status."""
+        """Both collector and query must reference health port 13133."""
         assert "13133" in self.source, "Health port 13133 must be referenced"
         assert '"/status"' in self.source or "'/status'" in self.source, (
             "Health probe path /status must be referenced"
@@ -234,8 +233,8 @@ class TestOBS01JaegerDeployments:
         # referencing the same health port
         health_port_count = self.source.count("13133")
         assert health_port_count >= 2, (
-            "Expected health port 13133 to appear in both "
-            f"deployments (>=2 uses), found {health_port_count}"
+            "Expected health port 13133 in both deployments "
+            f"(>=2 uses), found {health_port_count}"
         )
 
     def test_both_deployments_have_resource_limits(self) -> None:

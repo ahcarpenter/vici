@@ -24,8 +24,7 @@ def test_pipeline_failures_total_importable():
 
 @pytest.mark.asyncio
 async def test_on_failure_handler_increments_counter():
-    """After calling handle_process_message_failure_activity,
-    counter increments by 1."""
+    """handle_process_message_failure_activity increments counter."""
     from src.metrics import pipeline_failures_total
     from src.temporal.activities import (
         ProcessMessageInput,
@@ -94,16 +93,15 @@ async def test_update_gauges_logs_warning_on_db_error():
 
                     result = await session.execute(
                         text(
-                            "SELECT COUNT(*) FROM "
-                            "pinecone_sync_queue "
+                            "SELECT COUNT(*) FROM pinecone_sync_queue "
                             "WHERE status = 'pending'"
                         )
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
             except Exception as exc:
                 _structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue "
-                    "depth read failed — metric stale",
+                    "gauge_updater: pinecone_sync_queue depth "
+                    "read failed — metric stale",
                     error=str(exc),
                 )
 
@@ -145,8 +143,7 @@ def test_hash_phone_valid():
 
 @pytest.mark.asyncio
 async def test_job_datetime_parse_failure_logs_warning():
-    """JobRepository.create with unparseable ideal_datetime
-    logs a warning and sets None."""
+    """JobRepository.create with unparseable ideal_datetime logs warning."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     from src.jobs.repository import JobRepository
@@ -206,8 +203,7 @@ async def test_job_datetime_parse_failure_logs_warning():
 
 @pytest.mark.asyncio
 async def test_sync_pinecone_queue_logs_failure_summary():
-    """sync_pinecone_queue_activity with 1 failing row
-    logs a warning with failed count."""
+    """sync_pinecone_queue_activity logs warning with failed count."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     import src.temporal.activities as acts

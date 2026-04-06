@@ -122,8 +122,7 @@ def test_config_raises_on_empty_pinecone_api_key(monkeypatch):
 
 
 def test_config_valid_when_all_credentials_present():
-    """Settings constructs without error when all four
-    required credentials are provided."""
+    """Settings constructs when all required credentials are present."""
     from src.config import Settings
 
     s = Settings(

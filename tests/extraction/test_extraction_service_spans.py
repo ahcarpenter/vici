@@ -47,8 +47,7 @@ def _make_service():
 
 @pytest.mark.asyncio
 async def test_extraction_service_emits_gpt_span(span_exporter):
-    """ExtractionService.process() emits a span named
-    'gpt.classify_and_extract' with gen_ai attributes."""
+    """ExtractionService.process() emits a 'gpt.classify_and_extract' span."""
     service = _make_service()
 
     stub_result = ExtractionResult(
@@ -88,8 +87,7 @@ async def test_extraction_service_emits_gpt_span(span_exporter):
 
 @pytest.mark.asyncio
 async def test_extraction_service_gpt_span_attributes_match_settings(span_exporter):
-    """gen_ai.request.model reflects the configured model
-    from settings (not a hardcoded string)."""
+    """gen_ai.request.model reflects the configured model from settings."""
     service = _make_service()
     # Verify the settings mock has the expected model
     assert service._settings.extraction.gpt_model == GPT_MODEL

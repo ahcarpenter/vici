@@ -6,8 +6,7 @@ import pytest
 
 
 def test_import_metrics_does_not_raise_value_error():
-    """Importing src.metrics twice does not raise
-    ValueError (duplicate registration)."""
+    """Importing src.metrics twice does not raise ValueError."""
     # Second import hits module cache — no re-registration, no ValueError
     import src.metrics  # noqa: F401  # noqa: F401, F811
 

@@ -134,8 +134,7 @@ async def test_tenacity_retry_on_rate_limit():
 
 @pytest.mark.asyncio
 async def test_gpt_none_parsed_raises():
-    """When GPT returns parsed=None, ExtractionService.process
-    raises ApplicationError."""
+    """When GPT returns parsed=None, process raises ApplicationError."""
     from temporalio.exceptions import ApplicationError
 
     mock_message = MagicMock()

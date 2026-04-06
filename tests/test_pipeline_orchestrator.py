@@ -188,8 +188,7 @@ async def test_unknown_branch():
 
 @pytest.mark.asyncio
 async def test_pinecone_failure_enqueues_retry():
-    """Pinecone write failure: pipeline returns result,
-    does not re-raise, enqueues sync."""
+    """Pinecone write failure: returns result, enqueues sync."""
     job = JobExtraction(
         description="Painting job",
         datetime_flexible=True,
@@ -249,8 +248,7 @@ def _span_exporter_for_orchestrator():
 
 @pytest.mark.asyncio
 async def test_job_branch_emits_pinecone_span():
-    """Job branch emits a 'pinecone.upsert' span with
-    db.system, db.operation, db.vector.job_id."""
+    """Job branch emits a 'pinecone.upsert' span with db attributes."""
     import src.pipeline.handlers.job_posting as job_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
@@ -298,8 +296,7 @@ async def test_job_branch_emits_pinecone_span():
 
 @pytest.mark.asyncio
 async def test_unknown_branch_emits_twilio_span():
-    """Unknown branch emits a 'twilio.send_sms' span with
-    messaging.system and messaging.destination."""
+    """Unknown branch emits a 'twilio.send_sms' span with attrs."""
     import src.pipeline.handlers.unknown as unknown_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
@@ -347,8 +344,7 @@ async def test_unknown_branch_emits_twilio_span():
 
 @pytest.mark.asyncio
 async def test_orchestrator_emits_pipeline_span():
-    """PipelineOrchestrator.run() emits a pipeline.orchestrate
-    span with message and phone attrs."""
+    """PipelineOrchestrator.run() emits a pipeline.orchestrate span."""
     import src.pipeline.orchestrator as orch_module
     from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 
@@ -393,8 +389,7 @@ async def test_orchestrator_emits_pipeline_span():
 
 
 def test_gauge_updater_no_silent_pass():
-    """Verify gauge updater no longer has a bare 'pass'
-    on exception — warning log present."""
+    """Gauge updater has no bare 'pass' on exception."""
     with open(Path(__file__).parent.parent / "src" / "main.py") as f:
         source = f.read()
     # Old pattern: except Exception:\n    pass

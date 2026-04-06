@@ -1,9 +1,9 @@
 """
 Integration test: worker goal end-to-end flow.
 
-NOTE: The full pipeline integration test was removed when Inngest
-was replaced by Temporal (Phase 02.9). The pipeline logic is
-covered by tests/temporal/test_activities.py.
+NOTE: The full pipeline integration test was removed when Inngest was
+replaced by Temporal
+(Phase 02.9). The pipeline logic is covered by tests/temporal/test_activities.py.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -24,8 +24,7 @@ async def test_full_pipeline_worker_goal():
 
 @pytest.mark.asyncio
 async def test_worker_goal_handler_emits_span():
-    """WorkerGoalHandler.handle() emits pipeline.handle_worker_goal
-    span with message and user attrs."""
+    """WorkerGoalHandler emits pipeline.handle_worker_goal span."""
     import src.pipeline.handlers.worker_goal as wg_module
     from src.extraction.schemas import ExtractionResult, WorkerExtraction
     from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_WORK_GOAL_USER_ID

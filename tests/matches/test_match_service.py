@@ -160,8 +160,7 @@ async def test_dp_meets_goal_flat(async_session, make_job, make_work_goal):
 
 @pytest.mark.asyncio
 async def test_dp_partial_match(async_session, make_job, make_work_goal):
-    """When no combination meets goal, returns best-effort
-    subset with is_partial=True (D-05)."""
+    """No combination meets goal: returns best-effort subset (D-05)."""
     await make_job(pay_rate=10.0, pay_type="flat", status="available")
     goal = await make_work_goal(target_earnings=500.0)
 
@@ -175,8 +174,7 @@ async def test_dp_partial_match(async_session, make_job, make_work_goal):
 
 @pytest.mark.asyncio
 async def test_empty_match(async_session, make_work_goal):
-    """No jobs in DB -- MatchResult.is_empty=True, format
-    returns graceful string (D-13)."""
+    """No jobs in DB: is_empty=True, graceful string (D-13)."""
     goal = await make_work_goal(target_earnings=100.0)
 
     svc = _make_service()
@@ -306,8 +304,7 @@ async def test_sms_format_empty():
 
 @pytest.mark.asyncio
 async def test_sms_max_5_jobs(async_session, make_job, make_work_goal):
-    """SMS output includes at most 5 job lines regardless
-    of DP selection size (D-08)."""
+    """SMS output includes at most 5 job lines (D-08)."""
     for _ in range(8):
         await make_job(pay_rate=5.0, pay_type="flat", status="available")
     goal = await make_work_goal(target_earnings=1.0)

@@ -9,8 +9,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_job_posting_queue_insert_failure_is_caught():
-    """Pinecone upsert AND queue INSERT both fail:
-    no exception propagated, error logged."""
+    """Pinecone upsert AND queue INSERT both fail: no exception."""
     from src.extraction.schemas import ExtractionResult, JobExtraction
     from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.job_posting import JobPostingHandler

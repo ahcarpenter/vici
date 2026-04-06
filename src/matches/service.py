@@ -1,6 +1,6 @@
-import structlog
 from datetime import UTC, datetime
 
+import structlog
 from opentelemetry import trace as otel_trace
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -16,7 +16,9 @@ from src.work_goals.models import WorkGoal
 tracer = otel_trace.get_tracer(__name__)
 log = structlog.get_logger()
 
-SENTINEL_DATETIME = datetime.max.replace(tzinfo=UTC)  # NULL ideal_datetime sorts last (D-12)
+SENTINEL_DATETIME = datetime.max.replace(
+    tzinfo=UTC
+)  # NULL ideal_datetime sorts last (D-12)
 
 
 class MatchService:
@@ -71,9 +73,7 @@ class MatchService:
         messages = {m.id: m for m in msg_result.scalars().all()}
 
         user_ids = list({m.user_id for m in messages.values()})
-        user_result = await session.execute(
-            select(User).where(User.id.in_(user_ids))
-        )
+        user_result = await session.execute(select(User).where(User.id.in_(user_ids)))
         users = {u.id: u for u in user_result.scalars().all()}
 
         candidates = []
