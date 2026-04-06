@@ -7,7 +7,7 @@ config:
   vici-infra:app_hostname: dev.usevici.com
   vici-infra:github_org: ahcarpenter
   vici-infra:temporal_db_user:
-    secure: v1:tIr5x37jsfD9KrV1:lERgurpFhOLoKePqYeJf2bi0gn5S1lYH
+    secure: v1:ze0QmT22r7B8mq/n:+pU+GNlO85WrSSIIN1a+xs5U0kE=
   vici-infra:temporal_db_password:
-    secure: v1:RSPtynFKg5YZNqs5:YG+cL1tr0dmZ7vptxgRsukzAAYTKS+ucSGJ3Xi6jkPKw+Ae8d8FJXAKOrnVqVXQh3nHPHIROZMYdlp4=
-encryptionsalt: v1:eQAsOykhiHk=:v1:ePoMuTEO8Qjl/OSL:1CRWsrB0kPHDXvCOt9xrBm80+a2EQQ==
+    secure: v1:d/0yncKnfYAVdkaD:stCzZtUJLO5W37qzWwU5rfyWLfE=
+encryptionsalt: v1:EeaM9dDANHQ=:v1:5ITYxT6i+0l5K9L4:bR/RYlqgH83b9l6EaB+4B1tXsOwUKw==

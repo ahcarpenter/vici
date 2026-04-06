@@ -6,4 +6,4 @@ config:
   vici-infra:registry_name: vici-images
   vici-infra:app_hostname: usevici.com
   vici-infra:github_org: ahcarpenter
-encryptionsalt: v1:GW7nju7Ccyc=:v1:PncZxhnWR4Y04ofm:jCG6fK+3nUsP6l5my9XcBPDJWLoW8w==
+encryptionsalt: v1:gPuz2z50nzI=:v1:2gLvT1VXroTE6tCy:XFo5BiqJPiNSPUgnpI1y14ilSf1WlQ==
