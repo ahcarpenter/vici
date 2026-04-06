@@ -127,6 +127,8 @@ temporal_release = k8s.helm.v3.Release(
         namespace="temporal",
         create_namespace=False,
         values={
+            # Override chart release-hash prefix so services are named temporal-{component}
+            "fullnameOverride": "temporal",
             # D-02: Disable bundled sub-charts — we supply our own dependencies.
             # cassandra.config.ports.db must be set even when disabled; chart references it.
             "cassandra": {"enabled": False, "config": {"ports": {"db": 9042}}},
