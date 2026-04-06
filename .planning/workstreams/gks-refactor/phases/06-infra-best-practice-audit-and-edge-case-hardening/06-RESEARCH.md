@@ -528,7 +528,7 @@ This is a hardening phase with no formal REQ IDs. The 5 success criteria map to 
 | A2 | Staging and prod have never had `temporal_db_user`/`temporal_db_password` as stack secrets | Runtime State Inventory | If they do exist, they also need to be removed after SM migration |
 | A3 | The GCS state bucket naming convention is `vici-app-pulumi-state-{ENV}` for all three environments | Architecture Patterns — Pattern 1 | If bucket names differ, import command targets wrong resource |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Temporal Helm pod labels for PDB selector**
    - What we know: The chart uses Helm standard labels; `fullnameOverride: "temporal"` is set
