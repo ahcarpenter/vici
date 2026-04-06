@@ -13,7 +13,7 @@
 
 **Hostname & DNS Convention**
 - D-01: Use GKE auto-assigned IPs for v1 (no custom domain purchase required)
-- D-02: Stub out a `getvici.ai` subdomain scheme in Pulumi stack configs (`dev.getvici.ai`, `staging.getvici.ai`, `getvici.ai`) so switching to custom domains later is a config change only
+- D-02: Use `usevici.com` subdomain scheme in Pulumi stack configs (`dev.usevici.com`, `staging.usevici.com`, `usevici.com`). Domain purchased on Squarespace.
 - D-03: Only the FastAPI app gets public Ingress in Phase 5. Temporal UI, Grafana, and Jaeger UI remain ClusterIP-only — operators use `kubectl port-forward`
 - D-04: Internal UIs must NOT be exposed via Ingress until authentication is in place for each service
 
@@ -50,7 +50,7 @@
 - Expose Temporal UI, Grafana, and Jaeger UI via public Ingress (requires authentication first)
 - Semver image tagging from git tags
 - Auto port-forward for in-cluster MCP servers on dev
-- Custom domain activation (getvici.ai) — stubbed in config, activate when DNS is ready
+- Custom domain DNS configuration (usevici.com) — purchased on Squarespace, configure DNS to point subdomains to GKE Ingress IPs after first pulumi up
 </user_constraints>
 
 ---
@@ -282,7 +282,7 @@ staging_issuer = k8s.apiextensions.CustomResource(
     spec={
         "acme": {
             "server": "https://acme-staging-v02.api.letsencrypt.org/directory",
-            "email": "ops@getvici.ai",
+            "email": "ops@usevici.com",
             "privateKeySecretRef": {"name": "letsencrypt-staging-key"},
             "solvers": [{
                 "http01": {
@@ -306,7 +306,7 @@ prod_issuer = k8s.apiextensions.CustomResource(
     spec={
         "acme": {
             "server": "https://acme-v02.api.letsencrypt.org/directory",
-            "email": "ops@getvici.ai",
+            "email": "ops@usevici.com",
             "privateKeySecretRef": {"name": "letsencrypt-prod-key"},
             "solvers": [{
                 "http01": {
@@ -573,10 +573,10 @@ ci_wif_binding = gcp.serviceaccount.IAMBinding(
 **Why it happens:** `envFrom.secretRef.name` must exactly match the `spec.target.name` in the `ExternalSecret`. From `secrets.py`, the target name IS the slug (e.g., `database-url`, `temporal-host`). The env var key injected is the `secretKey` field (e.g., `DATABASE_URL`, `TEMPORAL_HOST`).
 **How to avoid:** Copy `envFrom` names directly from `secrets.py` `_SECRET_DEFINITIONS` list. All 11 vici-namespace secrets are: `twilio-auth-token`, `twilio-account-sid`, `twilio-from-number`, `openai-api-key`, `pinecone-api-key`, `pinecone-index-host`, `braintrust-api-key`, `database-url`, `temporal-host`, `otel-exporter-otlp-endpoint`, `webhook-base-url`. [VERIFIED: codebase grep — secrets.py `_SECRET_DEFINITIONS`]
 
-### Pitfall 6: `app_hostname` with Auto-Assigned IP — ACME Challenge DNS
+### Pitfall 6: `app_hostname` DNS Must Be Configured Before TLS Issuance
 **What goes wrong:** Using a raw IP address as the Ingress hostname for TLS. Let's Encrypt does NOT issue certificates for IP addresses — only domain names.
-**Why it happens:** D-01 says "use GKE auto-assigned IPs for v1" which creates ambiguity about how TLS works without a real domain.
-**How to avoid:** For v1 with auto-assigned IP only, TLS cannot use Let's Encrypt. Options: (a) Use a `nip.io` hostname (`<ip>.nip.io` — free wildcard DNS for IPs, Let's Encrypt will issue a cert) or (b) skip TLS for dev and use Let's Encrypt staging cert only on staging/prod with real domains stubbed in. D-02 stubs `getvici.ai` subdomains in config — if DNS for `dev.getvici.ai` is pointed at the GKE IP, Let's Encrypt will work immediately. **The planner must clarify this with the user before implementing ingress.py** — the `app_hostname` value in each stack config determines whether TLS is possible. [ASSUMED — needs user confirmation]
+**Why it happens:** TLS cannot be provisioned until DNS records resolve to the GKE Ingress IP.
+**How to avoid:** usevici.com is purchased on Squarespace (D-01 updated). After first `pulumi up` allocates the GKE Ingress IP, configure DNS A records in Squarespace: `dev.usevici.com`, `staging.usevici.com`, and `usevici.com` → GKE Ingress IP. Once DNS propagates, cert-manager ACME HTTP-01 challenge will succeed and Let's Encrypt will issue the certificate. [RESOLVED — domain purchased]
 
 ---
 
@@ -653,7 +653,7 @@ from components.cd import wif_pool, wif_provider                # noqa: F401
 ```yaml
 # Add to Pulumi.dev.yaml, Pulumi.staging.yaml, Pulumi.prod.yaml:
 config:
-  vici-infra:app_hostname: dev.getvici.ai      # Or <ip>.nip.io for v1
+  vici-infra:app_hostname: dev.usevici.com
   vici-infra:github_org: your-org-name
   vici-infra:wif_pool_id: github-actions-dev  # Matches cd.py constant
 ```
@@ -681,7 +681,7 @@ config:
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | Double-firing of `ci.yml` and `cd-dev.yml` on push to `main` is acceptable with no race condition risk | Pitfall 4 | If race condition exists, build deploys untested code; mitigate by adding `needs` dependency |
-| A2 | `nip.io` is a viable v1 hostname for Let's Encrypt TLS with auto-assigned GKE IP | Pitfall 6 | If nip.io rate-limits or is blocked by Let's Encrypt, TLS won't work with auto-assigned IPs until real DNS is configured |
+| A2 | `usevici.com` DNS is configured in Squarespace to point to GKE Ingress IPs | - | DNS must be configured after first `pulumi up` allocates the Ingress IP |
 | A3 | `vici-ci-push` SA (from `identity.py`) is the correct SA to bind to WIF for CI pushes and Pulumi deploys | Architecture Patterns (cd.py) | If a separate deploy SA is needed vs push SA, `cd.py` must create a second SA with Pulumi state bucket access |
 | A4 | GKE Autopilot on the dev cluster currently supports bursting (250m CPU minimum per container) | Common Pitfalls (Pitfall 3) | If non-bursting, minimum is still 250m CPU / 512Mi memory — same recommendation applies |
 
@@ -689,7 +689,7 @@ config:
 
 ## Open Questions (RESOLVED)
 
-1. **`app_hostname` value for v1 TLS** — RESOLVED: Plan 01 Task 2 stubs `getvici.ai` subdomains per D-02. For v1 with auto-assigned IPs (D-01), operator updates `app_hostname` to `<ip>.nip.io` after first `pulumi up` and re-runs. The `gcp.secretmanager.SecretVersion` for `WEBHOOK_BASE_URL` in Plan 02 uses `APP_HOSTNAME`, so re-running `pulumi up` after updating the hostname automatically updates the secret value.
+1. **`app_hostname` value for TLS** — RESOLVED: Plan 01 Task 2 sets `usevici.com` subdomains per D-02. After first `pulumi up` allocates the GKE Ingress IP, operator configures DNS in Squarespace (dev.usevici.com → IP, staging.usevici.com → IP, usevici.com → IP). The `gcp.secretmanager.SecretVersion` for `WEBHOOK_BASE_URL` in Plan 02 uses `APP_HOSTNAME`, so re-running `pulumi up` after DNS propagates requires no code changes.
 
 2. **`vici-ci-push` SA scope for Pulumi** — RESOLVED: Plan 03 Task 1 grants `vici-ci-push` SA two additional roles in `cd.py`: `roles/storage.objectAdmin` (Pulumi state bucket) and `roles/container.developer` (GKE cluster access).
 
@@ -796,7 +796,7 @@ config:
 - [cert-manager GitHub issue #1343](https://github.com/cert-manager/cert-manager/issues/1343) — chicken-and-egg issue confirmed active in ingress-gce
 
 ### Tertiary (LOW confidence)
-- `nip.io` as interim hostname for Let's Encrypt with auto-assigned IPs — based on common community practice, not officially documented by cert-manager or GKE
+- `usevici.com` DNS records configured in Squarespace — standard A record configuration pointing subdomains to GKE Ingress IPs
 
 ---
 

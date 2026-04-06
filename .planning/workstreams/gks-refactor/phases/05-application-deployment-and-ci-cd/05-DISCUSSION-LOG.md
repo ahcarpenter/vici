@@ -14,7 +14,7 @@
 | Option | Description | Selected |
 |--------|-------------|----------|
 | Subdomain per env | dev.vici.app, staging.vici.app, vici.app. Clean, conventional. | |
-| GKE auto-assigned IPs only | No custom domains for v1. Raw IP + nip.io for TLS testing. | |
+| GKE auto-assigned IPs only | No custom domains for v1. Raw IP only, no TLS. | |
 | Custom per env | User specifies their own scheme. | |
 
 **User's choice:** Use purchased domain usevici.com with subdomains per env. DNS configuration in Squarespace required.
