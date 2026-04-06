@@ -5,6 +5,7 @@ Tests: JobRepository.create, WorkGoalRepository.create.
 Note: Pinecone integration tests have moved to tests/test_pipeline_orchestrator.py
 as PipelineOrchestrator now owns all storage orchestration.
 """
+
 import hashlib
 
 import pytest

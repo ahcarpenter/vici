@@ -1,6 +1,7 @@
 """
 Integration / handler tests: job posting flow.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_job_posting_queue_insert_failure_is_caught():
-    """Pinecone upsert AND queue INSERT both fail: no exception propagated, error logged."""
+    """Pinecone upsert AND queue INSERT both fail: no exception."""
     from src.extraction.schemas import ExtractionResult, JobExtraction
     from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.job_posting import JobPostingHandler
@@ -100,5 +101,9 @@ async def test_rate_limit_rolling_window():
 
     src_code = inspect.getsource(MessageRepository.enforce_rate_limit)
     # Calendar-minute truncation uses replace(second=0), rolling uses timedelta
-    assert "timedelta" in src_code, "enforce_rate_limit should use timedelta for rolling window"
-    assert "replace(second=0" not in src_code, "enforce_rate_limit should not use calendar-minute truncation"
+    assert "timedelta" in src_code, (
+        "enforce_rate_limit should use timedelta for rolling window"
+    )
+    assert "replace(second=0" not in src_code, (
+        "enforce_rate_limit should not use calendar-minute truncation"
+    )

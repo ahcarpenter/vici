@@ -16,7 +16,8 @@ class MatchRepository(BaseRepository):
         Silently skips duplicates using IntegrityError catch -- cross-dialect compatible
         with both PostgreSQL (production) and SQLite (tests).
         Per D-10: UNIQUE(job_id, work_goal_id) -- on conflict, skip.
-        Does NOT use pg_insert().on_conflict_do_nothing() to avoid SQLite incompatibility.
+        Does NOT use pg_insert().on_conflict_do_nothing()
+        to avoid SQLite incompatibility.
         """
         for job_id in job_ids:
             try:

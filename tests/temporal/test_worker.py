@@ -1,13 +1,14 @@
 """Tests for get_temporal_client wiring of TracingInterceptor."""
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from temporalio.contrib.opentelemetry import TracingInterceptor
 
 
 @pytest.mark.asyncio
 async def test_get_temporal_client_wires_tracing_interceptor():
-    """get_temporal_client passes TracingInterceptor(always_create_workflow_spans=True) to Client.connect."""
+    """get_temporal_client passes TracingInterceptor to Client.connect."""
     mock_client = MagicMock()
     with patch(
         "temporalio.client.Client.connect",
@@ -15,6 +16,7 @@ async def test_get_temporal_client_wires_tracing_interceptor():
         return_value=mock_client,
     ) as mock_connect:
         from src.temporal.worker import get_temporal_client
+
         await get_temporal_client("localhost:7233")
 
     _, kwargs = mock_connect.call_args

@@ -6,13 +6,14 @@ import pytest
 
 
 def test_import_metrics_does_not_raise_value_error():
-    """Importing src.metrics twice does not raise ValueError (duplicate registration)."""
+    """Importing src.metrics twice does not raise ValueError."""
     # Second import hits module cache — no re-registration, no ValueError
     import src.metrics  # noqa: F401  # noqa: F401, F811
 
 
 def test_gpt_calls_total_increments():
     from src.metrics import gpt_calls_total
+
     before = gpt_calls_total.labels(classification_result="job")._value.get()
     gpt_calls_total.labels(classification_result="job").inc()
     after = gpt_calls_total.labels(classification_result="job")._value.get()
@@ -21,12 +22,14 @@ def test_gpt_calls_total_increments():
 
 def test_gpt_call_duration_seconds_observe():
     from src.metrics import gpt_call_duration_seconds
+
     # observe() should not raise
     gpt_call_duration_seconds.observe(1.5)
 
 
 def test_pinecone_sync_queue_depth_settable():
     from src.metrics import pinecone_sync_queue_depth
+
     pinecone_sync_queue_depth.set(42)
     samples = list(pinecone_sync_queue_depth.collect())[0].samples
     assert any(s.value == 42 for s in samples)
@@ -34,6 +37,7 @@ def test_pinecone_sync_queue_depth_settable():
 
 def test_temporal_queue_depth_settable():
     from src.metrics import temporal_queue_depth
+
     # Should not raise
     temporal_queue_depth.set(0)
 
@@ -143,6 +147,7 @@ async def test_gpt_token_counters_increment_after_process():
 
 def test_pinecone_gauge_settable():
     from src.metrics import pinecone_sync_queue_depth
+
     pinecone_sync_queue_depth.set(7)
     samples = list(pinecone_sync_queue_depth.collect())[0].samples
     assert any(s.value == 7 for s in samples)
@@ -155,10 +160,12 @@ def test_pipeline_failures_total_is_counter():
     from prometheus_client import Counter
 
     from src.metrics import pipeline_failures_total
+
     assert isinstance(pipeline_failures_total, Counter)
 
 
 def test_pipeline_failures_total_has_function_label():
     from src.metrics import pipeline_failures_total
+
     # Calling with label should not raise
     pipeline_failures_total.labels(function="process-message").inc()

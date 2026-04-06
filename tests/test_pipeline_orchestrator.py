@@ -3,6 +3,7 @@ Tests for PipelineOrchestrator — plan 02.1-02.
 Mocks at service/repo boundaries; verifies transaction discipline.
 Span tests added in plan 02.3-02 using InMemorySpanExporter.
 """
+
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,10 +25,10 @@ def _make_orchestrator(
     pinecone_side_effect=None,
 ):
     """Build a PipelineOrchestrator with all deps mocked via handler chain."""
-    from src.pipeline.orchestrator import PipelineOrchestrator
     from src.pipeline.handlers.job_posting import JobPostingHandler
     from src.pipeline.handlers.unknown import UnknownMessageHandler
     from src.pipeline.handlers.worker_goal import WorkerGoalHandler
+    from src.pipeline.orchestrator import PipelineOrchestrator
 
     mock_extraction_service = AsyncMock()
     mock_extraction_service.process = AsyncMock(return_value=extraction_result)
@@ -78,7 +79,14 @@ def _make_orchestrator(
         audit_repo=mock_audit_repo,
         handlers=handlers,
     )
-    return orchestrator, mock_extraction_service, mock_job_repo, mock_wr_repo, mock_audit_repo, mock_pinecone
+    return (
+        orchestrator,
+        mock_extraction_service,
+        mock_job_repo,
+        mock_wr_repo,
+        mock_audit_repo,
+        mock_pinecone,
+    )
 
 
 def _make_session():
@@ -100,7 +108,9 @@ async def test_job_branch_commits_once():
         pay_rate=25.0,
     )
     result = ExtractionResult(message_type="job_posting", job=job)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+        _make_orchestrator(result)
+    )
     session = _make_session()
 
     with patch("src.pipeline.handlers.job_posting.get_sessionmaker"):
@@ -126,7 +136,9 @@ async def test_worker_branch_commits_once():
     """Worker branch: work_goal_repo.create called, audit written, commit once."""
     worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
     result = ExtractionResult(message_type="work_goal", work_goal=worker)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+        _make_orchestrator(result)
+    )
     session = _make_session()
 
     out = await orchestrator.run(
@@ -153,7 +165,9 @@ async def test_unknown_branch():
     """Unknown branch: commit called once, no job/work_goal rows created."""
     unknown = UnknownMessage(reason="Greeting with no actionable content")
     result = ExtractionResult(message_type="unknown", unknown=unknown)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(result)
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+        _make_orchestrator(result)
+    )
     session = _make_session()
 
     out = await orchestrator.run(
@@ -174,7 +188,7 @@ async def test_unknown_branch():
 
 @pytest.mark.asyncio
 async def test_pinecone_failure_enqueues_retry():
-    """Pinecone write failure: pipeline returns result, does not re-raise, enqueues sync."""
+    """Pinecone write failure: returns result, enqueues sync."""
     job = JobExtraction(
         description="Painting job",
         datetime_flexible=True,
@@ -183,8 +197,10 @@ async def test_pinecone_failure_enqueues_retry():
         pay_rate=500.0,
     )
     result = ExtractionResult(message_type="job_posting", job=job)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = _make_orchestrator(
-        result, pinecone_side_effect=Exception("Pinecone unavailable")
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+        _make_orchestrator(
+            result, pinecone_side_effect=Exception("Pinecone unavailable")
+        )
     )
     session = _make_session()
 
@@ -193,7 +209,10 @@ async def test_pinecone_failure_enqueues_retry():
     mock_s2.__aexit__ = AsyncMock(return_value=None)
     mock_sessionmaker = MagicMock(return_value=mock_s2)
 
-    with patch("src.pipeline.handlers.job_posting.get_sessionmaker", return_value=mock_sessionmaker):
+    with patch(
+        "src.pipeline.handlers.job_posting.get_sessionmaker",
+        return_value=mock_sessionmaker,
+    ):
         out = await orchestrator.run(
             session=session,
             sms_text="Painting job downtown $500",
@@ -229,7 +248,7 @@ def _span_exporter_for_orchestrator():
 
 @pytest.mark.asyncio
 async def test_job_branch_emits_pinecone_span():
-    """Job branch emits a 'pinecone.upsert' span with db.system, db.operation, db.vector.job_id."""
+    """Job branch emits a 'pinecone.upsert' span with db attributes."""
     import src.pipeline.handlers.job_posting as job_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
@@ -261,7 +280,9 @@ async def test_job_branch_emits_pinecone_span():
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]
-        assert "pinecone.upsert" in span_names, f"Expected 'pinecone.upsert' span. Got: {span_names}"
+        assert "pinecone.upsert" in span_names, (
+            f"Expected 'pinecone.upsert' span. Got: {span_names}"
+        )
 
         pinecone_span = next(s for s in spans if s.name == "pinecone.upsert")
         attrs = dict(pinecone_span.attributes)
@@ -275,7 +296,7 @@ async def test_job_branch_emits_pinecone_span():
 
 @pytest.mark.asyncio
 async def test_unknown_branch_emits_twilio_span():
-    """Unknown branch emits a 'twilio.send_sms' span with messaging.system and messaging.destination."""
+    """Unknown branch emits a 'twilio.send_sms' span with attrs."""
     import src.pipeline.handlers.unknown as unknown_handler_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
@@ -289,7 +310,10 @@ async def test_unknown_branch_emits_twilio_span():
         session = _make_session()
 
         # Mock asyncio.to_thread to avoid real Twilio call
-        with patch("src.pipeline.handlers.unknown.asyncio.to_thread", new=AsyncMock(return_value=None)):
+        with patch(
+            "src.pipeline.handlers.unknown.asyncio.to_thread",
+            new=AsyncMock(return_value=None),
+        ):
             await orchestrator.run(
                 session=session,
                 sms_text="Hello!",
@@ -302,7 +326,9 @@ async def test_unknown_branch_emits_twilio_span():
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]
-        assert "twilio.send_sms" in span_names, f"Expected 'twilio.send_sms' span. Got: {span_names}"
+        assert "twilio.send_sms" in span_names, (
+            f"Expected 'twilio.send_sms' span. Got: {span_names}"
+        )
 
         twilio_span = next(s for s in spans if s.name == "twilio.send_sms")
         attrs = dict(twilio_span.attributes)
@@ -318,7 +344,7 @@ async def test_unknown_branch_emits_twilio_span():
 
 @pytest.mark.asyncio
 async def test_orchestrator_emits_pipeline_span():
-    """PipelineOrchestrator.run() emits a pipeline.orchestrate span with message and phone attrs."""
+    """PipelineOrchestrator.run() emits a pipeline.orchestrate span."""
     import src.pipeline.orchestrator as orch_module
     from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 
@@ -344,7 +370,9 @@ async def test_orchestrator_emits_pipeline_span():
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]
-        assert "pipeline.orchestrate" in span_names, f"Expected pipeline.orchestrate span. Got: {span_names}"
+        assert "pipeline.orchestrate" in span_names, (
+            f"Expected pipeline.orchestrate span. Got: {span_names}"
+        )
 
         orch_span = next(s for s in spans if s.name == "pipeline.orchestrate")
         attrs = dict(orch_span.attributes)
@@ -361,7 +389,7 @@ async def test_orchestrator_emits_pipeline_span():
 
 
 def test_gauge_updater_no_silent_pass():
-    """Verify gauge updater no longer has a bare 'pass' on exception — warning log present."""
+    """Gauge updater has no bare 'pass' on exception."""
     with open(Path(__file__).parent.parent / "src" / "main.py") as f:
         source = f.read()
     # Old pattern: except Exception:\n    pass

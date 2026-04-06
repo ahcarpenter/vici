@@ -49,4 +49,5 @@ def _format_job_line(rank: int, cand: JobCandidate) -> str:
     loc = (cand.job.location or "?")[:20]
     phone = cand.poster_phone or "N/A"
     dur_str = f"{cand.duration:.1f}h" if cand.duration else "flat"
-    return f"{rank}. {desc} @ {loc} | ${cents_to_dollars(cand.earnings):.0f}/{dur_str} | {phone}"
+    pay = f"${cents_to_dollars(cand.earnings):.0f}/{dur_str}"
+    return f"{rank}. {desc} @ {loc} | {pay} | {phone}"
