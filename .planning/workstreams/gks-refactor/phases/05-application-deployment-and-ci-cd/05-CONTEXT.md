@@ -14,8 +14,8 @@ FastAPI app serves traffic on environment-specific public hostnames with TLS, au
 ## Implementation Decisions
 
 ### Hostname & DNS Convention
-- **D-01:** Use GKE auto-assigned IPs for v1 (no custom domain purchase required)
-- **D-02:** Stub out a `getvici.ai` subdomain scheme in Pulumi stack configs (`dev.getvici.ai`, `staging.getvici.ai`, `getvici.ai`) so switching to custom domains later is a config change only
+- **D-01:** Use real DNS with purchased domain usevici.com (purchased on Squarespace)
+- **D-02:** Use `usevici.com` subdomain scheme in Pulumi stack configs (`dev.usevici.com`, `staging.usevici.com`, `usevici.com`). Domain purchased on Squarespace; DNS configuration required before Phase 5 execution.
 - **D-03:** Only the FastAPI app gets public Ingress in Phase 5. Temporal UI, Grafana, and Jaeger UI remain ClusterIP-only — operators use `kubectl port-forward`
 - **D-04:** Internal UIs must NOT be exposed via Ingress until authentication is in place for each service (deferred — see todo)
 
@@ -124,7 +124,7 @@ FastAPI app serves traffic on environment-specific public hostnames with TLS, au
 ## Specific Ideas
 
 - Reusable workflow pattern: `.github/workflows/cd-base.yml` defines the build-push-deploy job; per-env files (`cd-dev.yml`, etc.) call it with env-specific inputs (stack name, trigger conditions, approval requirements)
-- getvici.ai subdomain scheme stubbed in Pulumi stack configs as commented-out or defaulted values — ready to activate when DNS is configured
+- usevici.com subdomain scheme in Pulumi stack configs — DNS must be configured in Squarespace pointing subdomains to GKE Ingress IPs after first pulumi up
 - Let's Encrypt staging issuer name should be clearly distinguishable (e.g., `letsencrypt-staging` vs `letsencrypt-prod`) so switching is a single value change in Ingress annotations
 
 </specifics>
@@ -135,7 +135,7 @@ FastAPI app serves traffic on environment-specific public hostnames with TLS, au
 - Expose Temporal UI, Grafana, and Jaeger UI via public Ingress — requires authentication for each service first (todo created)
 - Semver image tagging from git tags — todo created for future CD enhancement
 - Auto port-forward for in-cluster MCP servers on dev — reviewed, kept as separate backlog item
-- Custom domain activation (getvici.ai) — stubbed in config, activate when DNS is ready
+- Custom domain activation (usevici.com) — DNS configuration in Squarespace required before Phase 5 execution. Point dev.usevici.com, staging.usevici.com, and usevici.com to GKE Ingress IPs after first pulumi up.
 
 ### Reviewed Todos (not folded)
 - "Auto port-forward for in-cluster MCP servers on dev" — out of scope for Phase 5; DX tooling, not production deployment

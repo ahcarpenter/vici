@@ -17,8 +17,8 @@
 | GKE auto-assigned IPs only | No custom domains for v1. Raw IP + nip.io for TLS testing. | |
 | Custom per env | User specifies their own scheme. | |
 
-**User's choice:** Use auto-assigned IPs, but stub out a getvici.ai subdomain scheme in config for future activation.
-**Notes:** User wants the cheapest path for v1 but with the getvici.ai domain pre-configured so switching is a config change.
+**User's choice:** Use purchased domain usevici.com with subdomains per env. DNS configuration in Squarespace required.
+**Notes:** User purchased usevici.com on Squarespace. Domain is now real; DNS configuration in Squarespace required before Phase 5 execution.
 
 ### UI Ingress Scope
 
@@ -133,4 +133,4 @@
 - Expose Temporal UI, Grafana, Jaeger UI with authentication — todo
 - Semver image tagging from git tags — todo
 - Auto port-forward for in-cluster MCP servers on dev — existing backlog item, not folded
-- Custom domain activation (getvici.ai) — stubbed, activate when DNS ready
+- Custom domain DNS configuration (usevici.com) — purchased on Squarespace, configure DNS to point to GKE Ingress IPs after first pulumi up
