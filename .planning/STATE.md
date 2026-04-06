@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 03 (temporal-in-cluster) — EXECUTING
 Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-06 - Completed quick task 260406-j8u: Update README env var tables to match actual .env.*.example files
+Last activity: 2026-04-06 - Completed quick task 260406-m06: Ensure GitHub Actions CI build fails if tests don't pass
 
 Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
 
@@ -201,6 +201,7 @@ Recent decisions affecting current work:
 | 260405-wjc | Fix Pulumi pending ops, Temporal DNS mismatch, WorkflowAlreadyStartedError | 2026-04-06 | d0a29ab | [260405-wjc-fix-pulumi-pending-operations-and-resolv](./quick/260405-wjc-fix-pulumi-pending-operations-and-resolv/) |
 | 260406-0zi | Redeploy dev — fix TLS cert issuance, ACME solver IP mismatch, switch to prod LE | 2026-04-06 | 6010f62 | [260406-0zi-redeploy-dev-now-that-the-dns-has-propog](./quick/260406-0zi-redeploy-dev-now-that-the-dns-has-propog/) |
 | 260406-j8u | Update README env var tables to match actual .env.*.example files | 2026-04-06 | 0b6d69c | [260406-j8u-ensure-the-readme-reflects-the-latest-se](./quick/260406-j8u-ensure-the-readme-reflects-the-latest-se/) |
+| 260406-m06 | Ensure GitHub Actions CI build fails if tests don't pass | 2026-04-06 | a254ef9 | [260406-m06-ensure-github-actions-ci-build-fails-if-](./quick/260406-m06-ensure-github-actions-ci-build-fails-if-/) |
 
 ### Blockers/Concerns
 
