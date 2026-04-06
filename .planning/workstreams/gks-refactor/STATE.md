@@ -71,6 +71,7 @@ Recent decisions affecting current work:
 
 - Auto port-forward for in-cluster MCP servers on dev (tooling)
 - Add ephemeral PR infrastructure with full test suite (tooling)
+- Fix Pinecone sync query after 3NF normalization (database)
 
 ### Roadmap Evolution
 
