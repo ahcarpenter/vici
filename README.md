@@ -51,7 +51,7 @@ See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) f
    uv run alembic upgrade head
    ```
 
-   > **Note:** Migrations run automatically on container startup via the Dockerfile CMD, so this step is only needed when running the API outside Docker.
+   > **Note:** Migrations run automatically on container startup via the Docker Compose command, so this step is only needed when running the API outside Docker.
 
 ## Environment Variables
 
@@ -61,11 +61,11 @@ Each service has its own env file. The `.example` files document all required va
 
 | Variable | Required | Description | Where to get it |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | Async PostgreSQL connection string | Pre-filled for local Docker Compose |
+| `DATABASE_URL` | Yes | Async PostgreSQL connection string | Template provided -- fill in credentials matching `.env.postgres` |
 | `TWILIO_AUTH_TOKEN` | Yes | Validates inbound webhook signatures | Twilio Console |
 | `TWILIO_ACCOUNT_SID` | Yes | Identifies your Twilio account | Twilio Console |
 | `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console |
-| `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your production domain in GKE |
+| `WEBHOOK_BASE_URL` | Yes | Public base URL for Twilio webhooks | Externally reachable URL (e.g., ngrok for local dev); your production domain in GKE |
 | `ENV` | Yes | Runtime environment | `development` locally, `production` in GKE |
 | `TEMPORAL_ADDRESS` | Yes | Temporal server address | `temporal:7233` (matches Docker Compose) |
 | `TEMPORAL_TASK_QUEUE` | No | Temporal task queue name (default: `vici-queue`) | Pre-filled |
