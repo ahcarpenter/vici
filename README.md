@@ -76,6 +76,8 @@ Each service has its own env file. The `.example` files document all required va
 | `BRAINTRUST_API_KEY` | Yes | LLM observability and evals | braintrust.dev |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OpenTelemetry collector endpoint | `http://jaeger-collector:4317` (matches Docker Compose) |
 | `OTEL_SERVICE_NAME` | Yes | Service name in traces | `vici` |
+| `SMS_RATE_LIMIT_WINDOW_SECONDS` | No | Rate limit sliding window in seconds (default: `60`) | Pre-filled |
+| `SMS_RATE_LIMIT_MAX` | No | Max SMS messages per window (default: `5`) | Pre-filled |
 | `GIT_SHA` | No | Current git SHA for trace metadata | `dev` locally; set by CI in production |
 
 ### `.env.postgres` -- Postgres service
@@ -108,12 +110,13 @@ Each service has its own env file. The `.example` files document all required va
 |---|---|---|
 | `discovery.type` | Yes | Set to `single-node` for local use |
 | `DISABLE_SECURITY_PLUGIN` | Yes | Set to `true` for local use |
+| `OPENSEARCH_JAVA_OPTS` | No | JVM heap settings (default: `-Xms512m -Xmx512m`) |
 
 ### `.env.jaeger-query` -- Jaeger Query service
 
 | Variable | Required | Description |
 |---|---|---|
-| `SPAN_STORAGE_TYPE` | Yes | Set to `opensearch` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OTLP endpoint for self-reporting traces (`http://jaeger-collector:4317`) |
 
 ### `.env.grafana` -- Grafana service
 
@@ -121,6 +124,8 @@ Each service has its own env file. The `.example` files document all required va
 |---|---|---|
 | `GF_SECURITY_ADMIN_USER` | Yes | Grafana admin username |
 | `GF_SECURITY_ADMIN_PASSWORD` | Yes | Grafana admin password |
+| `GF_AUTH_ANONYMOUS_ENABLED` | No | Allow anonymous read-only access (`true`) |
+| `GF_AUTH_ANONYMOUS_ORG_ROLE` | No | Role for anonymous users (`Viewer`) |
 
 ## Running Tests
 
