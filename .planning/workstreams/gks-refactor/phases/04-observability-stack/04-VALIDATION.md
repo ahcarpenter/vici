@@ -39,9 +39,9 @@ validated: 2026-04-05
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 04-xx-01 | 01 | 1 | OBS-01 | — | Jaeger collector endpoint reachable in-cluster | live-cluster | `kubectl get pods -n observability -l app=jaeger-collector` | ❌ W0 | ✅ green |
-| 04-xx-02 | 01 | 1 | OBS-02 | — | Prometheus scrapes /metrics via ServiceMonitor | live-cluster | `kubectl get servicemonitor -n vici` | ❌ W0 | ✅ green |
-| 04-xx-03 | 01 | 2 | OBS-03 | — | Grafana accessible and dashboards provisioned | live-cluster | `kubectl get pods -n observability -l app.kubernetes.io/name=grafana` | ❌ W0 | ✅ green |
+| 04-xx-01 | 01 | 1 | OBS-01 | — | Jaeger collector endpoint reachable in-cluster | pytest + live-cluster | `uv run pytest tests/infra/test_observability_static.py::TestOBS01JaegerDeployments -v` | ✅ | ✅ green |
+| 04-xx-02 | 01 | 1 | OBS-02 | — | Prometheus scrapes /metrics via ServiceMonitor | pytest + live-cluster | `uv run pytest tests/infra/test_observability_static.py::TestOBS02ServiceMonitor -v` | ✅ | ✅ green |
+| 04-xx-03 | 01 | 2 | OBS-03 | — | Grafana accessible and dashboards provisioned | pytest + live-cluster | `uv run pytest tests/infra/test_observability_static.py::TestOBS03GrafanaStack -v` | ✅ | ✅ green |
 | 04-xx-04 | 01 | 2 | OBS-04 | — | Dashboard ConfigMaps labeled grafana_dashboard=1 | pytest | `uv run pytest tests/infra/test_observability_static.py::TestOBS04DashboardConfigMapLabels -v` | ✅ | ✅ green |
 | 04-xx-05 | 01 | 3 | OBS-05 | — | OTEL_EXPORTER_OTLP_ENDPOINT secret resolves | pytest | `uv run pytest tests/infra/test_observability_static.py::TestOBS05OtelExternalSecret -v` | ✅ | ✅ green |
 
@@ -63,7 +63,7 @@ validated: 2026-04-05
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `tests/infra/test_observability_static.py` | 7 | OBS-04 (4 tests), OBS-05 (3 tests) |
+| `tests/infra/test_observability_static.py` | 29 | OBS-01 (7 tests), OBS-02 (5 tests), OBS-03 (10 tests), OBS-04 (4 tests), OBS-05 (3 tests) |
 
 ---
 
