@@ -15,6 +15,7 @@ Migrate Vici from Render.com to GKE Autopilot across dev, staging, and prod envi
 - [x] **Phase 3: Temporal In-Cluster** - Temporal Server on dedicated Cloud SQL with OpenSearch visibility
 - [x] **Phase 4: Observability Stack** - Jaeger, Prometheus, Grafana deployed and configured for application monitoring
 - [x] **Phase 5: Application Deployment and CI/CD** - FastAPI app, Ingress with TLS, HPA, and GitHub Actions CD pipeline
+- [ ] **Phase 6: Infra Best-Practice Audit and Edge-Case Hardening** - Pulumi resource protection, network policies, PDBs, Temporal credential migration to ESO, and operational runbook
 
 ## Phase Details
 
@@ -101,10 +102,28 @@ Plans:
 - [x] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
 - [x] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
 
+### Phase 6: Infra Best-Practice Audit and Edge-Case Hardening
+**Goal**: All stateful infrastructure is protected from accidental deletion, namespaces enforce least-privilege network access, Temporal credentials follow the ESO pattern, and operators have a runbook for edge-case scenarios
+**Depends on**: Phase 5
+**Requirements**: None (hardening phase — success criteria below)
+**Success Criteria** (what must be TRUE):
+  1. `pulumi preview` shows `protect: true` on Cloud SQL instances, GKE cluster, Artifact Registry, and GCS state bucket across all environments
+  2. Each of the 5 namespaces (vici, temporal, observability, cert-manager, external-secrets) has a default-deny NetworkPolicy and explicit allow rules matching actual traffic patterns
+  3. Temporal DB credentials are sourced from GCP Secret Manager via ESO (not Pulumi stack secrets) and the Temporal Helm release uses `existingSecret`
+  4. PDBs exist for vici-app, temporal-frontend, and temporal-history in staging and prod (not dev)
+  5. `infra/OPERATIONS.md` documents cold-start ordering, secret rotation, and cluster upgrade procedures
+**Plans**: 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Test scaffold and protect=True on stateful resources
+- [ ] 06-02-PLAN.md — NetworkPolicies for all 5 namespaces
+- [ ] 06-03-PLAN.md — Temporal DB credential migration to ESO
+- [ ] 06-04-PLAN.md — PDBs, resource limits, OPERATIONS.md, and __main__.py wiring
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -113,4 +132,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Temporal In-Cluster | 3/3 | Complete | 2026-04-05 |
 | 4. Observability Stack | 3/3 | Validated | 2026-04-05 |
 | 5. Application Deployment and CI/CD | 3/3 | Validated | 2026-04-06 |
-| 6. Infra Best-Practice Audit | 0/? | Not started | - |
+| 6. Infra Best-Practice Audit | 0/4 | Planned | - |
