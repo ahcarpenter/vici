@@ -43,7 +43,7 @@ See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) f
    docker compose up
    ```
 
-   The API is available at http://localhost:8000. The Temporal UI is at http://localhost:8233.
+   The API is available at http://localhost:8000. The Temporal UI is at http://localhost:8080.
 
 4. Apply database migrations (first time and after schema changes)
 
@@ -55,36 +55,38 @@ See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) f
 
 ## Environment Variables
 
-Each service has its own env file. The `.example` files document all required variables — copy them (step 2 above) and fill in values marked `your_*`.
+Each service has its own env file. The `.example` files document all required variables -- copy them (step 2 above) and fill in values marked `your_*`.
 
-### `.env.app` — API service
+### `.env.app` -- API service
 
 | Variable | Required | Description | Where to get it |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | Async PostgreSQL connection string | Pre-filled for local Docker Compose |
-| `TWILIO_AUTH_TOKEN` | Yes | Validates inbound webhook signatures | Twilio Console → Account → Auth Token |
-| `TWILIO_ACCOUNT_SID` | Yes | Identifies your Twilio account | Twilio Console → Account → Account SID |
-| `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console → Phone Numbers |
-| `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your Render URL in production |
-| `ENV` | Yes | Runtime environment | `development` locally, `production` on Render |
+| `TWILIO_AUTH_TOKEN` | Yes | Validates inbound webhook signatures | Twilio Console |
+| `TWILIO_ACCOUNT_SID` | Yes | Identifies your Twilio account | Twilio Console |
+| `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console |
+| `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your production domain in GKE |
+| `ENV` | Yes | Runtime environment | `development` locally, `production` in GKE |
 | `TEMPORAL_ADDRESS` | Yes | Temporal server address | `temporal:7233` (matches Docker Compose) |
-| `OPENAI_API_KEY` | Yes | GPT classification and embedding calls | platform.openai.com → API Keys |
-| `PINECONE_API_KEY` | Yes | Vector upsert and query | Pinecone Console → API Keys |
-| `PINECONE_INDEX_HOST` | Yes | Your Pinecone index endpoint | Pinecone Console → your index → Host |
-| `BRAINTRUST_API_KEY` | Yes | LLM observability and evals | braintrust.dev → Settings → API Keys |
+| `TEMPORAL_TASK_QUEUE` | No | Temporal task queue name (default: `vici-queue`) | Pre-filled |
+| `CRON_SCHEDULE_PINECONE_SYNC` | No | Pinecone sync cron expression (default: `*/5 * * * *`) | Pre-filled |
+| `OPENAI_API_KEY` | Yes | GPT classification and embedding calls | platform.openai.com |
+| `PINECONE_API_KEY` | Yes | Vector upsert and query | Pinecone Console |
+| `PINECONE_INDEX_HOST` | Yes | Your Pinecone index endpoint | Pinecone Console |
+| `BRAINTRUST_API_KEY` | Yes | LLM observability and evals | braintrust.dev |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OpenTelemetry collector endpoint | `http://jaeger-collector:4317` (matches Docker Compose) |
 | `OTEL_SERVICE_NAME` | Yes | Service name in traces | `vici` |
-| `GIT_SHA` | No | Current git SHA for trace metadata | `dev` locally; set by CI/deploy in production |
+| `GIT_SHA` | No | Current git SHA for trace metadata | `dev` locally; set by CI in production |
 
-### `.env.postgres` — Postgres service
+### `.env.postgres` -- Postgres service
 
 | Variable | Required | Description |
 |---|---|---|
 | `POSTGRES_DB` | Yes | Database name |
 | `POSTGRES_USER` | Yes | Postgres username |
-| `POSTGRES_PASSWORD` | Yes | Postgres password — change `change_me` in production |
+| `POSTGRES_PASSWORD` | Yes | Postgres password -- change `change_me` in production |
 
-### `.env.temporal` — Temporal service
+### `.env.temporal` -- Temporal service
 
 | Variable | Required | Description |
 |---|---|---|
@@ -94,26 +96,26 @@ Each service has its own env file. The `.example` files document all required va
 | `POSTGRES_PWD` | Yes | Postgres password |
 | `POSTGRES_SEEDS` | Yes | Postgres host (e.g. `postgres`) |
 
-### `.env.temporal-ui` — Temporal UI service
+### `.env.temporal-ui` -- Temporal UI service
 
 | Variable | Required | Description |
 |---|---|---|
 | `TEMPORAL_ADDRESS` | Yes | Temporal server address (`temporal:7233`) |
 
-### `.env.opensearch` — OpenSearch service
+### `.env.opensearch` -- OpenSearch service
 
 | Variable | Required | Description |
 |---|---|---|
 | `discovery.type` | Yes | Set to `single-node` for local use |
 | `DISABLE_SECURITY_PLUGIN` | Yes | Set to `true` for local use |
 
-### `.env.jaeger-query` — Jaeger Query service
+### `.env.jaeger-query` -- Jaeger Query service
 
 | Variable | Required | Description |
 |---|---|---|
 | `SPAN_STORAGE_TYPE` | Yes | Set to `opensearch` |
 
-### `.env.grafana` — Grafana service
+### `.env.grafana` -- Grafana service
 
 | Variable | Required | Description |
 |---|---|---|
@@ -126,7 +128,7 @@ Each service has its own env file. The `.example` files document all required va
 uv run pytest
 ```
 
-Tests use SQLite + aiosqlite — no Postgres dependency. Temporal activities are mocked in tests. To run with coverage:
+Tests use SQLite + aiosqlite -- no Postgres dependency. Temporal activities are mocked in tests. To run with coverage:
 
 ```bash
 uv run pytest --cov=src --cov-report=term-missing
@@ -144,14 +146,16 @@ uv run ruff format .
 After `docker compose up`:
 
 - **Traces**: Jaeger UI at http://localhost:16686
-- **Metrics**: Grafana at http://localhost:3000 (admin / admin) — pre-provisioned FastAPI dashboard
+- **Metrics**: Grafana at http://localhost:3000 (admin / admin) -- pre-provisioned FastAPI dashboard
 - **Prometheus**: http://localhost:9090
 
-## Deployment
+## Documentation
 
-The project deploys to Render.com via the `render.yaml` Blueprint:
+Detailed documentation lives in `docs/`:
 
-1. Push to `main` triggers a Render deploy (web service + managed PostgreSQL)
-2. Set all production env vars in the Render dashboard (see [Environment Variables](#environment-variables) above — use `.env.app` vars for the web service)
-3. Configure `TEMPORAL_ADDRESS` to point to your Temporal Cloud or self-hosted instance
-4. Render runs migrations automatically on startup via the Dockerfile CMD
+- [Getting Started](docs/GETTING-STARTED.md) -- Prerequisites, installation, and first run
+- [Architecture](docs/ARCHITECTURE.md) -- System design, component diagram, and data flow
+- [Configuration](docs/CONFIGURATION.md) -- Full environment variable reference
+- [Development](docs/DEVELOPMENT.md) -- Build commands, code style, and branch conventions
+- [Testing](docs/TESTING.md) -- Test framework, running tests, and writing new tests
+- [Deployment](docs/DEPLOYMENT.md) -- GKE deployment, CI/CD pipelines, and monitoring

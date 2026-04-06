@@ -67,6 +67,7 @@ src/
 ├── main.py                # FastAPI app factory, lifespan DI wiring, OTel/Prometheus setup
 ├── metrics.py             # Prometheus gauge and counter definitions
 ├── models.py              # Central model registry (imports all domain models for Alembic)
+├── money.py               # Cents/dollars conversion utilities (all monetary values stored as integer cents)
 ├── repository.py          # BaseRepository ABC with flush-only _persist
 ├── extraction/            # OpenAI GPT integration -- classification, structured output parsing
 ├── jobs/                  # Job posting domain -- model, repository, schemas

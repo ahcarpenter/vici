@@ -71,6 +71,8 @@ tests/
 │   ├── test_metrics.py
 │   ├── test_persistence.py
 │   └── test_extraction_service_spans.py
+├── infra/
+│   └── test_observability_static.py
 ├── integration/
 │   ├── test_job_posting.py
 │   ├── test_worker_goal.py

@@ -24,11 +24,16 @@ Guide for setting up and contributing to the Vici project locally.
    uv sync
    ```
 
-4. Copy the environment file and fill in required values (see [CONFIGURATION.md](CONFIGURATION.md) for the full variable reference):
+4. Copy the example env files for each service and fill in required values (see [CONFIGURATION.md](CONFIGURATION.md) for the full variable reference):
 
    ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
+   cp .env.app.example .env.app
+   cp .env.postgres.example .env.postgres
+   cp .env.opensearch.example .env.opensearch
+   cp .env.jaeger-query.example .env.jaeger-query
+   cp .env.temporal.example .env.temporal
+   cp .env.temporal-ui.example .env.temporal-ui
+   cp .env.grafana.example .env.grafana
    ```
 
 5. Start infrastructure services with Docker Compose:
