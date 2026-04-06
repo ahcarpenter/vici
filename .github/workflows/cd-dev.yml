@@ -17,4 +17,4 @@ jobs:
     secrets:
       WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
       WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_DEV }}
-      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
