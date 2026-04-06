@@ -1,29 +1,41 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-05T16:35:57.806Z",
-  "phase": "04",
-  "phase_name": "observability-stack",
-  "phase_dir": ".planning/workstreams/gks-refactor/phases/04-observability-stack",
+  "timestamp": "2026-04-06T03:29:28.198Z",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
   "plan": 0,
   "task": 0,
   "total_tasks": 0,
   "status": "paused",
-  "completed_tasks": [],
+  "completed_tasks": [
+    {"id": 1, "name": "Quick 260405-wai: Ingress IP export + DOMAIN-SETUP.md", "status": "done", "commit": "6682159"},
+    {"id": 2, "name": "Quick 260405-wjc Task 1: Add fullnameOverride to Temporal Helm values", "status": "done", "commit": "9610ec2"}
+  ],
   "remaining_tasks": [
-    {"id": 1, "name": "Research Phase 4", "status": "in_progress", "progress": "Researcher agent spawned, running in background"},
-    {"id": 2, "name": "Create VALIDATION.md", "status": "not_started"},
-    {"id": 3, "name": "Spawn planner agent", "status": "not_started"},
-    {"id": 4, "name": "Verify plans with plan-checker", "status": "not_started"}
+    {"id": 3, "name": "Quick 260405-wjc: Finalize STATE.md + docs commit", "status": "not_started"},
+    {"id": 4, "name": "Quick 260405-wjc Task 2: Run pulumi cancel + pulumi up", "status": "not_started"}
   ],
-  "blockers": [],
-  "human_actions_pending": [],
+  "blockers": [
+    {"description": "Pulumi has 5 pending 'creating' operations blocking new deployments", "type": "technical", "workaround": "Run 'pulumi cancel' in infra/ to clear pending ops"},
+    {"description": "vici-app pod crashloops due to Temporal DNS mismatch (fullnameOverride fix committed but not deployed)", "type": "technical", "workaround": "Run 'pulumi up' after cancel to deploy the fix"}
+  ],
+  "human_actions_pending": [
+    {"action": "Run 'cd infra && pulumi cancel' to clear 5 pending operations", "context": "Pulumi state has stuck creating ops from timed-out deployment", "blocking": true},
+    {"action": "Run 'pulumi up' to deploy fullnameOverride fix and unblock ingress creation", "context": "This will recreate Temporal services with correct names, fix app DNS, create Service + Ingress", "blocking": true}
+  ],
   "decisions": [
-    {"decision": "Jaeger v2 as raw K8s manifests via Pulumi (not Helm chart)", "rationale": "Jaeger v2 unified binary config not supported by v1 Helm chart", "phase": "04"},
-    {"decision": "Full kube-prometheus-stack Helm chart", "rationale": "Industry standard, includes ServiceMonitor CRDs, matches OBS-03", "phase": "04"},
-    {"decision": "Grafana dashboard via ConfigMap sidecar provisioning", "rationale": "Standard kube-prometheus-stack pattern, keeps dashboard JSON maintainable", "phase": "04"},
-    {"decision": "All UIs ClusterIP-only, Ingress deferred to Phase 5", "rationale": "Keeps Phase 4 focused on components, Phase 5 owns Ingress", "phase": "04"}
+    {"decision": "Add fullnameOverride: temporal to Helm chart values", "rationale": "Helm auto-generates service names with release hash prefix (temporal-5b5cac0f-frontend) but secret expects temporal-frontend", "phase": "quick-260405-wjc"},
+    {"decision": "Export ingress_external_ip from Pulumi for Squarespace DNS setup", "rationale": "User needs static IP for A record; DOMAIN-SETUP.md documents full workflow", "phase": "quick-260405-wai"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Check if researcher agent completed and wrote 04-RESEARCH.md. If yes, continue plan-phase workflow from step 5.5 (validation strategy). If no, re-spawn researcher.",
-  "context_notes": "Running /gsd-plan-phase 4 --ws gks-refactor. CONTEXT.md was captured in prior discussion session. Researcher agent was spawned in background (gsd-phase-researcher, sonnet model). Workflow is at step 5 (research). After research completes: create VALIDATION.md, spawn planner (opus), then plan-checker (sonnet). Security threat model required (ASVS L1, block on high). Phase req IDs: OBS-01 through OBS-05."
+  "uncommitted_files": [
+    "infra/components/app.py",
+    "infra/components/certmanager.py",
+    "infra/components/secrets.py",
+    ".planning/debug/cert-manager-helm-timeout.md",
+    ".planning/quick/260405-wjc-fix-pulumi-pending-operations-and-resolv/",
+    ".planning/v1.0-MILESTONE-AUDIT.md"
+  ],
+  "next_action": "1) Finalize quick task 260405-wjc: create SUMMARY.md, update STATE.md, commit docs. 2) Run 'cd infra && pulumi cancel && pulumi up' to deploy fixes. 3) Verify ingress created and app healthy.",
+  "context_notes": "Two quick tasks ran this session. 260405-wai (ingress check + domain doc) completed fully. 260405-wjc (Temporal DNS fix) has the code change committed but needs docs finalization and the user must run pulumi cancel/up to deploy. Root cause: Helm chart generated service names with hash prefix but secret expected plain names. Pre-existing uncommitted changes in app.py, certmanager.py, secrets.py from prior work."
 }
