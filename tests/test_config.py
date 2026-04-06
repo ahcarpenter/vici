@@ -34,7 +34,9 @@ def test_nested_settings_has_four_sub_models(monkeypatch):
     assert hasattr(settings, "sms"), "Settings missing .sms sub-model"
     assert hasattr(settings, "extraction"), "Settings missing .extraction sub-model"
     assert hasattr(settings, "pinecone"), "Settings missing .pinecone sub-model"
-    assert hasattr(settings, "observability"), "Settings missing .observability sub-model"
+    assert hasattr(settings, "observability"), (
+        "Settings missing .observability sub-model"
+    )
 
     get_settings.cache_clear()
 
@@ -58,7 +60,8 @@ def test_extraction_gpt_model_default(monkeypatch):
 def test_config_raises_on_empty_database_url(monkeypatch):
     """Settings raises ValueError when DATABASE_URL is empty."""
     import pytest
-    from src.config import get_settings, Settings
+
+    from src.config import Settings, get_settings
 
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL", "")
@@ -76,6 +79,7 @@ def test_config_raises_on_empty_database_url(monkeypatch):
 def test_config_raises_on_empty_openai_api_key(monkeypatch):
     """Settings raises ValueError when OPENAI_API_KEY is empty."""
     import pytest
+
     from src.config import Settings
 
     with pytest.raises(Exception):
@@ -90,6 +94,7 @@ def test_config_raises_on_empty_openai_api_key(monkeypatch):
 def test_config_raises_on_empty_twilio_auth_token(monkeypatch):
     """Settings raises ValueError when TWILIO_AUTH_TOKEN is empty."""
     import pytest
+
     from src.config import Settings
 
     with pytest.raises(Exception):
@@ -104,6 +109,7 @@ def test_config_raises_on_empty_twilio_auth_token(monkeypatch):
 def test_config_raises_on_empty_pinecone_api_key(monkeypatch):
     """Settings raises ValueError when PINECONE_API_KEY is empty."""
     import pytest
+
     from src.config import Settings
 
     with pytest.raises(Exception):
@@ -116,7 +122,8 @@ def test_config_raises_on_empty_pinecone_api_key(monkeypatch):
 
 
 def test_config_valid_when_all_credentials_present():
-    """Settings constructs without error when all four required credentials are provided."""
+    """Settings constructs without error when all four
+    required credentials are provided."""
     from src.config import Settings
 
     s = Settings(

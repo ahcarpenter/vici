@@ -1,10 +1,12 @@
-"""Tests for production hardening: pipeline_failures_total, Temporal retry config, gauge updater logging."""
+"""Tests for production hardening: pipeline_failures_total,
+Temporal retry config, gauge updater logging."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 # ── Test 1: pipeline_failures_total counter exists in src.metrics ─────────────
+
 
 def test_pipeline_failures_total_importable():
     """pipeline_failures_total is a prometheus Counter with label 'function'."""
@@ -19,9 +21,11 @@ def test_pipeline_failures_total_importable():
 
 # ── Test 2: on_failure handler increments pipeline_failures_total ─────────────
 
+
 @pytest.mark.asyncio
 async def test_on_failure_handler_increments_counter():
-    """After calling handle_process_message_failure_activity, counter increments by 1."""
+    """After calling handle_process_message_failure_activity,
+    counter increments by 1."""
     from src.metrics import pipeline_failures_total
     from src.temporal.activities import (
         ProcessMessageInput,
@@ -41,6 +45,7 @@ async def test_on_failure_handler_increments_counter():
 
 # ── Test 3: ProcessMessageWorkflow has maximum_attempts=4 retry policy ───────
 
+
 def test_process_message_workflow_retry_policy():
     """ProcessMessageWorkflow uses a retry policy with 4 maximum attempts."""
     from src.temporal.workflows import PROCESS_MESSAGE_RETRY
@@ -49,6 +54,7 @@ def test_process_message_workflow_retry_policy():
 
 
 # ── Test 4: _update_gauges calls structlog warning, not bare pass ─────────────
+
 
 @pytest.mark.asyncio
 async def test_update_gauges_logs_warning_on_db_error():
@@ -85,22 +91,28 @@ async def test_update_gauges_logs_warning_on_db_error():
             try:
                 async with mock_sessionmaker()() as session:
                     from sqlalchemy import text
+
                     result = await session.execute(
-                        text("SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'")
+                        text(
+                            "SELECT COUNT(*) FROM "
+                            "pinecone_sync_queue "
+                            "WHERE status = 'pending'"
+                        )
                     )
                     pinecone_sync_queue_depth.set(result.scalar_one())
             except Exception as exc:
                 _structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed — metric stale",
+                    "gauge_updater: pinecone_sync_queue "
+                    "depth read failed — metric stale",
                     error=str(exc),
                 )
 
         await _update_gauges_under_test()
 
     # At least one warning was logged
-    assert any(
-        "gauge_updater" in event for _, event, _ in logged_events
-    ), f"Expected a structlog warning but got: {logged_events}"
+    assert any("gauge_updater" in event for _, event, _ in logged_events), (
+        f"Expected a structlog warning but got: {logged_events}"
+    )
 
 
 # ── Task 4 tests ──────────────────────────────────────────────────────────────
@@ -133,7 +145,8 @@ def test_hash_phone_valid():
 
 @pytest.mark.asyncio
 async def test_job_datetime_parse_failure_logs_warning():
-    """JobRepository.create with unparseable ideal_datetime logs a warning and sets None."""
+    """JobRepository.create with unparseable ideal_datetime
+    logs a warning and sets None."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     from src.jobs.repository import JobRepository
@@ -143,6 +156,7 @@ async def test_job_datetime_parse_failure_logs_warning():
     class BadDateTime:
         def __str__(self):
             return "not-a-date"
+
         def __bool__(self):
             return True  # passes the `if job_create.ideal_datetime:` check
 
@@ -178,7 +192,9 @@ async def test_job_datetime_parse_failure_logs_warning():
 
     repo = JobRepository()
 
-    with patch("src.jobs.repository.structlog.get_logger", return_value=CapturingLogger()):
+    with patch(
+        "src.jobs.repository.structlog.get_logger", return_value=CapturingLogger()
+    ):
         with patch.object(repo, "_persist", AsyncMock(return_value=mock_job)):
             job = await repo.create(MagicMock(), job_create)
 
@@ -190,7 +206,8 @@ async def test_job_datetime_parse_failure_logs_warning():
 
 @pytest.mark.asyncio
 async def test_sync_pinecone_queue_logs_failure_summary():
-    """sync_pinecone_queue_activity with 1 failing row logs a warning with failed count."""
+    """sync_pinecone_queue_activity with 1 failing row
+    logs a warning with failed count."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     import src.temporal.activities as acts
@@ -246,7 +263,10 @@ async def test_sync_pinecone_queue_logs_failure_summary():
     try:
         capturing_logger = CapturingLogger()
         with (
-            patch("src.temporal.activities.get_sessionmaker", return_value=mock_sessionmaker),
+            patch(
+                "src.temporal.activities.get_sessionmaker",
+                return_value=mock_sessionmaker,
+            ),
             patch("src.temporal.activities.write_job_embedding", mock_write),
             patch("src.temporal.activities.get_settings", return_value=mock_settings),
             patch("structlog.get_logger", return_value=capturing_logger),
@@ -257,7 +277,8 @@ async def test_sync_pinecone_queue_logs_failure_summary():
 
     assert result == "ok"
     failure_logs = [
-        (e, kw) for e, kw in capturing_logger.logged_warnings
+        (e, kw)
+        for e, kw in capturing_logger.logged_warnings
         if "sweep completed with failures" in e
     ]
     assert len(failure_logs) > 0
