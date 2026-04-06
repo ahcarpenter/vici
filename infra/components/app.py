@@ -47,7 +47,7 @@ _ENV_FROM_SOURCES = [
     "pinecone-index-host",
     "braintrust-api-key",
     "database-url",
-    "temporal-host",
+    "temporal-address",
     "otel-exporter-otlp-endpoint",
     "webhook-base-url",
 ]
@@ -119,11 +119,15 @@ app_deployment = k8s.apps.v1.Deployment(
                     k8s.core.v1.ContainerArgs(
                         name="vici-app",
                         image=pulumi.Output.concat(registry_url, "/vici:", ENV),
+                        image_pull_policy="Always",
                         ports=[
                             k8s.core.v1.ContainerPortArgs(
                                 container_port=_APP_PORT,
                                 name="http",
                             ),
+                        ],
+                        env=[
+                            k8s.core.v1.EnvVarArgs(name="ENV", value=ENV),
                         ],
                         env_from=[
                             k8s.core.v1.EnvFromSourceArgs(
