@@ -38,7 +38,7 @@ staging_issuer = k8s.apiextensions.CustomResource(
             "server": _ACME_STAGING_SERVER,
             "email": _ACME_EMAIL,
             "privateKeySecretRef": {"name": "letsencrypt-staging-key"},
-            "solvers": [{"http01": {"ingress": {"class": _INGRESS_CLASS}}}],
+            "solvers": [{"http01": {"ingress": {"name": "vici-ingress"}}}],
         }
     },
     opts=ResourceOptions(
@@ -64,7 +64,7 @@ prod_issuer = k8s.apiextensions.CustomResource(
             "server": _ACME_PROD_SERVER,
             "email": _ACME_EMAIL,
             "privateKeySecretRef": {"name": "letsencrypt-prod-key"},
-            "solvers": [{"http01": {"ingress": {"class": _INGRESS_CLASS}}}],
+            "solvers": [{"http01": {"ingress": {"name": "vici-ingress"}}}],
         }
     },
     opts=ResourceOptions(
@@ -102,7 +102,7 @@ vici_ingress = k8s.networking.v1.Ingress(
         annotations={
             "kubernetes.io/ingress.class": _INGRESS_CLASS,
             "kubernetes.io/ingress.allow-http": "true",
-            "cert-manager.io/issuer": "letsencrypt-staging",
+            "cert-manager.io/issuer": "letsencrypt-prod",
         },
     ),
     spec=k8s.networking.v1.IngressSpecArgs(
