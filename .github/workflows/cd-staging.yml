@@ -1,0 +1,29 @@
+name: CD Staging
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  preview:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/cd-base.yml
+    with:
+      stack: staging
+      command: preview
+    secrets:
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
+      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_STAGING }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/cd-base.yml
+    with:
+      stack: staging
+      command: up
+    secrets:
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
+      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_STAGING }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
