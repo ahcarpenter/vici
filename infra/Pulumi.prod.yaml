@@ -4,4 +4,6 @@ config:
   vici-infra:env: prod
   vici-infra:cluster_name: vici-prod
   vici-infra:registry_name: vici-images
+  vici-infra:app_hostname: usevici.com
+  vici-infra:github_org: ahcarpenter
 encryptionsalt: v1:GW7nju7Ccyc=:v1:PncZxhnWR4Y04ofm:jCG6fK+3nUsP6l5my9XcBPDJWLoW8w==

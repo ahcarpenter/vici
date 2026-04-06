@@ -4,6 +4,8 @@ config:
   vici-infra:env: dev
   vici-infra:cluster_name: vici-dev
   vici-infra:registry_name: vici-images
+  vici-infra:app_hostname: dev.usevici.com
+  vici-infra:github_org: ahcarpenter
   vici-infra:temporal_db_user:
     secure: v1:tIr5x37jsfD9KrV1:lERgurpFhOLoKePqYeJf2bi0gn5S1lYH
   vici-infra:temporal_db_password:

@@ -4,4 +4,6 @@ config:
   vici-infra:env: staging
   vici-infra:cluster_name: vici-staging
   vici-infra:registry_name: vici-images
+  vici-infra:app_hostname: staging.usevici.com
+  vici-infra:github_org: ahcarpenter
 encryptionsalt: v1:ebjOmizRDe8=:v1:8xBL08OwnzmF3msC:FSjC5yYIJ+1kWIHtOG46b1vqlBkYTw==
