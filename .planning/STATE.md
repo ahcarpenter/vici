@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 03 (temporal-in-cluster) — EXECUTING
 Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-06 - Completed quick task 260405-wjc: Fix Pulumi pending ops + Temporal DNS + app crash
+Last activity: 2026-04-06 - Completed quick task 260406-0zi: Redeploy dev — fix TLS & HTTPS with prod Let's Encrypt cert
 
 Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
 
@@ -199,6 +199,7 @@ Recent decisions affecting current work:
 | 260405-oux | Install MCP servers and Claude skills for vici tech stack | 2026-04-05 | 7ead7a1 | [260405-oux-install-mcp-servers-and-claude-skills-fo](./quick/260405-oux-install-mcp-servers-and-claude-skills-fo/) |
 | 260405-wai | Verify ingress status + add domain setup runbook for Squarespace DNS | 2026-04-06 | 6682159 | [260405-wai-double-check-that-the-ingress-was-create](./quick/260405-wai-double-check-that-the-ingress-was-create/) |
 | 260405-wjc | Fix Pulumi pending ops, Temporal DNS mismatch, WorkflowAlreadyStartedError | 2026-04-06 | d0a29ab | [260405-wjc-fix-pulumi-pending-operations-and-resolv](./quick/260405-wjc-fix-pulumi-pending-operations-and-resolv/) |
+| 260406-0zi | Redeploy dev — fix TLS cert issuance, ACME solver IP mismatch, switch to prod LE | 2026-04-06 | 6010f62 | [260406-0zi-redeploy-dev-now-that-the-dns-has-propog](./quick/260406-0zi-redeploy-dev-now-that-the-dns-has-propog/) |
 
 ### Blockers/Concerns
 
@@ -207,7 +208,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-06T04:10:00Z
-Stopped at: Completed quick task 260405-wjc: Fix Pulumi + Temporal DNS + app crash
+Last session: 2026-04-06T05:10:00Z
+Stopped at: Completed quick task 260406-0zi: Redeploy dev — HTTPS working with prod LE cert
 Resume file: None
-Next action: Configure Squarespace DNS A record → 34.120.195.235 (see infra/DOMAIN-SETUP.md)
+Next action: Fix Pinecone sync query (j.user_id removed in 3NF), fix Temporal schema migration idempotency
