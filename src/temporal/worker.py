@@ -54,9 +54,10 @@ async def start_cron_if_needed(client: Client) -> None:
             task_queue=settings.temporal.task_queue,
             cron_schedule=settings.temporal.cron_schedule_pinecone_sync,
         )
-    except (WorkflowAlreadyStartedError, RPCError) as err:
-        already_exists = err.status == RPCStatusCode.ALREADY_EXISTS
-        if isinstance(err, WorkflowAlreadyStartedError) or already_exists:
+    except WorkflowAlreadyStartedError:
+        pass  # cron workflow already registered
+    except RPCError as err:
+        if err.status == RPCStatusCode.ALREADY_EXISTS:
             pass  # cron workflow already registered
         else:
             raise
