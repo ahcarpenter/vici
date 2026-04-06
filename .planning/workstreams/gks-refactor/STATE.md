@@ -69,7 +69,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Auto port-forward for in-cluster MCP servers on dev (tooling)
+- Add ephemeral PR infrastructure with full test suite (tooling)
 
 ### Roadmap Evolution
 
