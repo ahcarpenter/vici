@@ -1,6 +1,6 @@
 {
   "mode": "interactive",
-  "granularity": "coarse",
+  "granularity": "standard",
   "parallelization": true,
   "commit_docs": true,
   "model_profile": "quality",
