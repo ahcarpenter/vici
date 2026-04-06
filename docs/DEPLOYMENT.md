@@ -1,26 +1,14 @@
 <!-- generated-by: gsd-doc-writer -->
 # Deployment
 
-Vici uses two deployment targets: **Render** for the current production service and **Google Cloud (GKE)** for planned infrastructure managed by Pulumi.
+Vici deploys to **Google Cloud (GKE Autopilot)** via Pulumi infrastructure-as-code. Local development uses Docker Compose.
 
 ## Deployment Targets
 
-| Target | Config File | Status |
-|--------|------------|--------|
-| Render | `render.yaml` | Active production deployment |
+| Target | Config | Status |
+|--------|--------|--------|
+| GKE via Pulumi | `infra/` | Production infrastructure |
 | Docker Compose | `docker-compose.yml` | Local development |
-| GKE via Pulumi | `infra/` | Infrastructure-as-code for dev, staging, and prod environments |
-
-### Render
-
-The production application runs on Render as a Docker-based web service. Configuration is defined in `render.yaml`:
-
-- **Runtime:** Docker (uses the root `Dockerfile`)
-- **Region:** Oregon
-- **Plan:** Starter
-- **Pre-deploy command:** `uv run alembic upgrade head` (runs database migrations before each deploy)
-- **Health check:** `/health`
-- **Database:** Managed PostgreSQL 16 (`vici-db`, basic-256mb plan)
 
 ### GKE (Pulumi)
 
@@ -36,8 +24,12 @@ Pulumi components provision:
 
 - **GKE Autopilot cluster** (`infra/components/cluster.py`) with Workload Identity and Cloud DNS
 - **Artifact Registry** (`infra/components/registry.py`) for Docker images at `us-central1-docker.pkg.dev/<project>/vici-images/`
+- **Cloud SQL** (`infra/components/database.py`) for application and Temporal databases
+- **External Secrets Operator** (`infra/components/secrets.py`) with GCP Secret Manager
 - **IAM identities** (`infra/components/identity.py`) including a CI push service account and Workload Identity binding
 - **Kubernetes namespaces** (`infra/components/namespaces.py`)
+- **Temporal Server** (`infra/components/temporal.py`) via Helm in dedicated namespace
+- **OpenSearch** (`infra/components/opensearch.py`) for Temporal visibility
 
 Pulumi state is stored in a GCS bucket (`gs://vici-app-pulumi-state-dev` by default; CI overrides via `PULUMI_BACKEND_URL`).
 
@@ -68,35 +60,21 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes and pull requests to
 4. Lint: `uv run ruff check src/ tests/`
 5. Test: `uv run pytest tests/ -x --tb=short -q` (using SQLite for CI)
 
-There is no automated deploy step in CI. Render auto-deploys from the `main` branch on push.
-<!-- VERIFY: Render auto-deploy trigger configuration -->
-
 ## Environment Setup
 
-Production environment variables are listed in `render.yaml` and documented in detail in [CONFIGURATION.md](CONFIGURATION.md). Key required variables for production:
+Production environment variables are managed via GCP Secret Manager and delivered to pods through External Secrets Operator. See [CONFIGURATION.md](CONFIGURATION.md) for the full variable reference.
 
-- `DATABASE_URL` -- provided automatically by Render's managed database
+Key required variables for production:
+
+- `DATABASE_URL` -- Cloud SQL connection string via Auth Proxy sidecar
 - `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER` -- SMS integration
 - `OPENAI_API_KEY` -- LLM services
 - `PINECONE_API_KEY`, `PINECONE_INDEX_HOST` -- vector search
 - `BRAINTRUST_API_KEY` -- evaluation/observability
 - `OTEL_EXPORTER_OTLP_ENDPOINT` -- OpenTelemetry trace export
-- `ENV` -- set to `production` on Render
-
-All secrets are configured through the deployment platform's environment variable management.
-<!-- VERIFY: Secret management platform and process for Render and GKE deployments -->
+- `ENV` -- environment name (`dev`, `staging`, `production`)
 
 ## Rollback Procedure
-
-### Render
-
-Render maintains a history of deploys. To roll back:
-
-1. Open the Render dashboard for the `vici` service
-2. Navigate to the deploy history
-3. Select a previous successful deploy and trigger a manual redeploy
-
-<!-- VERIFY: Render dashboard URL for the vici service -->
 
 ### GKE
 
@@ -130,5 +108,3 @@ The `docker-compose.yml` includes a full local observability stack:
 | Grafana | 3000 | Metrics dashboards |
 
 Grafana provisioning configuration lives in `grafana/provisioning/` and Prometheus scrape config in `prometheus/prometheus.yml`.
-
-<!-- VERIFY: Production monitoring dashboard URLs and alerting configuration -->

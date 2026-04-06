@@ -65,8 +65,8 @@ Each service has its own env file. The `.example` files document all required va
 | `TWILIO_AUTH_TOKEN` | Yes | Validates inbound webhook signatures | Twilio Console → Account → Auth Token |
 | `TWILIO_ACCOUNT_SID` | Yes | Identifies your Twilio account | Twilio Console → Account → Account SID |
 | `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console → Phone Numbers |
-| `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your Render URL in production |
-| `ENV` | Yes | Runtime environment | `development` locally, `production` on Render |
+| `WEBHOOK_BASE_URL` | Yes | Public base URL for this service | `http://localhost:8000` locally; your service URL in production |
+| `ENV` | Yes | Runtime environment | `development` locally, `production` in GKE |
 | `TEMPORAL_ADDRESS` | Yes | Temporal server address | `temporal:7233` (matches Docker Compose) |
 | `OPENAI_API_KEY` | Yes | GPT classification and embedding calls | platform.openai.com → API Keys |
 | `PINECONE_API_KEY` | Yes | Vector upsert and query | Pinecone Console → API Keys |
@@ -149,9 +149,6 @@ After `docker compose up`:
 
 ## Deployment
 
-The project deploys to Render.com via the `render.yaml` Blueprint:
+The project deploys to **GKE Autopilot** via Pulumi infrastructure-as-code. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full details.
 
-1. Push to `main` triggers a Render deploy (web service + managed PostgreSQL)
-2. Set all production env vars in the Render dashboard (see [Environment Variables](#environment-variables) above — use `.env.app` vars for the web service)
-3. Configure `TEMPORAL_ADDRESS` to point to your Temporal Cloud or self-hosted instance
-4. Render runs migrations automatically on startup via the Dockerfile CMD
+Infrastructure is managed under `infra/` with three mirrored environments (dev, staging, prod). Secrets are delivered via GCP Secret Manager + External Secrets Operator.

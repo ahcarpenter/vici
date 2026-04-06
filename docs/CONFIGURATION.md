@@ -78,6 +78,6 @@ Vici uses separate `.env.*` files for docker-compose services, each scoped to a 
 | `.env.jaeger-query` | Jaeger query service |
 | `.env.grafana` | Grafana dashboard |
 
-For production on Render, environment variables are configured in `render.yaml` under the `envVars` key. Variables marked `sync: false` must be set manually in the Render dashboard. <!-- VERIFY: Render dashboard URL for managing secrets -->
+For production on GKE, environment variables are managed via GCP Secret Manager and delivered to pods through External Secrets Operator (see `infra/components/secrets.py`).
 
 The `ENV` variable controls the environment name. Set it to `local` for development or `production` for production deployments.

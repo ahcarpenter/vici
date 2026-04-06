@@ -34,5 +34,5 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Production CMD — Render pre-deploy hook runs migrations separately
+# Production CMD — migrations run via a separate Kubernetes Job before deploy
 CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
