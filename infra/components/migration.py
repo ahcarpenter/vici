@@ -72,6 +72,7 @@ migration_job = k8s.batch.v1.Job(
                     k8s.core.v1.ContainerArgs(
                         name="alembic-migration",
                         image=pulumi.Output.concat(registry_url, "/vici:", ENV),
+                        image_pull_policy="Always",
                         command=["uv", "run", "alembic", "upgrade", "head"],
                         env_from=[
                             k8s.core.v1.EnvFromSourceArgs(

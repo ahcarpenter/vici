@@ -43,14 +43,16 @@ _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 _SCHEMA_COMMANDS = pulumi.Output.all(_TEMPORAL_DB_USER, _TEMPORAL_DB_PASS).apply(
     lambda creds: " && ".join(
         [
+            # create-database and setup-schema are idempotent guards:
+            # '|| true' lets subsequent steps proceed if the object already exists.
             f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal create-database || true",
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal setup-schema -v 0.0",
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal setup-schema -v 0.0 || true",
             (
                 f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal update-schema"
                 f" -d {_SCHEMA_BASE}/temporal/versioned"
             ),
             f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility create-database || true",
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility setup-schema -v 0.0",
+            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility setup-schema -v 0.0 || true",
             (
                 f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility update-schema"
                 f" -d {_SCHEMA_BASE}/visibility/versioned"
@@ -122,6 +124,7 @@ temporal_release = k8s.helm.v3.Release(
     "temporal",
     k8s.helm.v3.ReleaseArgs(
         chart="temporal",
+        name="temporal",  # Explicit name for deterministic K8s resource naming
         version=_TEMPORAL_CHART_VERSION,
         repository_opts=k8s.helm.v3.RepositoryOptsArgs(repo=_TEMPORAL_REPO),
         namespace="temporal",

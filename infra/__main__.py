@@ -19,6 +19,9 @@ from components.opensearch import opensearch_release  # noqa: F401
 from components.temporal import temporal_schema_job, temporal_release  # noqa: F401
 from components.jaeger import jaeger_collector_deployment, jaeger_query_deployment  # noqa: F401
 from components.prometheus import kube_prometheus_release, fastapi_service_monitor  # noqa: F401
+from components.app import app_deployment, app_service, app_hpa  # noqa: F401
+from components.certmanager import certmanager_release  # noqa: F401
+from components.ingress import vici_ingress, webhook_base_url_version  # noqa: F401
 
 # All pulumi.export() calls are in their respective component files.
 # Add cross-component exports here if needed in the future.

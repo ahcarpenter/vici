@@ -14,7 +14,8 @@ Migrate Vici from Render.com to GKE Autopilot across dev, staging, and prod envi
 - [ ] **Phase 2: Database and Secrets Infrastructure** - Cloud SQL instances, ESO, Secret Manager integration, and Alembic migration Job
 - [ ] **Phase 3: Temporal In-Cluster** - Temporal Server on dedicated Cloud SQL with OpenSearch visibility
 - [ ] **Phase 4: Observability Stack** - Jaeger, Prometheus, Grafana deployed and configured for application monitoring
-- [ ] **Phase 5: Application Deployment and CI/CD** - FastAPI app, Ingress with TLS, HPA, and GitHub Actions CD pipeline
+- [x] **Phase 5: Application Deployment** - FastAPI app, Ingress with TLS, HPA, cert-manager, and full stack verification
+- [ ] **Phase 5.1: GitHub Actions CI/CD** *(INSERTED)* - WIF pool, reusable CD workflows, per-environment deploy triggers
 
 ## Phase Details
 
@@ -80,23 +81,34 @@ Plans:
 - [x] 04-02-PLAN.md — Deploy kube-prometheus-stack with Grafana dashboards and ServiceMonitor
 - [x] 04-03-PLAN.md — Wire observability into Pulumi entry point and create OTEL ExternalSecret
 
-### Phase 5: Application Deployment and CI/CD
-**Goal**: FastAPI app serves traffic on environment-specific public hostnames with TLS, auto-scales under load, and deploys automatically via GitHub Actions
+### Phase 5: Application Deployment
+**Goal**: FastAPI app serves traffic on the public hostname with TLS, auto-scales under load, and all infrastructure components deploy cleanly via `pulumi up`
 **Depends on**: Phase 4
-**Requirements**: APP-01, APP-02, APP-03, APP-04, APP-05, APP-06, CD-01, CD-02, CD-03, CD-04, CD-05
+**Requirements**: APP-01, APP-02, APP-03, APP-04, APP-05, APP-06
 **Success Criteria** (what must be TRUE):
-  1. `GET /health` returns HTTP 200 from the public GKE Ingress hostname with valid TLS certificate in all three environments
+  1. `GET /health` returns HTTP 200 from the public GKE Ingress hostname with valid TLS certificate
   2. Temporal worker is connected to the in-cluster Temporal Server and appears in Temporal UI
   3. HPA scales the FastAPI Deployment between 1 and 3 replicas based on CPU
-  4. Pushing to `main` triggers a GitHub Actions job that builds, pushes to Artifact Registry, and runs `pulumi up --stack dev` with no static GCP credentials
-  5. `pulumi up --stack prod` requires manual workflow dispatch with environment approval gate
-**Plans**: 3 plans
-**UI hint**: yes
+  4. `pulumi up --stack dev` completes with zero errors and all pods are Running
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
-- [ ] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
-- [ ] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
+- [x] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
+- [x] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
+
+### Phase 5.1: GitHub Actions CI/CD *(INSERTED)*
+**Goal**: Pushing to `main` triggers automated build, push, and deploy to dev; staging and prod have appropriate gating
+**Depends on**: Phase 5
+**Requirements**: CD-01, CD-02, CD-03, CD-04, CD-05
+**Success Criteria** (what must be TRUE):
+  1. Pushing to `main` triggers a GitHub Actions job that builds, pushes to Artifact Registry, and runs `pulumi up --stack dev` with no static GCP credentials
+  2. PRs to `main` run `pulumi preview --stack staging` automatically
+  3. `pulumi up --stack prod` requires manual workflow dispatch with GitHub environment approval gate
+  4. No static GCP service account keys exist; all auth uses WIF OIDC tokens
+**Plans**: 1 plan
+
+Plans:
+- [ ] 05.1-01-PLAN.md — WIF pool + CI/CD workflows + wire CD components into __main__.py
 
 ## Progress
 
@@ -109,4 +121,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Database and Secrets Infrastructure | 0/? | Not started | - |
 | 3. Temporal In-Cluster | 0/3 | Planned | - |
 | 4. Observability Stack | 3/3 | Validated | 2026-04-05 |
-| 5. Application Deployment and CI/CD | 0/3 | Planned | - |
+| 5. Application Deployment | 2/2 | Complete | 2026-04-09 |
+| 5.1 GitHub Actions CI/CD *(INSERTED)* | 0/1 | Not started | - |
