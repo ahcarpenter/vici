@@ -15,6 +15,7 @@ Migrate Vici from Render.com to GKE Autopilot across dev, staging, and prod envi
 - [x] **Phase 3: Temporal In-Cluster** - Temporal Server on dedicated Cloud SQL with OpenSearch visibility
 - [x] **Phase 4: Observability Stack** - Jaeger, Prometheus, Grafana deployed and configured for application monitoring
 - [x] **Phase 5: Application Deployment and CI/CD** - FastAPI app, Ingress with TLS, HPA, and GitHub Actions CD pipeline
+- [ ] **Phase 5.1: GitHub Actions CI/CD Hardening** (INSERTED) - Rewrite CD workflows to match locked decisions: two-job base, Docker cache, SHA tagging, staging dispatch-only, prod approval gate
 - [ ] **Phase 6: Infra Best-Practice Audit and Edge-Case Hardening** - Pulumi resource protection, network policies, PDBs, Temporal credential migration to ESO, and operational runbook
 
 ## Phase Details
@@ -102,6 +103,23 @@ Plans:
 - [x] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
 - [x] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
 
+### Phase 5.1: GitHub Actions CI/CD Hardening (INSERTED)
+**Goal**: CD workflow files fully match locked decisions — two-job reusable base, Docker GHA layer cache, SHA-only tagging with Pulumi config-map passthrough, staging dispatch-only, prod environment approval gate, and post-deploy health check
+**Depends on**: Phase 5
+**Requirements**: CD-01, CD-02, CD-03, CD-04, CD-05
+**Success Criteria** (what must be TRUE):
+  1. `cd-base.yml` has two jobs (`build` and `deploy`) with WIF auth, Docker GHA cache, and SHA-only image tagging
+  2. `cd-dev.yml` triggers on push to `main` and calls `cd-base.yml` with `command=up` and `stack=dev`
+  3. `cd-staging.yml` triggers only on `workflow_dispatch` (no `pull_request` trigger)
+  4. `cd-prod.yml` triggers on `workflow_dispatch` with `environment: prod` approval gate
+  5. `config.py` exports `IMAGE_TAG` from `cfg.get("imageTag")` with `ENV` fallback; `app.py` uses `IMAGE_TAG`
+  6. Static test suite validates all CD contracts via YAML and AST parsing
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05.1-01-PLAN.md — Test scaffold and IMAGE_TAG config key for Pulumi
+- [ ] 05.1-02-PLAN.md — Rewrite all four CD workflow files to match locked decisions
+
 ### Phase 6: Infra Best-Practice Audit and Edge-Case Hardening
 **Goal**: All stateful infrastructure is protected from accidental deletion, namespaces enforce least-privilege network access, Temporal credentials follow the ESO pattern, and operators have a runbook for edge-case scenarios
 **Depends on**: Phase 5
@@ -123,7 +141,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 5.1 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -132,4 +150,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Temporal In-Cluster | 3/3 | Complete | 2026-04-05 |
 | 4. Observability Stack | 3/3 | Validated | 2026-04-05 |
 | 5. Application Deployment and CI/CD | 3/3 | Validated | 2026-04-06 |
+| 5.1 GitHub Actions CI/CD Hardening | 0/2 | Planned | - |
 | 6. Infra Best-Practice Audit | 0/4 | Planned | - |
