@@ -18,7 +18,7 @@ Guide for setting up and contributing to the Vici project locally.
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-3. Install all dependencies including dev tools:
+3. Install all dependencies including the dev group:
 
    ```bash
    uv sync
@@ -60,7 +60,8 @@ Guide for setting up and contributing to the Vici project locally.
 
 | Command | Description |
 |---------|-------------|
-| `uv sync` | Install all dependencies (including dev group) |
+| `uv sync` | Install all dependencies including the dev group |
+| `uv sync --frozen` | Install from the locked `uv.lock` without resolving (matches CI) |
 | `uv sync --frozen --no-dev` | Install production dependencies only (reproducible lockfile) |
 | `uv run uvicorn src.main:app --reload` | Start the dev server with hot reload |
 | `uv run alembic upgrade head` | Apply all pending database migrations |
@@ -68,17 +69,17 @@ Guide for setting up and contributing to the Vici project locally.
 | `uv run ruff check src/ tests/` | Lint source and test files |
 | `uv run ruff check --fix src/ tests/` | Lint and auto-fix where possible |
 | `uv run ruff format src/ tests/` | Format source and test files |
-| `uv run pytest tests/ -x --tb=short -q` | Run the test suite |
+| `uv run pytest tests/ -x --tb=short -q` | Run the test suite (fail-fast) |
 | `uv run pytest tests/ --cov=src` | Run tests with coverage reporting |
 | `docker compose up` | Start the full stack (app, Postgres, Temporal, Jaeger, Prometheus, Grafana) |
 | `docker compose up -d postgres temporal` | Start only database and workflow infrastructure |
 
 ## Code style
 
-- **Ruff** is used for both linting and formatting. Configuration lives in `pyproject.toml` under `[tool.ruff]`.
-  - Target version: Python 3.12
+- **Ruff** handles both linting and formatting. Configuration lives in `pyproject.toml` under `[tool.ruff]`.
+  - Target version: Python 3.12 (`target-version = "py312"`)
   - Lint rules enabled: `E` (pycodestyle errors), `F` (pyflakes), `I` (isort import sorting)
-  - Long lines are exempted in `src/extraction/prompts.py` for LLM prompt strings
+  - Per-file ignore: `src/extraction/prompts.py` exempts `E501` (long lines) for LLM prompt strings
 - Run before committing:
 
   ```bash
@@ -86,18 +87,42 @@ Guide for setting up and contributing to the Vici project locally.
   uv run ruff format src/ tests/
   ```
 
-- CI runs `uv run ruff check src/ tests/` on every push and pull request (see `.github/workflows/ci.yml`). The lint step currently uses `continue-on-error: true` while formatting is being normalized.
+- CI runs `uv run ruff check src/ tests/` on every push and pull request (see `.github/workflows/ci.yml`). Lint failures fail the build — `continue-on-error` is no longer set on the Lint step.
+
+## Project structure conventions
+
+The `src/` tree is organized by **domain**, not by file type, following the FastAPI best-practices described in `AGENTS.md`. Each domain package may contain:
+
+- `router.py` — API endpoints
+- `schemas.py` — Pydantic request/response models
+- `models.py` — SQLModel database models
+- `service.py` — Business logic
+- `repository.py` — Data access layer
+- `dependencies.py` — Route dependencies (validation + DI)
+- `config.py` — Domain-scoped `BaseSettings`
+- `constants.py` — Constants and error codes
+- `exceptions.py` — Domain-specific exceptions
+- `utils.py` — Helper functions
+
+Current domains under `src/`: `extraction/`, `jobs/`, `matches/`, `pipeline/`, `sms/`, `temporal/`, `users/`, `work_goals/`. Shared modules live at the top level (`config.py`, `database.py`, `exceptions.py`, `models.py`, `repository.py`, `main.py`).
+
+When importing across domains, use explicit module names to preserve namespace clarity:
+
+```python
+from src.extraction import service as extraction_service
+from src.users import constants as user_constants
+```
 
 ## Branch conventions
 
-No formal branch naming convention is documented. The default branch is `main`. Recent commit messages follow the pattern `type(scope): description` (e.g., `docs(phase-03): add security threat verification`), suggesting conventional-commit style is preferred.
+No formal branch naming convention is documented. The default branch is `main`. Commit messages follow the conventional-commits style `type(scope): description` (examples from recent history: `fix(ci): ...`, `docs(05.1): ...`, `chore: ...`). Long-running feature branches use a `gsd/` prefix (e.g., `gsd/v1.0-milestone`) to denote in-progress milestone work.
 
 ## PR process
 
 - Open pull requests against the `main` branch.
-- CI automatically runs linting and tests on every pull request (`.github/workflows/ci.yml`).
-- Tests execute against an in-memory SQLite database in CI, so no external services are required for the test suite to pass.
-- No pull request template is configured. Ensure your PR description explains the motivation for the change and any testing performed.
+- CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request targeting `main`. It installs dependencies with `uv sync --frozen`, runs `ruff check`, and executes `pytest`.
+- Tests execute against an in-memory SQLite database in CI (`DATABASE_URL=sqlite+aiosqlite:///./test.db`), so no external services are required for the test suite to pass.
+- No pull request template is configured under `.github/`. Ensure your PR description explains the motivation for the change, the scope of affected domains, and any manual testing performed.
 
 ## Docker Compose services
 
@@ -117,7 +142,7 @@ The full local stack is defined in `docker-compose.yml`:
 
 ## Migrations
 
-Alembic is used for database migrations. Migration files live in `migrations/versions/` and follow the naming template `YYYY-MM-DD_slug.py` (configured in `alembic.ini`).
+Alembic manages database migrations. Migration files live in `migrations/versions/` and use the file template `%(year)d-%(month).2d-%(day).2d_%(slug)s` configured in `alembic.ini` (e.g., `2026-04-04_add_job_status.py`). The `sqlalchemy.url` is set programmatically in `migrations/env.py` from `src.config.settings` rather than in `alembic.ini`.
 
 To create a new migration after modifying SQLModel models:
 
@@ -125,4 +150,4 @@ To create a new migration after modifying SQLModel models:
 uv run alembic revision --autogenerate -m "short_description"
 ```
 
-Review the generated file to ensure the `upgrade()` and `downgrade()` functions are correct before committing.
+Review the generated file to ensure the `upgrade()` and `downgrade()` functions are correct and reversible before committing. Keep migrations static — do not edit previously merged revision files.
