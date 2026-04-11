@@ -1,5 +1,6 @@
 import pulumi
 import pulumi_gcp as gcp
+from pulumi import ResourceOptions
 
 from components.identity import ci_push_sa
 from config import PROJECT_ID, REGION, REGISTRY_NAME
@@ -14,6 +15,7 @@ registry = gcp.artifactregistry.Repository(
     repository_id=REGISTRY_NAME,
     format="DOCKER",
     description="Vici application Docker images",
+    opts=ResourceOptions(protect=True),
 )
 
 # Grant the CI service account push (writer) access to this repository.

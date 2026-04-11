@@ -63,6 +63,7 @@ cluster = gcp.container.Cluster(
     deletion_protection=True,
     opts=ResourceOptions(
         ignore_changes=AUTOPILOT_VOLATILE_FIELDS,
+        protect=True,
     ),
 )
 

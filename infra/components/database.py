@@ -73,7 +73,7 @@ app_db_instance = gcp.sql.DatabaseInstance(
             enabled=_BACKUPS_ENABLED[ENV],
         ),
     ),
-    opts=ResourceOptions(depends_on=[vpc_peering_connection]),
+    opts=ResourceOptions(depends_on=[vpc_peering_connection], protect=True),
 )
 
 app_database = gcp.sql.Database(
@@ -104,7 +104,7 @@ temporal_db_instance = gcp.sql.DatabaseInstance(
             enabled=_BACKUPS_ENABLED[ENV],
         ),
     ),
-    opts=ResourceOptions(depends_on=[vpc_peering_connection]),
+    opts=ResourceOptions(depends_on=[vpc_peering_connection], protect=True),
 )
 
 temporal_database = gcp.sql.Database(
