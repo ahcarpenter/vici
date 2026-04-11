@@ -25,7 +25,9 @@ from components.jaeger import (  # noqa: F401
 )
 from components.migration import migration_job  # noqa: F401
 from components.namespaces import namespaces  # noqa: F401
+from components.network_policy import default_deny_policies  # noqa: F401
 from components.opensearch import opensearch_release  # noqa: F401
+from components.pdb import pdbs  # noqa: F401
 from components.prometheus import (  # noqa: F401
     fastapi_service_monitor,
     kube_prometheus_release,
@@ -36,6 +38,7 @@ from components.secrets import (  # noqa: F401
     external_secrets,
     secret_stores,
 )
+from components.state_bucket import state_bucket  # noqa: F401
 from components.temporal import temporal_release, temporal_schema_job  # noqa: F401
 
 # All pulumi.export() calls are in their respective component files.
