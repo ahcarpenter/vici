@@ -114,10 +114,7 @@ jobs:
           stack-name: ${{ inputs.stack }}
           work-dir: infra
           cloud-url: gs://vici-app-pulumi-state-${{ inputs.stack }}
-          config-map: |
-            vici-infra:imageTag:
-              value: ${{ needs.build.outputs.sha }}
-              secret: false
+          config-map: '{"vici-infra:imageTag": {"value": "${{ needs.build.outputs.sha }}", "secret": false}}'
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
