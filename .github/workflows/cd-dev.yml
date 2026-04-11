@@ -8,6 +8,13 @@ permissions:
   contents: read
   id-token: write
 
+# WR-02 fix: serialize dev deploys per stack so two quick pushes to
+# main never race two `pulumi up` calls against the same GCS state
+# lock. cancel-in-progress: true because dev always wants latest main.
+concurrency:
+  group: cd-dev
+  cancel-in-progress: true
+
 jobs:
   deploy-dev:
     uses: ./.github/workflows/cd-base.yml

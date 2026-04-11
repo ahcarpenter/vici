@@ -7,6 +7,13 @@ permissions:
   contents: read
   id-token: write
 
+# WR-02 fix: serialize staging deploys per stack. cancel-in-progress
+# is false here because a staging deploy is manually dispatched and
+# should never be silently cancelled mid-apply by a follow-up click.
+concurrency:
+  group: cd-staging
+  cancel-in-progress: false
+
 jobs:
   deploy-staging:
     uses: ./.github/workflows/cd-base.yml

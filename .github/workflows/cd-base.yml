@@ -30,6 +30,13 @@ name: CD Base
 jobs:
   build:
     runs-on: ubuntu-latest
+    # WR-01 fix: attach the approval gate to build so the image push
+    # itself waits on the environment's required reviewers. Without
+    # this, anyone with workflow_dispatch permission could push
+    # arbitrary bytes to the prod Artifact Registry before any human
+    # reviews. Empty string (dev/staging) means no gate; 'prod' binds
+    # to the GitHub `prod` Environment.
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -99,10 +106,14 @@ jobs:
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
+      # WR-03 fix: extend budget from 60s to 180s (cover image pull +
+      # rolling update + readiness initial delay) and log pod status
+      # + recent logs on failure so triage doesn't require ssh-to-gke.
+      # Uses gke-gcloud-auth-plugin installed via setup-gcloud above.
       - name: Health check
         if: inputs.stack == 'dev' && inputs.command == 'up'
         run: |
-          for i in $(seq 1 12); do
+          for i in $(seq 1 36); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://dev.usevici.com/health)
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed (attempt $i)"
@@ -111,5 +122,13 @@ jobs:
             echo "Attempt $i: got $STATUS, retrying in 5s..."
             sleep 5
           done
-          echo "Health check failed after 60s"
+          echo "Health check failed after 180s — dumping triage data"
+          gcloud container clusters get-credentials vici-${{ inputs.stack }} \
+            --region us-central1 --project ${{ inputs.gcp_project }} || true
+          echo "--- deployment describe ---"
+          kubectl -n vici describe deployment vici-app || true
+          echo "--- pods ---"
+          kubectl -n vici get pods -l app=vici-app -o wide || true
+          echo "--- recent app logs ---"
+          kubectl -n vici logs -l app=vici-app --tail=100 --all-containers || true
           exit 1

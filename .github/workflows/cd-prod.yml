@@ -7,6 +7,13 @@ permissions:
   contents: read
   id-token: write
 
+# WR-02 fix: serialize prod deploys per stack. cancel-in-progress is
+# false because an approved prod deploy must never be silently
+# cancelled mid-apply by a follow-up dispatch.
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false
+
 jobs:
   deploy-prod:
     uses: ./.github/workflows/cd-base.yml

@@ -333,3 +333,83 @@ class TestCDBaseStructure:
             f"pulumi/actions step must pass config-map containing imageTag, "
             f"got: {config_map!r}"
         )
+
+    def test_cd_base_build_job_has_environment_gate(self) -> None:
+        """WR-01: build job must observe the same environment gate as deploy.
+
+        Without this, the image push step runs before any required
+        reviewer on `cd-prod` approves and an engineer with
+        workflow_dispatch permission can push arbitrary bytes to the
+        prod Artifact Registry.
+        """
+        build_job = self.workflow.get("jobs", {}).get("build", {})
+        env = build_job.get("environment", "")
+        assert env, (
+            "WR-01: cd-base.yml build job must declare an `environment:` "
+            "key so the approval gate covers image push, not just deploy. "
+            f"Got: {env!r}"
+        )
+        assert "inputs.environment" in str(env), (
+            f"WR-01: cd-base.yml build job environment must reference "
+            f"inputs.environment (same source as deploy), got: {env!r}"
+        )
+
+    def test_cd_base_health_check_extended_budget(self) -> None:
+        """WR-03: health check must loop long enough to cover image pull
+        + rolling update + readiness initial delay (target: 180s).
+        """
+        steps = _all_steps(self.workflow, "deploy")
+        health_steps = [
+            s
+            for s in steps
+            if "inputs.stack == 'dev'" in (s.get("if", "") or "")
+            and "inputs.command == 'up'" in (s.get("if", "") or "")
+        ]
+        assert health_steps, "cd-base.yml must have a dev health check step"
+        run_text = health_steps[0].get("run", "") or ""
+        # The loop must iterate at least 36 times (36 * 5s = 180s).
+        assert "seq 1 36" in run_text or "seq 1 72" in run_text, (
+            "WR-03: health check loop must iterate at least 36 times "
+            f"(>= 180s). Got run: {run_text!r}"
+        )
+        # On failure, pod-level diagnostics must be dumped for triage.
+        assert "kubectl" in run_text, (
+            f"WR-03: health check must dump kubectl diagnostics on "
+            f"failure. Got run: {run_text!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# WR-02: Concurrency groups on all caller workflows
+# ---------------------------------------------------------------------------
+
+
+class TestCallerConcurrency:
+    """Verify cd-dev/staging/prod all declare a concurrency group.
+
+    Without a concurrency group two quick pushes / dispatches race two
+    `pulumi up` calls against the same GCS-backed stack lock.
+    """
+
+    @pytest.mark.parametrize(
+        ("filename", "expected_group"),
+        [
+            ("cd-dev.yml", "cd-dev"),
+            ("cd-staging.yml", "cd-staging"),
+            ("cd-prod.yml", "cd-prod"),
+        ],
+    )
+    def test_caller_has_concurrency_group(
+        self, filename: str, expected_group: str
+    ) -> None:
+        workflow = _load_workflow(filename)
+        concurrency = workflow.get("concurrency", {})
+        assert concurrency, (
+            f"WR-02: {filename} must declare a top-level `concurrency:` "
+            f"block, got: {concurrency!r}"
+        )
+        group = concurrency.get("group", "")
+        assert group == expected_group, (
+            f"WR-02: {filename} concurrency.group must be "
+            f"{expected_group!r}, got: {group!r}"
+        )
