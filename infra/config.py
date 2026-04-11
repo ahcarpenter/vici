@@ -10,3 +10,4 @@ PROJECT_ID: str = gcp_cfg.require("project")
 REGION: str = gcp_cfg.get("region") or "us-central1"
 APP_HOSTNAME: str = cfg.require("app_hostname")  # "dev.usevici.com" | "staging.usevici.com" | "usevici.com"
 GITHUB_ORG: str = cfg.require("github_org")      # GitHub organization or user owning the repo
+IMAGE_TAG: str = cfg.get("imageTag") or ENV      # CI passes --config vici-infra:imageTag=<sha>; local fallback to ENV
