@@ -6,7 +6,8 @@ from components.database import temporal_db_instance
 from components.iam import temporal_app_ksa
 from components.namespaces import k8s_provider, namespaces
 from components.opensearch import OPENSEARCH_SERVICE_HOST, opensearch_release
-from config import ENV, cfg
+from components.secrets import external_secrets
+from config import ENV
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -35,36 +36,28 @@ _OPENSEARCH_VISIBILITY_PORT = 9200
 # Auth Proxy runs in TCP mode (--port=5432); tool connects to localhost:5432.
 # No unix socket volume needed for TCP mode.
 
-_TEMPORAL_DB_USER = cfg.require_secret("temporal_db_user")
-_TEMPORAL_DB_PASS = cfg.require_secret("temporal_db_password")
+_TEMPORAL_DB_USER = "temporal"
 
 _SQL_TOOL_PREFIX = "temporal-sql-tool --plugin postgres12 --ep localhost -p 5432"
 _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 
-
-def _build_schema_commands(creds: tuple[str, str]) -> str:
-    """Compose the idempotent temporal-sql-tool command chain for one run.
-
-    create-database and setup-schema use '|| true' so subsequent steps
-    proceed when the object already exists. update-schema is not guarded.
-    """
-    auth = f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]}"
-    temporal_dir = f"{_SCHEMA_BASE}/temporal/versioned"
-    visibility_dir = f"{_SCHEMA_BASE}/visibility/versioned"
-    return " && ".join(
-        [
-            f"{auth} --db temporal create-database || true",
-            f"{auth} --db temporal setup-schema -v 0.0 || true",
-            f"{auth} --db temporal update-schema -d {temporal_dir}",
-            f"{auth} --db temporal_visibility create-database || true",
-            f"{auth} --db temporal_visibility setup-schema -v 0.0 || true",
-            f"{auth} --db temporal_visibility update-schema -d {visibility_dir}",
-        ]
-    )
-
-
-_SCHEMA_COMMANDS = pulumi.Output.all(_TEMPORAL_DB_USER, _TEMPORAL_DB_PASS).apply(
-    _build_schema_commands
+# Credentials are injected at runtime via TEMPORAL_DB_PASSWORD env var sourced
+# from the ESO-synced K8s Secret temporal-db-credentials (D-06, D-07).
+_SCHEMA_COMMANDS = " && ".join(
+    [
+        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal create-database || true",
+        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal setup-schema -v 0.0 || true",
+        (
+            f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal update-schema"
+            f" -d {_SCHEMA_BASE}/temporal/versioned"
+        ),
+        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility create-database || true",
+        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility setup-schema -v 0.0 || true",
+        (
+            f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility update-schema"
+            f" -d {_SCHEMA_BASE}/visibility/versioned"
+        ),
+    ]
 )
 
 temporal_schema_job = k8s.batch.v1.Job(
@@ -95,6 +88,10 @@ temporal_schema_job = k8s.batch.v1.Job(
                             run_as_non_root=True,
                             run_as_user=_AUTH_PROXY_RUN_AS_USER,
                         ),
+                        resources=k8s.core.v1.ResourceRequirementsArgs(
+                            requests={"cpu": "100m", "memory": "128Mi"},
+                            limits={"cpu": "200m", "memory": "256Mi"},
+                        ),
                     ),
                 ],
                 containers=[
@@ -103,6 +100,21 @@ temporal_schema_job = k8s.batch.v1.Job(
                         image=_ADMIN_TOOLS_IMAGE,
                         command=["sh", "-c"],
                         args=[_SCHEMA_COMMANDS],
+                        env=[
+                            k8s.core.v1.EnvVarArgs(
+                                name="TEMPORAL_DB_PASSWORD",
+                                value_from=k8s.core.v1.EnvVarSourceArgs(
+                                    secret_key_ref=k8s.core.v1.SecretKeySelectorArgs(
+                                        name="temporal-db-credentials",
+                                        key="password",
+                                    ),
+                                ),
+                            ),
+                        ],
+                        resources=k8s.core.v1.ResourceRequirementsArgs(
+                            requests={"cpu": "100m", "memory": "256Mi"},
+                            limits={"cpu": "500m", "memory": "512Mi"},
+                        ),
                     ),
                 ],
             ),
@@ -114,6 +126,7 @@ temporal_schema_job = k8s.batch.v1.Job(
             temporal_db_instance,
             temporal_app_ksa,
             namespaces["temporal"],
+            external_secrets["temporal-db-password"],
         ],
     ),
 )
@@ -179,7 +192,8 @@ temporal_release = k8s.helm.v3.Release(
                                 "host": "127.0.0.1",  # Auth Proxy TCP mode
                                 "port": 5432,
                                 "user": _TEMPORAL_DB_USER,
-                                "password": _TEMPORAL_DB_PASS,
+                                "existingSecret": "temporal-db-credentials",
+                                "secretKey": "password",
                             },
                         },
                     },
@@ -240,6 +254,7 @@ temporal_release = k8s.helm.v3.Release(
             opensearch_release,
             temporal_app_ksa,
             namespaces["temporal"],
+            external_secrets["temporal-db-password"],
         ],
     ),
 )

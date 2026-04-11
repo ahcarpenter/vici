@@ -6,8 +6,4 @@ config:
   vici-infra:registry_name: vici-images
   vici-infra:app_hostname: dev.usevici.com
   vici-infra:github_org: ahcarpenter
-  vici-infra:temporal_db_user:
-    secure: v1:wUdmMLRaVnYI9sre:YLesutdYUHcZ1F2aarBeRycZVSU=
-  vici-infra:temporal_db_password:
-    secure: v1:+/RyM91QECw9FKgs:nczyPoM4Ol7rAu98ZZyfNaupchk=
 encryptionsalt: v1:81TxmqrpLik=:v1:Dp1mky8HdWfv+Qpy:qJCnVkuGWB6AtDz4AcFjdaAT3HjSqA==
