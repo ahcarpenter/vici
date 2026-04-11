@@ -26,10 +26,10 @@ The following variables are read by `src/config.py`. Variables documented in the
 | `BRAINTRUST_API_KEY` | No | `""` | Braintrust observability API key |
 | `GIT_SHA` | No | `"dev"` | Git commit SHA used as `service.version` in telemetry; set by CI in production |
 | `SMS_RATE_LIMIT_WINDOW_SECONDS` | No | `60` | SMS rate-limit sliding-window size in seconds (bound to `Settings.sms_rate_limit_window_seconds`; note: the enforced rate-limit values used at runtime live in `src/sms/constants.py`) |
-| `GRAFANA_ADMIN_USER` | No | `"admin"` | Grafana admin username (used by docker-compose) |
-| `GRAFANA_ADMIN_PASSWORD` | No | `"admin"` | Grafana admin password (used by docker-compose) |
+| `GRAFANA_ADMIN_USER` | No | `"admin"` | Declared on `Settings` but not referenced anywhere in `src/`; dead field. The Grafana container instead reads `GF_SECURITY_ADMIN_USER` from `.env.grafana`. |
+| `GRAFANA_ADMIN_PASSWORD` | No | `"admin"` | Declared on `Settings` but not referenced anywhere in `src/`; dead field. The Grafana container instead reads `GF_SECURITY_ADMIN_PASSWORD` from `.env.grafana`. |
 
-> **Note:** `SMS_RATE_LIMIT_MAX` is documented in the README but is not bound to any field on `Settings` in `src/config.py`. The effective rate-limit max is the compile-time constant `MAX_MESSAGES_PER_WINDOW = 5` in `src/sms/constants.py`, and the effective window is `RATE_LIMIT_WINDOW_SECONDS = 60` in the same file. The `sms_rate_limit_window_seconds` setting is currently a wiring hook that is not read by the SMS rate-limiter.
+> **Note:** `SMS_RATE_LIMIT_MAX` is documented in the README (`.env.app` table) but is not bound to any field on `Settings` in `src/config.py`. The effective rate-limit max is the compile-time constant `MAX_MESSAGES_PER_WINDOW = 5` in `src/sms/constants.py`, and the effective window is `RATE_LIMIT_WINDOW_SECONDS = 60` in the same file. The `sms_rate_limit_window_seconds` setting is currently a wiring hook that is not read by the SMS rate-limiter.
 
 ## Config File Format
 
@@ -41,7 +41,7 @@ model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 Variable names are case-insensitive (pydantic-settings default). Any extra variables not declared on the model are silently ignored.
 
-Because flat env vars are remapped into nested sub-models via a `model_validator(mode="after")`, downstream code should read structured settings through `get_settings().sms`, `.extraction`, `.pinecone`, `.observability`, and `.temporal` rather than reading the flat top-level fields directly.
+Because flat env vars are remapped into nested sub-models via a `model_validator(mode="after")` (`Settings._build_sub_models`, `src/config.py` lines 111–138), downstream code should read structured settings through `get_settings().sms`, `.extraction`, `.pinecone`, `.observability`, and `.temporal` rather than reading the flat top-level fields directly.
 
 ## Required vs Optional Settings
 
@@ -57,7 +57,7 @@ The following variables cause a `ValueError` at startup if they are missing or e
 
 Failure produces an error of the form: `Required credentials are missing or empty: <comma-separated names>`.
 
-All other variables have defaults on `Settings` and are optional from the config layer's point of view. Note that some of these (e.g. `PINECONE_INDEX_HOST`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `BRAINTRUST_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`) are documented as **required** by the README because the associated features will not function without them, even though `Settings` does not validate them.
+All other variables have defaults on `Settings` and are optional from the config layer's point of view. Note that some of these (e.g. `PINECONE_INDEX_HOST`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `BRAINTRUST_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`) are documented as **required** by the README (`.env.app` table) because the associated features will not function without them, even though `Settings` does not validate them.
 
 ## Defaults
 
@@ -82,20 +82,22 @@ All other variables have defaults on `Settings` and are optional from the config
 
 ## Per-Environment Overrides
 
-Vici uses separate `.env.*` files for docker-compose services, each scoped to a single container. Copy the corresponding `.env.*.example` file at the project root and fill in values marked `your_*`:
+Vici uses separate `.env.*` files for docker-compose services, each scoped to a single container. Copy the corresponding `.env.*.example` file at the project root and fill in values marked `your_*`. The mapping between compose service and env file is defined in `docker-compose.yml`:
 
-| File | Service | Example file |
+| File | Service (docker-compose.yml) | Example file |
 |---|---|---|
-| `.env.app` | FastAPI application | `.env.app.example` |
-| `.env.postgres` | PostgreSQL database | `.env.postgres.example` |
-| `.env.opensearch` | OpenSearch (Jaeger storage backend) | `.env.opensearch.example` |
-| `.env.temporal` | Temporal server | `.env.temporal.example` |
-| `.env.temporal-ui` | Temporal UI | `.env.temporal-ui.example` |
-| `.env.jaeger-query` | Jaeger query service | `.env.jaeger-query.example` |
-| `.env.grafana` | Grafana dashboard | `.env.grafana.example` |
+| `.env.app` | `app` (FastAPI application) | `.env.app.example` |
+| `.env.postgres` | `postgres` (PostgreSQL database) | `.env.postgres.example` |
+| `.env.opensearch` | `opensearch` (Jaeger storage backend) | `.env.opensearch.example` |
+| `.env.jaeger-query` | `jaeger-query` (Jaeger query service) | `.env.jaeger-query.example` |
+| `.env.temporal` | `temporal` (Temporal server) | `.env.temporal.example` |
+| `.env.temporal-ui` | `temporal-ui` (Temporal UI) | `.env.temporal-ui.example` |
+| `.env.grafana` | `grafana` (Grafana dashboard) | `.env.grafana.example` |
 
-See the "Environment Variables" section of the project README for the per-file variable lists (`.env.app`, `.env.postgres`, `.env.temporal`, `.env.temporal-ui`, `.env.opensearch`, `.env.jaeger-query`, `.env.grafana`).
+Note that the `jaeger-collector`, `prometheus`, and `app`-adjacent `prometheus` services in `docker-compose.yml` do **not** declare an `env_file` and are configured entirely via mounted config files (`jaeger/collector-config.yaml`, `prometheus/prometheus.yml`).
 
-For production on GKE, environment variables are managed via **GCP Secret Manager** and synced into Kubernetes `Secret` resources by the External Secrets Operator (ESO). The Pulumi wiring lives in `infra/components/secrets.py` and is consumed by `infra/components/app.py`. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full secrets pipeline. <!-- VERIFY: exact GCP project, Secret Manager secret names, and ESO `SecretStore`/`ClusterSecretStore` identifiers used in each deployed environment -->
+See the "Environment Variables" section of the project [README](../README.md#environment-variables) for the per-file variable lists.
+
+For production on GKE, environment variables are managed via **GCP Secret Manager** and synced into Kubernetes `Secret` resources by the External Secrets Operator (ESO). The Pulumi wiring lives in `infra/components/secrets.py` and is consumed by `infra/components/app.py`. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full secrets pipeline. <!-- VERIFY: exact GCP project IDs, Secret Manager resource names, and ESO `SecretStore`/`ClusterSecretStore` identifiers used in each deployed environment -->
 
 The `ENV` variable controls the runtime environment name. Set it to `development` (or `local`) for local development and `production` for production deployments on GKE.

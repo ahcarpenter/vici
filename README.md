@@ -1,131 +1,121 @@
+<!-- generated-by: gsd-doc-writer -->
 # Vici
 
-An SMS-driven platform for the gig economy
+An SMS-driven job-matching backend that ingests inbound Twilio text messages, extracts structured job postings and worker goals with OpenAI, indexes them in Pinecone for semantic search, and orchestrates the pipeline with Temporal workflows on a FastAPI + PostgreSQL stack.
 
-## How It Works
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
-Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with the relevant details (desc, pay, duration, expected done date). GPT classifies each inbound message and extracts structured data from both. Matching algorithm surfaces the gig(s) on-demand that the worker can then do to achieve their earnings goal in the shortest amount of time possible.
+## Features
 
-## Roadmap
+- **FastAPI** async webhook API with `/webhook/sms`, `/health`, `/readyz`, and `/metrics` endpoints
+- **Twilio** inbound SMS ingestion with signature validation, idempotency, and per-sender rate limiting
+- **OpenAI GPT** extraction pipeline for parsing unstructured SMS into job postings and worker goals
+- **Pinecone** vector index for semantic job/worker matching (async SDK)
+- **Temporal** workflow orchestration with a cron-scheduled Pinecone sync worker
+- **PostgreSQL** persistence via SQLAlchemy / SQLModel with **Alembic** migrations
+- **OpenTelemetry** tracing (OTLP → Jaeger) and **Prometheus** metrics, with pre-built Grafana dashboards
+- **Structured logging** via structlog with automatic OTel trace correlation
+- **Pulumi-on-GKE** infrastructure-as-code under `infra/` for production deployments
 
-See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) for the current roadmap, and progress.
+## Tech Stack
+
+| Layer           | Technology                                              |
+|-----------------|---------------------------------------------------------|
+| Runtime         | Python 3.12+                                            |
+| Package manager | [uv](https://github.com/astral-sh/uv)                   |
+| Web framework   | FastAPI + Uvicorn                                       |
+| ORM / migrations| SQLModel / SQLAlchemy (async) + Alembic                 |
+| Database        | PostgreSQL 16 (asyncpg driver)                          |
+| Workflows       | Temporal 1.26                                           |
+| Vector search   | Pinecone (async SDK)                                    |
+| LLM             | OpenAI (wrapped by Braintrust)                          |
+| SMS gateway     | Twilio                                                  |
+| Observability   | OpenTelemetry, Jaeger 2.16, Prometheus 3.1, Grafana 11  |
+| Infra           | Pulumi on Google Kubernetes Engine                      |
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (`pip install uv`)
-- Accounts with API keys for: Twilio, OpenAI, Pinecone, Braintrust
+- Python 3.12 or newer
+- [uv](https://github.com/astral-sh/uv) (installs and manages the virtualenv and lockfile)
+- Docker and Docker Compose (for the local full-stack environment)
+- Credentials for: Twilio, OpenAI, Pinecone (see `docs/CONFIGURATION.md` for the complete list)
 
-## Local Setup
+## Installation
 
-1. Clone the repository
+Clone the repository and install dependencies with `uv`:
 
-   ```bash
-   git clone <repo-url>
-   cd vici
-   ```
+```bash
+git clone <repository-url> vici
+cd vici
+uv sync
+```
 
-2. Copy the example env files for each service and fill in your secrets (see [Environment Variables](#environment-variables) below)
+This creates a `.venv/` and installs the runtime and dev dependencies pinned in `uv.lock`.
 
-   ```bash
-   cp .env.app.example .env.app
-   cp .env.postgres.example .env.postgres
-   cp .env.opensearch.example .env.opensearch
-   cp .env.jaeger-query.example .env.jaeger-query
-   cp .env.temporal.example .env.temporal
-   cp .env.temporal-ui.example .env.temporal-ui
-   cp .env.grafana.example .env.grafana
-   ```
+## Quick Start
 
-3. Start the full stack (Postgres, OpenSearch, Jaeger, Temporal, Prometheus, Grafana, and the API)
+The fastest path to a working local stack is Docker Compose, which brings up PostgreSQL, Temporal, Jaeger, Prometheus, Grafana, and the FastAPI app together.
+
+1. Create the required env files (`.env.app`, `.env.postgres`, `.env.temporal`, `.env.temporal-ui`, `.env.jaeger-query`, `.env.grafana`, `.env.opensearch`). See `docs/GETTING-STARTED.md` and `docs/CONFIGURATION.md` for variables.
+2. Start the stack:
 
    ```bash
-   docker compose up
+   docker compose up --build
    ```
 
-   The API is available at http://localhost:8000. The Temporal UI is at http://localhost:8080.
+3. The app container automatically runs `alembic upgrade head` before launching Uvicorn. Once healthy, endpoints are available at:
 
-4. Apply database migrations (first time and after schema changes)
+   | URL                                | Purpose                              |
+   |------------------------------------|--------------------------------------|
+   | http://localhost:8000/health       | Liveness probe                       |
+   | http://localhost:8000/readyz       | Readiness probe (DB connectivity)    |
+   | http://localhost:8000/metrics      | Prometheus metrics                   |
+   | http://localhost:8000/webhook/sms  | Twilio inbound SMS webhook           |
+   | http://localhost:8080              | Temporal Web UI                      |
+   | http://localhost:16686             | Jaeger UI                            |
+   | http://localhost:9090              | Prometheus                           |
+   | http://localhost:3000              | Grafana                              |
 
-   ```bash
-   uv run alembic upgrade head
-   ```
+4. Configure a Twilio webhook pointing at `${WEBHOOK_BASE_URL}/webhook/sms` to start ingesting SMS.
 
-   > **Note:** Migrations run automatically on container startup via the Docker Compose command, so this step is only needed when running the API outside Docker.
+To run the API outside Docker against an existing Postgres and Temporal:
 
-## Environment Variables
+```bash
+uv run alembic upgrade head
+uv run uvicorn src.main:app --reload
+```
 
-Each service has its own env file. The `.example` files document all required variables -- copy them (step 2 above) and fill in values marked `your_*`.
+## Project Layout
 
-### `.env.app` -- API service
-
-| Variable | Required | Description | Where to get it |
-|---|---|---|---|
-| `DATABASE_URL` | Yes | Async PostgreSQL connection string | Template provided -- fill in credentials matching `.env.postgres` |
-| `TWILIO_AUTH_TOKEN` | Yes | Validates inbound webhook signatures | Twilio Console |
-| `TWILIO_ACCOUNT_SID` | Yes | Identifies your Twilio account | Twilio Console |
-| `TWILIO_FROM_NUMBER` | Yes | Twilio phone number for outbound SMS | Twilio Console |
-| `WEBHOOK_BASE_URL` | Yes | Public base URL for Twilio webhooks | Externally reachable URL (e.g., ngrok for local dev); your production domain in GKE |
-| `ENV` | Yes | Runtime environment | `development` locally, `production` in GKE |
-| `TEMPORAL_ADDRESS` | Yes | Temporal server address | `temporal:7233` (matches Docker Compose) |
-| `TEMPORAL_TASK_QUEUE` | No | Temporal task queue name (default: `vici-queue`) | Pre-filled |
-| `CRON_SCHEDULE_PINECONE_SYNC` | No | Pinecone sync cron expression (default: `*/5 * * * *`) | Pre-filled |
-| `OPENAI_API_KEY` | Yes | GPT classification and embedding calls | platform.openai.com |
-| `PINECONE_API_KEY` | Yes | Vector upsert and query | Pinecone Console |
-| `PINECONE_INDEX_HOST` | Yes | Your Pinecone index endpoint | Pinecone Console |
-| `BRAINTRUST_API_KEY` | Yes | LLM observability and evals | braintrust.dev |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OpenTelemetry collector endpoint | `http://jaeger-collector:4317` (matches Docker Compose) |
-| `OTEL_SERVICE_NAME` | Yes | Service name in traces | `vici` |
-| `SMS_RATE_LIMIT_WINDOW_SECONDS` | No | Rate limit sliding window in seconds (default: `60`) | Pre-filled |
-| `SMS_RATE_LIMIT_MAX` | No | Max SMS messages per window (default: `5`) | Pre-filled |
-| `GIT_SHA` | No | Current git SHA for trace metadata | `dev` locally; set by CI in production |
-
-### `.env.postgres` -- Postgres service
-
-| Variable | Required | Description |
-|---|---|---|
-| `POSTGRES_DB` | Yes | Database name |
-| `POSTGRES_USER` | Yes | Postgres username |
-| `POSTGRES_PASSWORD` | Yes | Postgres password -- change `change_me` in production |
-
-### `.env.temporal` -- Temporal service
-
-| Variable | Required | Description |
-|---|---|---|
-| `DB` | Yes | Temporal persistence backend (`postgres12`) |
-| `DB_PORT` | Yes | Postgres port |
-| `POSTGRES_USER` | Yes | Postgres username |
-| `POSTGRES_PWD` | Yes | Postgres password |
-| `POSTGRES_SEEDS` | Yes | Postgres host (e.g. `postgres`) |
-
-### `.env.temporal-ui` -- Temporal UI service
-
-| Variable | Required | Description |
-|---|---|---|
-| `TEMPORAL_ADDRESS` | Yes | Temporal server address (`temporal:7233`) |
-
-### `.env.opensearch` -- OpenSearch service
-
-| Variable | Required | Description |
-|---|---|---|
-| `discovery.type` | Yes | Set to `single-node` for local use |
-| `DISABLE_SECURITY_PLUGIN` | Yes | Set to `true` for local use |
-| `OPENSEARCH_JAVA_OPTS` | No | JVM heap settings (default: `-Xms512m -Xmx512m`) |
-
-### `.env.jaeger-query` -- Jaeger Query service
-
-| Variable | Required | Description |
-|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OTLP endpoint for self-reporting traces (`http://jaeger-collector:4317`) |
-
-### `.env.grafana` -- Grafana service
-
-| Variable | Required | Description |
-|---|---|---|
-| `GF_SECURITY_ADMIN_USER` | Yes | Grafana admin username |
-| `GF_SECURITY_ADMIN_PASSWORD` | Yes | Grafana admin password |
-| `GF_AUTH_ANONYMOUS_ENABLED` | No | Allow anonymous read-only access (`true`) |
-| `GF_AUTH_ANONYMOUS_ORG_ROLE` | No | Role for anonymous users (`Viewer`) |
+```
+vici/
+├── src/
+│   ├── main.py          # FastAPI app factory + lifespan (OTel, Temporal worker, gauges)
+│   ├── config.py        # Pydantic Settings (flat env vars remapped into sub-models)
+│   ├── database.py      # Async SQLAlchemy engine + session factory
+│   ├── sms/             # Twilio webhook: router, service, rate-limit, audit
+│   ├── extraction/      # OpenAI GPT extraction + Pinecone embedding writes
+│   ├── pipeline/        # Orchestrator + handlers (job posting, worker goal, unknown)
+│   ├── jobs/            # Job posting domain (models, repository)
+│   ├── work_goals/      # Worker goal domain (models, repository)
+│   ├── matches/         # Semantic match results
+│   ├── users/           # User domain
+│   ├── temporal/        # Temporal client, worker, cron schedules
+│   ├── metrics.py       # Prometheus gauges/counters
+│   └── models.py        # Shared SQLModel base classes
+├── migrations/          # Alembic revision scripts
+├── tests/               # Pytest (async mode) suite
+├── infra/               # Pulumi-on-GKE stack (Python)
+├── docs/                # ARCHITECTURE, CONFIGURATION, DEPLOYMENT, DEVELOPMENT, GETTING-STARTED, TESTING
+├── grafana/             # Dashboard + datasource provisioning
+├── jaeger/              # Jaeger collector / query configs
+├── prometheus/          # Prometheus scrape config
+├── docker-compose.yml   # Local dev stack
+├── Dockerfile           # Multi-stage production image (uv + python:3.12-slim)
+├── alembic.ini
+└── pyproject.toml
+```
 
 ## Running Tests
 
@@ -133,34 +123,38 @@ Each service has its own env file. The `.example` files document all required va
 uv run pytest
 ```
 
-Tests use SQLite + aiosqlite -- no Postgres dependency. Temporal activities are mocked in tests. To run with coverage:
+`pytest-asyncio` is configured in `auto` mode (see `pyproject.toml`), so async tests require no explicit marker. Coverage is available via `pytest-cov`.
+
+See `docs/TESTING.md` for detailed testing guidance.
+
+## Linting and Formatting
+
+Ruff is the single source of truth for lint and format:
 
 ```bash
-uv run pytest --cov=src --cov-report=term-missing
+uv run ruff check --fix src tests
+uv run ruff format src tests
 ```
 
-## Linting
-
-```bash
-uv run ruff check .
-uv run ruff format .
-```
-
-## Observability (Local)
-
-After `docker compose up`:
-
-- **Traces**: Jaeger UI at http://localhost:16686
-- **Metrics**: Grafana at http://localhost:3000 (admin / admin) -- pre-provisioned FastAPI dashboard
-- **Prometheus**: http://localhost:9090
+Configuration lives in `pyproject.toml` under `[tool.ruff]` (target `py312`, rules `E`, `F`, `I`).
 
 ## Documentation
 
-Detailed documentation lives in `docs/`:
+| Document                                             | Description                                   |
+|------------------------------------------------------|-----------------------------------------------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)         | System architecture and component overview   |
+| [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)   | First-run walkthrough                         |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)           | Local development workflow                   |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md)       | Environment variables and settings           |
+| [docs/TESTING.md](docs/TESTING.md)                   | Test framework and conventions                |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)             | Deployment and infrastructure                |
+| [AGENTS.md](AGENTS.md)                               | FastAPI conventions for contributors          |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                   | Contribution guidelines                       |
 
-- [Getting Started](docs/GETTING-STARTED.md) -- Prerequisites, installation, and first run
-- [Architecture](docs/ARCHITECTURE.md) -- System design, component diagram, and data flow
-- [Configuration](docs/CONFIGURATION.md) -- Full environment variable reference
-- [Development](docs/DEVELOPMENT.md) -- Build commands, code style, and branch conventions
-- [Testing](docs/TESTING.md) -- Test framework, running tests, and writing new tests
-- [Deployment](docs/DEPLOYMENT.md) -- GKE deployment, CI/CD pipelines, and monitoring
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, and [AGENTS.md](AGENTS.md) for the FastAPI coding conventions this project follows (async route rules, domain-oriented layout, Pydantic settings-per-domain, etc.).
+
+## License
+
+Vici is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for the full text.

@@ -36,13 +36,13 @@ A typical inbound SMS follows this path:
 
 1. **Twilio webhook** — Twilio delivers the message to `POST /webhook/sms`. The route-dependency chain in `src/sms/dependencies.py` runs four gates in order: `validate_twilio_request` (signature verification, required-field check), `check_idempotency` (rejects duplicate `MessageSid`), `get_or_create_user` (upserts a `user` row by phone hash), and `enforce_rate_limit` (per-user sliding window).
 2. **Persist and emit** — the route body in `src/sms/router.py` writes a `Message` row and an `audit_log` entry inside a single `session.begin()` transaction, then calls `sms_service.emit_message_received_event` to start a `ProcessMessageWorkflow` in Temporal (fire-and-forget). The handler returns an empty TwiML response immediately.
-3. **Temporal workflow** — `ProcessMessageWorkflow` (in `src/temporal/workflows.py`) executes `process_message_activity` with a retry policy built from the constants in `src/temporal/constants.py` (exponential backoff). If retries are exhausted, it calls `handle_process_message_failure_activity`, which increments the `pipeline_failures_total{function="process-message"}` Prometheus counter.
+3. **Temporal workflow** — `ProcessMessageWorkflow` (in `src/temporal/workflows.py`) executes `process_message_activity` with a retry policy built from the constants in `src/temporal/constants.py` (exponential backoff, 4 max attempts, 1 s initial interval, coefficient 2.0, 5 min max interval). If retries are exhausted, it calls `handle_process_message_failure_activity`, which increments the `pipeline_failures_total{function="process-message"}` Prometheus counter.
 4. **Pipeline orchestration** — `process_message_activity` (in `src/temporal/activities.py`) opens a database session, resolves the `Message` row by `message_sid`, and calls `PipelineOrchestrator.run`. The orchestrator first calls `ExtractionService.process` to classify and extract structured data via GPT, then writes a `gpt_classified` audit entry.
 5. **Handler dispatch** — the orchestrator iterates its handler list (Chain of Responsibility) and invokes the first whose `can_handle` returns `True`:
-   - `JobPostingHandler` — inserts a `Job` row, updates `message.message_type = 'job_posting'`, writes an audit entry, commits the transaction, then attempts a direct Pinecone embedding upsert. On upsert failure the job is enqueued into the `pinecone_sync_queue` table for later retry.
-   - `WorkerGoalHandler` — inserts a `WorkGoal` row, updates `message.message_type = 'work_goal'`, writes an audit entry, and commits. (Match execution is not yet wired into the runtime pipeline; `MatchService` is currently invoked only from tests.)
+   - `JobPostingHandler` — inserts a `Job` row, updates `message.message_type = 'job_posting'`, writes a `job_created` audit entry, commits the transaction, then attempts a direct Pinecone embedding upsert. On upsert failure the job is enqueued into the `pinecone_sync_queue` table (via a fresh session) for later retry.
+   - `WorkerGoalHandler` — inserts a `WorkGoal` row, updates `message.message_type = 'work_goal'`, writes a `work_goal_created` audit entry, and commits. (Match execution is not yet wired into the runtime pipeline; `MatchService` is currently invoked only from tests.)
    - `UnknownMessageHandler` — catch-all terminal handler; marks the message as `unknown`, commits, and sends a clarifying reply via the Twilio REST client (offloaded with `asyncio.to_thread` since `twilio.rest.Client` is synchronous).
-6. **Pinecone sync cron** — `SyncPineconeQueueWorkflow`, registered as a Temporal cron by `start_cron_if_needed` on startup (default schedule `*/5 * * * *`), invokes `sync_pinecone_queue_activity`. The activity sweeps up to 50 pending rows from `pinecone_sync_queue`, upserts embeddings via `write_job_embedding`, and marks rows as `success` or `failed` (incrementing `retry_count`).
+6. **Pinecone sync cron** — `SyncPineconeQueueWorkflow`, registered as a Temporal cron by `start_cron_if_needed` on startup (default schedule `*/5 * * * *`, workflow id `sync-pinecone-queue-cron`), invokes `sync_pinecone_queue_activity`. The activity sweeps up to 50 pending rows from `pinecone_sync_queue`, upserts embeddings via `write_job_embedding`, and marks rows as `success` or `failed` (incrementing the `retry_count` column).
 7. **Gauge updater** — a background asyncio task started in `lifespan` polls `pinecone_sync_queue` every 15 seconds and exposes the pending-row count via the `pinecone_sync_queue_depth` Prometheus gauge.
 
 ## Key Abstractions
@@ -50,14 +50,14 @@ A typical inbound SMS follows this path:
 | Abstraction | File | Purpose |
 |---|---|---|
 | `PipelineOrchestrator` | `src/pipeline/orchestrator.py` | Coordinates extraction and Chain-of-Responsibility handler dispatch for each inbound message |
-| `MessageHandler` (ABC) | `src/pipeline/handlers/base.py` | Chain of Responsibility interface — `can_handle` + `handle(ctx)` |
+| `MessageHandler` (ABC) | `src/pipeline/handlers/base.py` | Chain of Responsibility interface — `can_handle(result)` + `handle(ctx)` |
 | `PipelineContext` | `src/pipeline/context.py` | Dataclass passed to handlers carrying session, extraction result, and message metadata |
-| `ExtractionService` | `src/extraction/service.py` | Wraps OpenAI structured-output calls with tenacity retry, Prometheus metrics, and OTel spans |
-| `ExtractionResult` | `src/extraction/schemas.py` | Pydantic discriminated-union result (`job_posting` / `work_goal` / `unknown`) from GPT |
+| `ExtractionService` | `src/extraction/service.py` | Wraps OpenAI structured-output calls (`beta.chat.completions.parse`) with tenacity retry, Prometheus metrics, and OTel spans |
+| `ExtractionResult` | `src/extraction/schemas.py` | Pydantic model with a `Literal["job_posting","work_goal","unknown"]` `message_type` discriminator and optional `job` / `work_goal` / `unknown` variant fields |
 | `MatchService` | `src/matches/service.py` | Knapsack-based job selection optimizing earnings toward target, then minimizing duration |
 | `BaseRepository` | `src/repository.py` | Template Method base providing a flush-only `_persist`; caller owns the transaction |
 | `Settings` | `src/config.py` | Pydantic `BaseSettings` with nested sub-models (`SmsSettings`, `ExtractionSettings`, `PineconeSettings`, `ObservabilitySettings`, `TemporalSettings`) remapped from flat env vars via a `model_validator` |
-| `ProcessMessageWorkflow` | `src/temporal/workflows.py` | Temporal durable workflow wrapping `process_message_activity` with retry and failure handling |
+| `ProcessMessageWorkflow` | `src/temporal/workflows.py` | Temporal durable workflow wrapping `process_message_activity` with retry and a failure-handler activity |
 | `SyncPineconeQueueWorkflow` | `src/temporal/workflows.py` | Temporal cron workflow that drives `sync_pinecone_queue_activity` on a `*/5 * * * *` schedule |
 
 ## Directory Structure Rationale
@@ -68,7 +68,7 @@ src/
 ├── database.py            # Async SQLAlchemy engine, sessionmaker, and FastAPI get_session dep
 ├── exceptions.py          # Global exception handlers (e.g., Twilio signature invalid)
 ├── main.py                # FastAPI app factory, lifespan DI wiring, OTel/Prometheus setup
-├── metrics.py             # Prometheus gauge and counter definitions
+├── metrics.py             # Prometheus gauge, counter, and histogram definitions
 ├── models.py              # Central model registry (imports all domain models for Alembic)
 ├── money.py               # Cents/dollars conversion utilities (monetary values stored as integer cents)
 ├── repository.py          # BaseRepository ABC with flush-only _persist (Template Method)
@@ -85,10 +85,10 @@ src/
 └── work_goals/            # Worker goal domain — model, repository, schemas
 
 migrations/                # Alembic migration versions
-infra/                     # Infrastructure-as-code (Pulumi / GKE)
+infra/                     # Pulumi IaC for GKE (components: cluster, database, ingress, temporal, etc.)
 grafana/                   # Grafana dashboard provisioning
 prometheus/                # Prometheus scrape configuration
-jaeger/                    # Jaeger tracing configuration
+jaeger/                    # Jaeger collector/query configuration (OpenSearch backend)
 tests/                     # pytest async test suite
 ```
 

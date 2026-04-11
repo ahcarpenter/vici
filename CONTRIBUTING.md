@@ -3,6 +3,8 @@
 
 Thank you for your interest in contributing to Vici — an SMS-driven platform for the gig economy. This document outlines how to get involved, the coding conventions we follow, and the process for submitting changes.
 
+For an overview of what Vici does and how it is structured, see the project [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Code of Conduct
 
 This project does not yet have a formal `CODE_OF_CONDUCT.md`. In the meantime, we ask contributors to be respectful, constructive, and welcoming in all interactions (issues, pull requests, reviews, and discussions). Harassment or discriminatory behavior will not be tolerated.
@@ -11,18 +13,19 @@ This project does not yet have a formal `CODE_OF_CONDUCT.md`. In the meantime, w
 
 If you get stuck or have questions:
 
-- Open a [GitHub issue](https://github.com/ahcarpenter/vici/issues) with the `question` label.
+- Open a [GitHub issue](https://github.com/ahcarpenter/vici/issues) with the `question` label. <!-- VERIFY: public repository URL github.com/ahcarpenter/vici -->
 - Check the existing documentation in the `docs/` directory:
   - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) — prerequisites and first-run instructions
   - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local development commands and workflows
   - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system architecture and component overview
   - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — environment variables and configuration
   - [docs/TESTING.md](docs/TESTING.md) — how to write and run tests
+  - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — how the project is deployed and rolled back
 - Review closed issues and pull requests — your question may already be answered.
 
 ## Reporting Bugs
 
-Before filing a bug report, please search [existing issues](https://github.com/ahcarpenter/vici/issues) to avoid duplicates.
+Before filing a bug report, please search [existing issues](https://github.com/ahcarpenter/vici/issues) to avoid duplicates. <!-- VERIFY: public repository URL github.com/ahcarpenter/vici -->
 
 When opening a bug report, include:
 
@@ -30,7 +33,7 @@ When opening a bug report, include:
 2. **Steps to reproduce** — Exact commands, API requests, or SMS flows that trigger the bug.
 3. **Expected behavior** — What you expected to happen.
 4. **Actual behavior** — What actually happened, including full error messages and stack traces.
-5. **Environment** — Python version, operating system, whether you're running via Docker Compose or directly, and any relevant environment variable overrides.
+5. **Environment** — Python version (Vici requires `>=3.12`), operating system, whether you're running via Docker Compose or directly, and any relevant environment variable overrides.
 6. **Logs** — Relevant application logs, Temporal worker output, or container logs if applicable.
 
 ## Suggesting Features
@@ -40,7 +43,7 @@ Feature requests are welcome. Open a GitHub issue with the `enhancement` label a
 - **Problem statement** — What gap or pain point does this address?
 - **Proposed solution** — What should the behavior look like?
 - **Alternatives considered** — Other approaches you thought about and why you prefer this one.
-- **Scope and impact** — Which domain(s) under `src/` would be affected (e.g., `matches`, `extraction`, `sms`, `pipeline`)?
+- **Scope and impact** — Which domain(s) under `src/` would be affected. Current domains include `src/sms/`, `src/extraction/`, `src/matches/`, `src/pipeline/`, `src/temporal/`, `src/jobs/`, `src/work_goals/`, and `src/users/`.
 
 For substantial features, please open an issue for discussion before starting work — this avoids wasted effort if the direction needs adjustment.
 
@@ -60,7 +63,7 @@ This project follows the FastAPI conventions documented in [AGENTS.md](AGENTS.md
 
 ### Project Structure — Organize by Domain
 
-Code is organized by domain under `src/`, not by file type. Each domain directory (e.g., `src/auth/`, `src/matches/`, `src/extraction/`) contains its own `router.py`, `schemas.py`, `models.py`, `service.py`, `dependencies.py`, `config.py`, `constants.py`, `exceptions.py`, and `utils.py` as needed.
+Code is organized by domain under `src/`, not by file type. Each domain directory (e.g., `src/sms/`, `src/matches/`, `src/extraction/`, `src/pipeline/`) contains its own `router.py`, `schemas.py`, `models.py`, `service.py`, `dependencies.py`, `constants.py`, `exceptions.py`, and `utils.py` as needed. Global application wiring lives in `src/main.py`, `src/config.py`, `src/database.py`, and `src/models.py`.
 
 When importing across domains, use explicit module names:
 
@@ -80,19 +83,19 @@ from src.sms import constants as sms_constants
 ### Pydantic and SQLModel
 
 - Prefer built-in validators (`Field`, `EmailStr`, regex patterns) over custom validators.
-- Split `BaseSettings` by domain — each domain owns its own `config.py` with a dedicated settings class.
+- Split `BaseSettings` by domain where practical — global settings live in `src/config.py` and are remapped into nested sub-models; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for details.
 - Constantize magic numbers in `constants.py` within the owning domain.
 
 ### Dependencies
 
-- Use FastAPI dependencies for validation, not just dependency injection (e.g., `valid_post_id` resolves the ID and raises `PostNotFound` if missing).
+- Use FastAPI dependencies for validation, not just dependency injection (e.g., a `valid_post_id` dependency resolves the ID and raises a domain exception if missing).
 - Chain dependencies to share validation logic (e.g., `valid_owned_post` depends on `valid_post_id` and `parse_jwt_data`).
 - Prefer `async` dependencies to avoid threadpool overhead.
 - Use consistent path variable names across endpoints to enable dependency reuse.
 
 ### Database and Migrations
 
-- Use `lower_case_snake` naming with singular table names (`user`, `post`, `match`).
+- Use `lower_case_snake` naming with singular table names (`user`, `job`, `match`).
 - Use `_at` suffix for timestamps (`created_at`), `_date` for dates (`birth_date`).
 - Ensure schemas are in third normal form (3NF).
 - Keep Alembic migrations static and reversible; descriptive filenames are enforced via `alembic.ini`'s `file_template`.
@@ -111,6 +114,7 @@ We use [ruff](https://docs.astral.sh/ruff/) for both linting and formatting. The
 
 - Target Python version: `py312`
 - Enabled lint rules: `E` (pycodestyle errors), `F` (pyflakes), `I` (isort)
+- Per-file ignores: `src/extraction/prompts.py` ignores `E501` (long lines are intentional in LLM prompt strings)
 
 Before committing, run:
 
@@ -119,7 +123,7 @@ uv run ruff check --fix src/ tests/
 uv run ruff format src/ tests/
 ```
 
-CI enforces `ruff check src/ tests/` on every pull request via `.github/workflows/ci.yml` — a pull request with lint violations will not merge.
+CI enforces `uv run ruff check src/ tests/` on every push to `main` and every pull request targeting `main` via `.github/workflows/ci.yml` — a pull request with lint violations will not merge.
 
 ## Commit Message Conventions
 
@@ -166,13 +170,13 @@ Keep the subject line under ~72 characters. Use the body (separated by a blank l
    uv run pytest tests/ -x --tb=short -q
    ```
 
-5. **Update documentation** — If your change affects user-facing behavior, configuration, or architecture, update the relevant file(s) under `docs/` or the root `README.md`.
-6. **Open the pull request** — Push your branch and open a PR against `main`. In the description, include:
+5. **Update documentation** — If your change affects user-facing behavior, configuration, or architecture, update the relevant file(s) under `docs/` (for example [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) or [docs/CONFIGURATION.md](docs/CONFIGURATION.md)) or the root [README.md](README.md).
+6. **Open the pull request** — Push your branch and open a PR against `main`. This repository does not currently ship a pull request template, so please include the following in your PR description:
    - What the change does and why
    - Any issues it closes (e.g., `Closes #123`)
    - Testing notes — how you verified the change locally
    - Screenshots or log excerpts if relevant
-7. **Pass CI** — GitHub Actions runs lint and tests on every PR via `.github/workflows/ci.yml`. Your PR must be green before review.
+7. **Pass CI** — The `CI` workflow defined in `.github/workflows/ci.yml` runs on every push to `main` and every pull request targeting `main`. It installs dependencies with `uv sync --frozen`, runs `uv run ruff check src/ tests/`, and runs `uv run pytest tests/ -x --tb=short -q` against an aiosqlite-backed test database. Your PR must be green before review.
 8. **Respond to review feedback** — Address reviewer comments with follow-up commits (don't force-push during review unless asked). Once approved, a maintainer will merge.
 
 ## Testing Requirements
