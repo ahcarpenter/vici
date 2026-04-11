@@ -131,10 +131,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Test scaffold and protect=True on stateful resources
-- [ ] 06-02-PLAN.md — NetworkPolicies for all 5 namespaces
-- [ ] 06-03-PLAN.md — Temporal DB credential migration to ESO
-- [ ] 06-04-PLAN.md — PDBs, resource limits, OPERATIONS.md, and __main__.py wiring
+- [x] 06-01-PLAN.md — Test scaffold and protect=True on stateful resources
+- [x] 06-02-PLAN.md — NetworkPolicies for all 5 namespaces
+- [x] 06-03-PLAN.md — Temporal DB credential migration to ESO
+- [x] 06-04-PLAN.md — PDBs, resource limits, OPERATIONS.md, and __main__.py wiring
 
 ## Progress
 
