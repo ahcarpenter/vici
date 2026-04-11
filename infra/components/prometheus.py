@@ -17,7 +17,9 @@ _KUBE_PROMETHEUS_REPO = "https://prometheus-community.github.io/helm-charts"
 _PROMETHEUS_RETENTION = "15d"
 _PROMETHEUS_STORAGE_SIZE = "10Gi"
 _JAEGER_QUERY_URL = "http://jaeger-query.observability.svc.cluster.local:16686"
-_TEMPORAL_DASHBOARD_ID = 17900  # Grafana.com dashboard ID for Temporal Server SDK metrics
+_TEMPORAL_DASHBOARD_ID = (
+    17900  # Grafana.com dashboard ID for Temporal Server SDK metrics
+)
 
 # ---------------------------------------------------------------------------
 # Dashboard JSON paths
@@ -27,11 +29,11 @@ _INFRA_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _FASTAPI_DASHBOARD_PATH = os.path.join(
     _INFRA_DIR, "..", "grafana", "provisioning", "dashboards", "fastapi.json"
 )
-_TEMPORAL_DASHBOARD_DIR = os.path.join(_INFRA_DIR, "..", "grafana", "provisioning", "dashboards")
-_TEMPORAL_DASHBOARD_FILE = os.path.join(_TEMPORAL_DASHBOARD_DIR, "temporal.json")
-_TEMPORAL_DASHBOARD_URL = (
-    f"https://grafana.com/api/dashboards/{_TEMPORAL_DASHBOARD_ID}/revisions/latest/download"
+_TEMPORAL_DASHBOARD_DIR = os.path.join(
+    _INFRA_DIR, "..", "grafana", "provisioning", "dashboards"
 )
+_TEMPORAL_DASHBOARD_FILE = os.path.join(_TEMPORAL_DASHBOARD_DIR, "temporal.json")
+_TEMPORAL_DASHBOARD_URL = f"https://grafana.com/api/dashboards/{_TEMPORAL_DASHBOARD_ID}/revisions/latest/download"
 
 # ---------------------------------------------------------------------------
 # Load FastAPI dashboard JSON at module load time
@@ -55,11 +57,14 @@ if not os.path.exists(_TEMPORAL_DASHBOARD_FILE):
             _f.write(_temporal_raw)
         _TEMPORAL_DASHBOARD_JSON = _temporal_raw
     except Exception as _exc:
-        import pulumi as _pulumi  # already imported above; re-imported for clarity in except block
+        # Re-imported for clarity inside the except block (already imported above).
+        import pulumi as _pulumi
 
         _pulumi.warn(
-            f"Could not download Temporal dashboard (ID={_TEMPORAL_DASHBOARD_ID}): {_exc}. "
-            "Using placeholder dashboard. Replace grafana/provisioning/dashboards/temporal.json "
+            f"Could not download Temporal dashboard "
+            f"(ID={_TEMPORAL_DASHBOARD_ID}): {_exc}. "
+            "Using placeholder dashboard. Replace "
+            "grafana/provisioning/dashboards/temporal.json "
             "with the real dashboard JSON when network access is available."
         )
         _TEMPORAL_DASHBOARD_JSON = json.dumps(
@@ -73,9 +78,10 @@ if not os.path.exists(_TEMPORAL_DASHBOARD_FILE):
                         "title": "TODO",
                         "options": {
                             "content": (
-                                "Placeholder dashboard. Replace this file with the real "
-                                f"Temporal SDK dashboard from "
-                                f"https://grafana.com/grafana/dashboards/{_TEMPORAL_DASHBOARD_ID}"
+                                "Placeholder dashboard. Replace this file with "
+                                "the real Temporal SDK dashboard from "
+                                "https://grafana.com/grafana/dashboards/"
+                                f"{_TEMPORAL_DASHBOARD_ID}"
                             )
                         },
                     }
@@ -223,7 +229,9 @@ fastapi_service_monitor = k8s.apiextensions.CustomResource(
 # Exports
 # ---------------------------------------------------------------------------
 
-pulumi.export("grafana_service", "kube-prometheus-stack-grafana.observability.svc.cluster.local")
+pulumi.export(
+    "grafana_service", "kube-prometheus-stack-grafana.observability.svc.cluster.local"
+)
 pulumi.export(
     "prometheus_service",
     "kube-prometheus-stack-prometheus.observability.svc.cluster.local",

@@ -3,7 +3,7 @@ import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
 from components.database import temporal_db_instance
-from components.iam import temporal_app_ksa, temporal_gsa
+from components.iam import temporal_app_ksa
 from components.namespaces import k8s_provider, namespaces
 from components.opensearch import OPENSEARCH_SERVICE_HOST, opensearch_release
 from config import ENV, cfg
@@ -14,7 +14,8 @@ from config import ENV, cfg
 
 _AUTH_PROXY_IMAGE = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1"
 _AUTH_PROXY_RUN_AS_USER = 65532
-# D-11: pin admin-tools to match Temporal server chart version (chart 0.74.0 = server 1.29.1)
+# D-11: pin admin-tools to match Temporal server chart version
+# (chart 0.74.0 = server 1.29.1).
 _ADMIN_TOOLS_IMAGE = "temporalio/admin-tools:1.29.1-tctl-1.18"
 _SCHEMA_JOB_BACKOFF_LIMIT = 0  # D-12: fail fast, no retries
 _SCHEMA_JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
@@ -40,25 +41,30 @@ _TEMPORAL_DB_PASS = cfg.require_secret("temporal_db_password")
 _SQL_TOOL_PREFIX = "temporal-sql-tool --plugin postgres12 --ep localhost -p 5432"
 _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 
-_SCHEMA_COMMANDS = pulumi.Output.all(_TEMPORAL_DB_USER, _TEMPORAL_DB_PASS).apply(
-    lambda creds: " && ".join(
+
+def _build_schema_commands(creds: tuple[str, str]) -> str:
+    """Compose the idempotent temporal-sql-tool command chain for one run.
+
+    create-database and setup-schema use '|| true' so subsequent steps
+    proceed when the object already exists. update-schema is not guarded.
+    """
+    auth = f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]}"
+    temporal_dir = f"{_SCHEMA_BASE}/temporal/versioned"
+    visibility_dir = f"{_SCHEMA_BASE}/visibility/versioned"
+    return " && ".join(
         [
-            # create-database and setup-schema are idempotent guards:
-            # '|| true' lets subsequent steps proceed if the object already exists.
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal create-database || true",
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal setup-schema -v 0.0 || true",
-            (
-                f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal update-schema"
-                f" -d {_SCHEMA_BASE}/temporal/versioned"
-            ),
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility create-database || true",
-            f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility setup-schema -v 0.0 || true",
-            (
-                f"{_SQL_TOOL_PREFIX} -u {creds[0]} --pw {creds[1]} --db temporal_visibility update-schema"
-                f" -d {_SCHEMA_BASE}/visibility/versioned"
-            ),
+            f"{auth} --db temporal create-database || true",
+            f"{auth} --db temporal setup-schema -v 0.0 || true",
+            f"{auth} --db temporal update-schema -d {temporal_dir}",
+            f"{auth} --db temporal_visibility create-database || true",
+            f"{auth} --db temporal_visibility setup-schema -v 0.0 || true",
+            f"{auth} --db temporal_visibility update-schema -d {visibility_dir}",
         ]
     )
+
+
+_SCHEMA_COMMANDS = pulumi.Output.all(_TEMPORAL_DB_USER, _TEMPORAL_DB_PASS).apply(
+    _build_schema_commands
 )
 
 temporal_schema_job = k8s.batch.v1.Job(
@@ -130,10 +136,12 @@ temporal_release = k8s.helm.v3.Release(
         namespace="temporal",
         create_namespace=False,
         values={
-            # Override chart release-hash prefix so services are named temporal-{component}
+            # Override chart release-hash prefix so services are named
+            # temporal-{component}.
             "fullnameOverride": "temporal",
             # D-02: Disable bundled sub-charts — we supply our own dependencies.
-            # cassandra.config.ports.db must be set even when disabled; chart references it.
+            # cassandra.config.ports.db must be set even when disabled because
+            # the chart references it.
             "cassandra": {"enabled": False, "config": {"ports": {"db": 9042}}},
             # OpenSearch exposes ES v7 compat API. Using elasticsearch.external=True
             # causes the chart to wire visibility through the top-level elasticsearch
@@ -182,8 +190,9 @@ temporal_release = k8s.helm.v3.Release(
                 # instead of the embedded config_template_embedded.yaml.
                 "configMapsToMount": "sprig",
                 "setConfigFilePath": True,
-                # Cloud SQL Auth Proxy as native sidecar (K8s 1.29+, restartPolicy=Always).
-                # Chart 0.74.0 does not support server.sidecarContainers — must use
+                # Cloud SQL Auth Proxy as native sidecar
+                # (K8s 1.29+, restartPolicy=Always). Chart 0.74.0 does not
+                # support server.sidecarContainers — must use
                 # additionalInitContainers with restartPolicy=Always instead.
                 "additionalInitContainers": [
                     {
@@ -203,8 +212,9 @@ temporal_release = k8s.helm.v3.Release(
                     },
                 ],
             },
-            # D-14: chart uses top-level serviceAccount.name (not server.serviceAccountName).
-            # create=False because we provision the KSA via temporal_app_ksa in iam.py.
+            # D-14: chart uses top-level serviceAccount.name
+            # (not server.serviceAccountName). create=False because we
+            # provision the KSA via temporal_app_ksa in iam.py.
             "serviceAccount": {
                 "create": False,
                 "name": "temporal-app",

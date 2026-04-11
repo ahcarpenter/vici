@@ -2,8 +2,8 @@ import pulumi
 import pulumi_gcp as gcp
 from pulumi import ResourceOptions
 
-from config import PROJECT_ID
 from components.cluster import cluster
+from config import PROJECT_ID
 
 # GCP Service Account for the Vici FastAPI application.
 # Pods annotated with this SA's email can call GCP APIs without key files.

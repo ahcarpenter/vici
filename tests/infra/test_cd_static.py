@@ -48,7 +48,7 @@ def _parse_module_assignments(source: str) -> dict[str, ast.expr]:
 
 
 class TestImageTagConfig:
-    """Verify config.py exports IMAGE_TAG derived from cfg.get('imageTag') with ENV fallback."""
+    """Verify config.py exports IMAGE_TAG from cfg.get('imageTag') with ENV fallback."""
 
     @pytest.fixture(autouse=True)
     def _load(self) -> None:
@@ -64,10 +64,10 @@ class TestImageTagConfig:
 
     def test_config_image_tag_has_env_fallback(self) -> None:
         """IMAGE_TAG must be defined as cfg.get('imageTag') or ENV."""
-        assert 'cfg.get("imageTag") or ENV' in self.source or \
-               "cfg.get('imageTag') or ENV" in self.source, (
-            "config.py IMAGE_TAG must be defined as: cfg.get('imageTag') or ENV"
-        )
+        assert (
+            'cfg.get("imageTag") or ENV' in self.source
+            or "cfg.get('imageTag') or ENV" in self.source
+        ), "config.py IMAGE_TAG must be defined as: cfg.get('imageTag') or ENV"
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ class TestImageTagConfig:
 
 
 class TestAppUsesImageTag:
-    """Verify app.py imports IMAGE_TAG from config and uses it for the container image tag."""
+    """Verify app.py imports IMAGE_TAG from config and uses it as the image tag."""
 
     @pytest.fixture(autouse=True)
     def _load(self) -> None:
@@ -85,9 +85,7 @@ class TestAppUsesImageTag:
     def test_app_imports_image_tag(self) -> None:
         """app.py must import IMAGE_TAG from config."""
         lines = self.source.splitlines()
-        import_lines = [
-            line for line in lines if line.startswith("from config import")
-        ]
+        import_lines = [line for line in lines if line.startswith("from config import")]
         assert import_lines, "app.py must have a 'from config import ...' line"
         combined = " ".join(import_lines)
         assert "IMAGE_TAG" in combined, (
@@ -99,8 +97,7 @@ class TestAppUsesImageTag:
         """The container image tag line must use IMAGE_TAG, not ENV."""
         lines = self.source.splitlines()
         image_tag_lines = [
-            line for line in lines
-            if "registry_url" in line and "/vici:" in line
+            line for line in lines if "registry_url" in line and "/vici:" in line
         ]
         assert image_tag_lines, (
             "app.py must have a line referencing registry_url and '/vici:' "

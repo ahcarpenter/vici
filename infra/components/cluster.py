@@ -36,11 +36,9 @@ cluster = gcp.container.Cluster(
     location=REGION,
     project=PROJECT_ID,
     enable_autopilot=True,
-
     # Required for Autopilot: GKE allocates pod and service CIDRs automatically.
     # Empty args object is sufficient; GKE fills in the CIDR ranges.
     ip_allocation_policy=gcp.container.ClusterIpAllocationPolicyArgs(),
-
     # Set dns_config explicitly to prevent GCP defaults from causing drift.
     # If this field is omitted, GCP silently applies CLOUD_DNS + CLUSTER_SCOPE +
     # cluster.local. Pulumi then sees the absence as a requested removal and
@@ -50,23 +48,19 @@ cluster = gcp.container.Cluster(
         cluster_dns_scope="CLUSTER_SCOPE",
         cluster_dns_domain="cluster.local",
     ),
-
     # Workload Identity enables pods to authenticate to GCP APIs using K8s
     # ServiceAccount annotations instead of static key files.
     # Format: "<project_id>.svc.id.goog"
     workload_identity_config=gcp.container.ClusterWorkloadIdentityConfigArgs(
         workload_pool=f"{PROJECT_ID}.svc.id.goog",
     ),
-
     release_channel=gcp.container.ClusterReleaseChannelArgs(
         channel=RELEASE_CHANNEL,
     ),
-
     # Prevent accidental cluster deletion via Pulumi destroy.
     # To intentionally destroy: set deletion_protection=False, run pulumi up,
     # then run pulumi destroy.
     deletion_protection=True,
-
     opts=ResourceOptions(
         ignore_changes=AUTOPILOT_VOLATILE_FIELDS,
     ),

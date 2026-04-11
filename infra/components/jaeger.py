@@ -413,5 +413,7 @@ jaeger_query_service = k8s.core.v1.Service(
 # Exports
 # ---------------------------------------------------------------------------
 
-pulumi.export("jaeger_collector_service", "jaeger-collector.observability.svc.cluster.local")
+pulumi.export(
+    "jaeger_collector_service", "jaeger-collector.observability.svc.cluster.local"
+)
 pulumi.export("jaeger_query_service", "jaeger-query.observability.svc.cluster.local")

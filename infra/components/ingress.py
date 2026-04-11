@@ -164,7 +164,11 @@ pulumi.export("webhook_base_url", pulumi.Output.concat("https://", APP_HOSTNAME)
 pulumi.export(
     "ingress_external_ip",
     vici_ingress.status.apply(
-        lambda s: (s.load_balancer.ingress[0].ip if s and s.load_balancer and s.load_balancer.ingress else "PENDING")
+        lambda s: (
+            s.load_balancer.ingress[0].ip
+            if s and s.load_balancer and s.load_balancer.ingress
+            else "PENDING"
+        )
     ),
 )
 pulumi.export("app_hostname", APP_HOSTNAME)

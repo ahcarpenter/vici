@@ -1,8 +1,8 @@
 import pulumi
 import pulumi_gcp as gcp
 
-from config import PROJECT_ID, REGION, REGISTRY_NAME
 from components.identity import ci_push_sa
+from config import PROJECT_ID, REGION, REGISTRY_NAME
 
 # Artifact Registry Docker repository for Vici application images.
 # Repository ID becomes part of the push URI:

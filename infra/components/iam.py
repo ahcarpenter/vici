@@ -3,11 +3,11 @@ import pulumi_gcp as gcp
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
-from config import ENV, PROJECT_ID
 from components.cluster import cluster
 from components.database import app_db_instance, temporal_db_instance  # noqa: F401
 from components.identity import app_gsa
 from components.namespaces import k8s_provider, namespaces
+from config import PROJECT_ID
 
 # -- Temporal GSA (D-13) ------------------------------------------------------
 
@@ -33,7 +33,8 @@ temporal_wi_binding = gcp.serviceaccount.IAMBinding(
             ".svc.id.goog[temporal/temporal-app]",
         )
     ],
-    # WIF pool is created by GKE; must depend on cluster to avoid "Identity Pool does not exist".
+    # WIF pool is created by GKE; must depend on cluster to avoid
+    # "Identity Pool does not exist".
     opts=ResourceOptions(depends_on=[cluster]),
 )
 

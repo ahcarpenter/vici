@@ -3,8 +3,8 @@ import pulumi_gcp as gcp
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
-from config import CLUSTER_NAME, ENV, PROJECT_ID, REGION
 from components.namespaces import k8s_provider, namespaces
+from config import CLUSTER_NAME, ENV, PROJECT_ID, REGION
 
 # ---------------------------------------------------------------------------
 # Module-level constants

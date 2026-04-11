@@ -2,11 +2,11 @@ import pulumi
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
-from config import ENV
 from components.database import app_db_instance
-from components.secrets import external_secrets
 from components.namespaces import k8s_provider, namespaces
 from components.registry import registry_url
+from components.secrets import external_secrets
+from config import ENV
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -16,8 +16,8 @@ _AUTH_PROXY_IMAGE = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1"
 _AUTH_PROXY_RUN_AS_USER = 65532
 _SOCKET_MOUNT_PATH = "/cloudsql"
 _VOLUME_NAME = "cloudsql-socket"
-_JOB_BACKOFF_LIMIT = 0     # Fail fast, no retries (D-12)
-_JOB_TTL_SECONDS = 300     # Clean up after 5 minutes
+_JOB_BACKOFF_LIMIT = 0  # Fail fast, no retries (D-12)
+_JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
 
 # ---------------------------------------------------------------------------
 # Alembic migration Job with Cloud SQL Auth Proxy native sidecar

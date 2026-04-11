@@ -2,14 +2,14 @@ import pulumi
 import pulumi_gcp as gcp
 from pulumi import ResourceOptions
 
-from config import ENV, PROJECT_ID, REGION
 from components.cluster import cluster
+from config import ENV, PROJECT_ID, REGION
 
 # -- Constants (no magic numbers) ------------------------------------------
 
-_DB_TIER = "db-g1-small"          # D-01
+_DB_TIER = "db-g1-small"  # D-01
 _DB_VERSION = "POSTGRES_16"
-_DB_STORAGE_GB = 10               # D-04
+_DB_STORAGE_GB = 10  # D-04
 _DISK_TYPE = "PD_SSD"
 _PEERING_IP_PREFIX_LENGTH = 16
 

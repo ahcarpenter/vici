@@ -89,7 +89,7 @@ class TestCD02StagingManualDispatchOnly:
             "cd-staging.yml must have workflow_dispatch trigger"
         )
         assert "pull_request" not in on, (
-            "cd-staging.yml must NOT have pull_request trigger (D-05: manual dispatch only)"
+            "cd-staging.yml must NOT have pull_request trigger (D-05: dispatch only)"
         )
 
     def test_cd_staging_calls_cd_base_with_up(self) -> None:
@@ -132,8 +132,9 @@ class TestCD03ProdEnvironmentApproval:
         assert jobs, "cd-prod.yml must define at least one job"
         job = next(iter(jobs.values()))
         with_args = job.get("with", {})
-        assert with_args.get("environment") == "prod", (
-            f"cd-prod.yml must pass with.environment: prod, got: {with_args.get('environment')}"
+        env = with_args.get("environment")
+        assert env == "prod", (
+            f"cd-prod.yml must pass with.environment: prod, got: {env}"
         )
 
 
@@ -153,16 +154,16 @@ class TestCD04WIFAuth:
         steps = _all_steps(self.workflow, "build")
         uses_values = [s.get("uses", "") for s in steps]
         assert any("google-github-actions/auth@v3" in u for u in uses_values), (
-            f"cd-base.yml build job must have a step using google-github-actions/auth@v3, "
-            f"found: {uses_values}"
+            f"cd-base.yml build job must have a google-github-actions/auth@v3 "
+            f"step, found: {uses_values}"
         )
 
     def test_cd_base_deploy_job_uses_wif_auth(self) -> None:
         steps = _all_steps(self.workflow, "deploy")
         uses_values = [s.get("uses", "") for s in steps]
         assert any("google-github-actions/auth@v3" in u for u in uses_values), (
-            f"cd-base.yml deploy job must have a step using google-github-actions/auth@v3, "
-            f"found: {uses_values}"
+            f"cd-base.yml deploy job must have a google-github-actions/auth@v3 "
+            f"step, found: {uses_values}"
         )
 
     def test_cd_base_no_static_key_steps(self) -> None:
@@ -183,7 +184,7 @@ class TestCD04WIFAuth:
                 )
 
     def test_cd_base_has_id_token_write_permission(self) -> None:
-        """Both build and deploy jobs must have permissions.id-token: write (WIF requirement)."""
+        """Both jobs must set permissions.id-token: write (required by WIF)."""
         jobs = self.workflow.get("jobs", {})
         for job_name in ("build", "deploy"):
             job = jobs.get(job_name, {})
@@ -269,7 +270,8 @@ class TestCDBaseStructure:
         step_with = buildx_steps[0].get("with", {})
         cache_from = step_with.get("cache-from", "")
         assert "type=gha" in str(cache_from), (
-            f"docker/build-push-action must use cache-from: type=gha, got: {cache_from!r}"
+            f"docker/build-push-action must set cache-from: type=gha, "
+            f"got: {cache_from!r}"
         )
 
     def test_cd_base_build_only_pushes_on_up(self) -> None:
@@ -277,20 +279,22 @@ class TestCDBaseStructure:
         buildx_steps = [
             s for s in steps if "docker/build-push-action" in (s.get("uses", "") or "")
         ]
-        assert buildx_steps, "cd-base.yml build job must have a docker/build-push-action step"
+        assert buildx_steps, (
+            "cd-base.yml build job must have a docker/build-push-action step"
+        )
         step_if = buildx_steps[0].get("if", "") or ""
-        assert "inputs.command == 'up'" in step_if or 'inputs.command == "up"' in step_if, (
-            f"docker/build-push-action must have if: inputs.command == 'up', got: {step_if!r}"
+        assert (
+            "inputs.command == 'up'" in step_if or 'inputs.command == "up"' in step_if
+        ), (
+            f"docker/build-push-action must have if: inputs.command == 'up', "
+            f"got: {step_if!r}"
         )
 
     def test_cd_base_has_gcp_project_input(self) -> None:
-        inputs = (
-            self.workflow.get("on", {})
-            .get("workflow_call", {})
-            .get("inputs", {})
-        )
+        inputs = self.workflow.get("on", {}).get("workflow_call", {}).get("inputs", {})
         assert "gcp_project" in inputs, (
-            f"cd-base.yml workflow_call inputs must include gcp_project, got: {list(inputs.keys())}"
+            f"cd-base.yml workflow_call inputs must include gcp_project, "
+            f"got: {list(inputs.keys())}"
         )
         assert inputs["gcp_project"].get("required") is True, (
             "cd-base.yml gcp_project input must be required: true"
@@ -299,8 +303,10 @@ class TestCDBaseStructure:
     def test_cd_base_health_check_on_dev_up(self) -> None:
         steps = _all_steps(self.workflow, "deploy")
         health_steps = [
-            s for s in steps
-            if s.get("if") and "inputs.stack == 'dev'" in (s.get("if", "") or "")
+            s
+            for s in steps
+            if s.get("if")
+            and "inputs.stack == 'dev'" in (s.get("if", "") or "")
             and "inputs.command == 'up'" in (s.get("if", "") or "")
         ]
         assert health_steps, (
@@ -320,9 +326,7 @@ class TestCDBaseStructure:
         pulumi_steps = [
             s for s in steps if "pulumi/actions" in (s.get("uses", "") or "")
         ]
-        assert pulumi_steps, (
-            "cd-base.yml deploy job must have a pulumi/actions step"
-        )
+        assert pulumi_steps, "cd-base.yml deploy job must have a pulumi/actions step"
         step_with = pulumi_steps[0].get("with", {})
         config_map = str(step_with.get("config-map", "") or "")
         assert "imageTag" in config_map, (
