@@ -8,7 +8,7 @@ from components.migration import migration_job
 from components.namespaces import k8s_provider, namespaces
 from components.registry import registry_url
 from components.secrets import external_secrets
-from config import ENV
+from config import ENV, IMAGE_TAG
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -121,7 +121,7 @@ app_deployment = k8s.apps.v1.Deployment(
                 containers=[
                     k8s.core.v1.ContainerArgs(
                         name="vici-app",
-                        image=pulumi.Output.concat(registry_url, "/vici:", ENV),
+                        image=pulumi.Output.concat(registry_url, "/vici:", IMAGE_TAG),
                         image_pull_policy="Always",
                         ports=[
                             k8s.core.v1.ContainerPortArgs(

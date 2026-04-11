@@ -1,6 +1,6 @@
 name: CD Dev
 
-on:
+"on":
   push:
     branches: [main]
 
@@ -14,7 +14,8 @@ jobs:
     with:
       stack: dev
       command: up
+      gcp_project: vici-app-dev
     secrets:
-      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
-      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_DEV }}
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_EMAIL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}

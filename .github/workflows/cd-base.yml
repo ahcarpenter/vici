@@ -1,6 +1,6 @@
 name: CD Base
 
-on:
+"on":
   workflow_call:
     inputs:
       stack:
@@ -12,6 +12,9 @@ on:
       environment:
         required: false
         type: string
+      gcp_project:
+        required: true
+        type: string
     secrets:
       WIF_PROVIDER:
         required: true
@@ -19,15 +22,51 @@ on:
         required: true
       PULUMI_CONFIG_PASSPHRASE:
         required: true
+    outputs:
+      sha:
+        description: "7-char git SHA used as image tag"
+        value: ${{ jobs.build.outputs.sha }}
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: sha
+        run: echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - uses: docker/build-push-action@v6
+        if: inputs.command == 'up'
+        with:
+          context: .
+          push: true
+          tags: us-central1-docker.pkg.dev/${{ inputs.gcp_project }}/vici-images/vici:${{ steps.sha.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
     runs-on: ubuntu-latest
+    needs: [build]
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -35,19 +74,6 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
-      - name: Build and push image
-        if: inputs.command == 'up'
-        run: |
-          PROJECT_ID=$(gcloud config get-value project)
-          IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/vici-images/vici"
-          SHA=$(git rev-parse --short HEAD)
-          docker build -t "${IMAGE}:${SHA}" -t "${IMAGE}:${{ inputs.stack }}" .
-          docker push "${IMAGE}:${SHA}"
-          docker push "${IMAGE}:${{ inputs.stack }}"
 
       - uses: astral-sh/setup-uv@v5
         with:
@@ -61,6 +87,22 @@ jobs:
           command: ${{ inputs.command }}
           stack-name: ${{ inputs.stack }}
           work-dir: infra
+          cloud-url: gs://vici-app-pulumi-state-${{ inputs.stack }}
+          config-map: '{"vici-infra:imageTag": {"value": "${{ needs.build.outputs.sha }}", "secret": false}}'
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          PULUMI_BACKEND_URL: gs://vici-app-pulumi-state-${{ inputs.stack }}
+
+      - name: Health check
+        if: inputs.stack == 'dev' && inputs.command == 'up'
+        run: |
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://dev.usevici.com/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: got $STATUS, retrying in 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 60s"
+          exit 1

@@ -1,8 +1,6 @@
 name: CD Staging
 
-on:
-  pull_request:
-    branches: [main]
+"on":
   workflow_dispatch:
 
 permissions:
@@ -10,24 +8,13 @@ permissions:
   id-token: write
 
 jobs:
-  preview:
-    if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/cd-base.yml
-    with:
-      stack: staging
-      command: preview
-    secrets:
-      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_STAGING }}
-      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-
-  deploy:
-    if: github.event_name == 'workflow_dispatch'
+  deploy-staging:
     uses: ./.github/workflows/cd-base.yml
     with:
       stack: staging
       command: up
+      gcp_project: vici-app-staging
     secrets:
-      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_STAGING }}
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_EMAIL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
