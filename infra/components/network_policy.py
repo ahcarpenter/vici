@@ -385,6 +385,29 @@ allow_policies["obs-egress"] = k8s.networking.v1.NetworkPolicy(
 
 # --- cert-manager namespace ---
 
+# Ingress: webhook validation from kube-apiserver on port 443.
+# Same GKE Autopilot data-plane routing issue as external-secrets above.
+allow_policies["certmgr-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
+    "netpol-certmgr-webhook-ingress",
+    metadata=k8s.meta.v1.ObjectMetaArgs(
+        name="allow-ingress-webhook", namespace="cert-manager"
+    ),
+    spec=k8s.networking.v1.NetworkPolicySpecArgs(
+        pod_selector=k8s.meta.v1.LabelSelectorArgs(),
+        policy_types=["Ingress"],
+        ingress=[
+            k8s.networking.v1.NetworkPolicyIngressRuleArgs(
+                ports=[
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                ],
+            )
+        ],
+    ),
+    opts=ResourceOptions(
+        provider=k8s_provider, depends_on=[namespaces["cert-manager"]]
+    ),
+)
+
 # Egress: HTTPS 443 to internet (Let's Encrypt ACME challenges + Kubernetes API)
 allow_policies["certmgr-egress"] = k8s.networking.v1.NetworkPolicy(
     "netpol-certmgr-egress",
@@ -413,6 +436,32 @@ allow_policies["certmgr-egress"] = k8s.networking.v1.NetworkPolicy(
 )
 
 # --- external-secrets namespace ---
+
+# Ingress: webhook validation from kube-apiserver on port 443.
+# The apiserver is not a pod, so its traffic bypasses pod-to-pod
+# NetworkPolicy rules on most CNIs — but GKE Autopilot routes webhook
+# calls through the data plane, which IS subject to NetworkPolicy.
+# Without this rule, ExternalSecret creation fails with webhook timeout.
+allow_policies["eso-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
+    "netpol-eso-webhook-ingress",
+    metadata=k8s.meta.v1.ObjectMetaArgs(
+        name="allow-ingress-webhook", namespace="external-secrets"
+    ),
+    spec=k8s.networking.v1.NetworkPolicySpecArgs(
+        pod_selector=k8s.meta.v1.LabelSelectorArgs(),
+        policy_types=["Ingress"],
+        ingress=[
+            k8s.networking.v1.NetworkPolicyIngressRuleArgs(
+                ports=[
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                ],
+            )
+        ],
+    ),
+    opts=ResourceOptions(
+        provider=k8s_provider, depends_on=[namespaces["external-secrets"]]
+    ),
+)
 
 # Egress: HTTPS 443 to internet (GCP Secret Manager API + Kubernetes API)
 allow_policies["eso-egress"] = k8s.networking.v1.NetworkPolicy(
