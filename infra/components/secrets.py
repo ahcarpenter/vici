@@ -28,6 +28,7 @@ _SECRET_DEFINITIONS: list[tuple[str, str, str]] = [
     ("temporal-address", "vici", "temporal-address"),
     ("otel-exporter-otlp-endpoint", "vici", "otel-exporter-otlp-endpoint"),
     ("webhook-base-url", "vici", "webhook-base-url"),
+    ("temporal-db-password", "temporal", "temporal-db-credentials"),
 ]
 
 # Namespaces that need a SecretStore (SECRETS-03)
@@ -155,6 +156,38 @@ for _slug, _ns, _k8s_name in _SECRET_DEFINITIONS:
             depends_on=[secret_stores[_ns], sm_secrets[_slug]],
         ),
     )
+
+# ---------------------------------------------------------------------------
+# Temporal DB credentials — custom ExternalSecret (D-06, D-07)
+# ---------------------------------------------------------------------------
+# The Temporal Helm chart expects existingSecret: "temporal-db-credentials"
+# with a key named "password". The generic loop would create key
+# "TEMPORAL_DB_PASSWORD" which doesn't match. Override with custom mapping.
+
+external_secrets["temporal-db-password"] = k8s.apiextensions.CustomResource(
+    "ext-secret-temporal-db-credentials",
+    api_version="external-secrets.io/v1",
+    kind="ExternalSecret",
+    metadata=k8s.meta.v1.ObjectMetaArgs(
+        name="temporal-db-credentials",
+        namespace="temporal",
+    ),
+    spec={
+        "refreshInterval": _REFRESH_INTERVAL,
+        "secretStoreRef": {"name": "gcp-secret-manager", "kind": "SecretStore"},
+        "target": {"name": "temporal-db-credentials", "creationPolicy": "Owner"},
+        "data": [
+            {
+                "secretKey": "password",
+                "remoteRef": {"key": f"{ENV}-temporal-db-password"},
+            },
+        ],
+    },
+    opts=ResourceOptions(
+        provider=k8s_provider,
+        depends_on=[secret_stores["temporal"], sm_secrets["temporal-db-password"]],
+    ),
+)
 
 # ---------------------------------------------------------------------------
 # Exports
