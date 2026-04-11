@@ -3,9 +3,8 @@ name: CD Prod
 "on":
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
+# IN-01 note: no top-level `permissions:` block. Reusable workflow
+# call inherits from cd-base.yml's job-level permissions declarations.
 
 # WR-02 fix: serialize prod deploys per stack. cancel-in-progress is
 # false because an approved prod deploy must never be silently

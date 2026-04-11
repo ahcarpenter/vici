@@ -3,9 +3,8 @@ name: CD Staging
 "on":
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
+# IN-01 note: no top-level `permissions:` block. Reusable workflow
+# call inherits from cd-base.yml's job-level permissions declarations.
 
 # WR-02 fix: serialize staging deploys per stack. cancel-in-progress
 # is false here because a staging deploy is manually dispatched and

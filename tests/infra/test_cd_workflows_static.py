@@ -322,6 +322,11 @@ class TestCDBaseStructure:
         )
 
     def test_cd_base_uses_pulumi_config_map_for_image_tag(self) -> None:
+        """IN-04: pin both the key AND the value source.
+
+        A regression that hardcodes imageTag or points it at the wrong
+        context (e.g. ``inputs.stack``) must fail this test.
+        """
         steps = _all_steps(self.workflow, "deploy")
         pulumi_steps = [
             s for s in steps if "pulumi/actions" in (s.get("uses", "") or "")
@@ -329,9 +334,12 @@ class TestCDBaseStructure:
         assert pulumi_steps, "cd-base.yml deploy job must have a pulumi/actions step"
         step_with = pulumi_steps[0].get("with", {})
         config_map = str(step_with.get("config-map", "") or "")
-        assert "imageTag" in config_map, (
-            f"pulumi/actions step must pass config-map containing imageTag, "
-            f"got: {config_map!r}"
+        assert "vici-infra:imageTag" in config_map, (
+            f"pulumi/actions must set vici-infra:imageTag, got: {config_map!r}"
+        )
+        assert "needs.build.outputs.sha" in config_map, (
+            f"pulumi/actions imageTag must come from build job's sha "
+            f"output, got: {config_map!r}"
         )
 
     def test_cd_base_build_job_has_environment_gate(self) -> None:
@@ -377,6 +385,41 @@ class TestCDBaseStructure:
             f"WR-03: health check must dump kubectl diagnostics on "
             f"failure. Got run: {run_text!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# IN-05: Every caller must wire the three secrets through to cd-base
+# ---------------------------------------------------------------------------
+
+
+class TestCallerSecretPassthrough:
+    """Verify each caller workflow wires all three required secrets.
+
+    cd-base.yml declares WIF_PROVIDER, WIF_SERVICE_ACCOUNT, and
+    PULUMI_CONFIG_PASSPHRASE as required: true. A caller that forgets
+    one would fail at runtime with an opaque error during auth or
+    stack unseal — catch it statically instead.
+    """
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["cd-dev.yml", "cd-staging.yml", "cd-prod.yml"],
+    )
+    def test_caller_passes_required_secrets(self, filename: str) -> None:
+        workflow = _load_workflow(filename)
+        jobs = workflow.get("jobs", {}) or {}
+        assert jobs, f"{filename} must define at least one job"
+        job = next(iter(jobs.values()))
+        secrets = job.get("secrets", {}) or {}
+        for required in (
+            "WIF_PROVIDER",
+            "WIF_SERVICE_ACCOUNT",
+            "PULUMI_CONFIG_PASSPHRASE",
+        ):
+            assert required in secrets, (
+                f"{filename} must pass {required} through to cd-base.yml, "
+                f"got secrets: {list(secrets.keys())}"
+            )
 
 
 # ---------------------------------------------------------------------------
