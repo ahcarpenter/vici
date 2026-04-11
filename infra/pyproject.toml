@@ -4,9 +4,11 @@ version = "0.1.0"
 description = "Vici GKE infrastructure — Pulumi Python program"
 requires-python = ">=3.12"
 dependencies = [
-    "pulumi>=3.229.0,<4",
-    "pulumi-gcp>=9.18.0,<10",
-    "pulumi-kubernetes>=4.28.0,<5",
+    # Exact pins match the schema version that wrote the current dev stack
+    # state. Bumping requires a corresponding `pulumi refresh` + re-apply.
+    "pulumi==3.229.0",
+    "pulumi-gcp==9.18.0",
+    "pulumi-kubernetes==4.28.0",
 ]
 
 [tool.uv]

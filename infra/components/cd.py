@@ -81,6 +81,12 @@ ci_wif_binding = gcp.serviceaccount.IAMBinding(
 # Minimum roles required for Pulumi CD:
 #   roles/storage.objectAdmin  — read/write Pulumi GCS state backend
 #   roles/container.developer  — deploy to GKE cluster (T-05-12)
+#   roles/compute.viewer       — read Compute Engine resources (regions,
+#                                InstanceGroupManagers, networks) that the
+#                                pulumi-gcp provider needs for cluster refresh
+#                                and drift detection on GKE node pools. GKE
+#                                Autopilot surfaces are not fully covered by
+#                                container.developer alone.
 #
 # roles/artifactregistry.writer is bound in registry.py alongside the registry.
 
@@ -95,6 +101,13 @@ ci_gke_access = gcp.projects.IAMMember(
     "ci-sa-container-developer",
     project=PROJECT_ID,
     role="roles/container.developer",
+    member=ci_push_sa.email.apply(lambda e: f"serviceAccount:{e}"),
+)
+
+ci_compute_viewer = gcp.projects.IAMMember(
+    "ci-sa-compute-viewer",
+    project=PROJECT_ID,
+    role="roles/compute.viewer",
     member=ci_push_sa.email.apply(lambda e: f"serviceAccount:{e}"),
 )
 
