@@ -133,8 +133,13 @@ for _ns in _SECRETSTORE_NAMESPACES:
 # ExternalSecret CRs (SECRETS-04)
 # ---------------------------------------------------------------------------
 
+# Slugs handled by custom ExternalSecret overrides below — skip in generic loop
+_CUSTOM_EXTERNAL_SECRETS = {"temporal-db-password"}
+
 external_secrets: dict[str, k8s.apiextensions.CustomResource] = {}
 for _slug, _ns, _k8s_name in _SECRET_DEFINITIONS:
+    if _slug in _CUSTOM_EXTERNAL_SECRETS:
+        continue
     external_secrets[_slug] = k8s.apiextensions.CustomResource(
         f"ext-secret-{_slug}",
         api_version="external-secrets.io/v1",
