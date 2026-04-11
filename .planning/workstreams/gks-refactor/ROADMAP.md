@@ -115,8 +115,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05.1-01-PLAN.md — Test scaffold and IMAGE_TAG config key for Pulumi
-- [ ] 05.1-02-PLAN.md — Rewrite all four CD workflow files to match locked decisions
+- [x] 05.1-01-PLAN.md — Test scaffold and IMAGE_TAG config key for Pulumi
+- [x] 05.1-02-PLAN.md — Rewrite all four CD workflow files to match locked decisions
 
 ### Phase 6: Infra Best-Practice Audit and Edge-Case Hardening
 **Goal**: All stateful infrastructure is protected from accidental deletion, namespaces enforce least-privilege network access, Temporal credentials follow the ESO pattern, and operators have a runbook for edge-case scenarios
