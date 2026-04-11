@@ -28,19 +28,19 @@ See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) f
 
 ## Tech Stack
 
-| Layer           | Technology                                              |
-|-----------------|---------------------------------------------------------|
-| Runtime         | Python 3.12+                                            |
-| Package manager | [uv](https://github.com/astral-sh/uv)                   |
-| Web framework   | FastAPI + Uvicorn                                       |
-| ORM / migrations| SQLModel / SQLAlchemy (async) + Alembic                 |
-| Database        | PostgreSQL 16 (asyncpg driver)                          |
-| Workflows       | Temporal 1.26                                           |
-| Vector search   | Pinecone (async SDK)                                    |
-| LLM             | OpenAI (wrapped by Braintrust)                          |
-| SMS gateway     | Twilio                                                  |
-| Observability   | OpenTelemetry, Jaeger 2.16, Prometheus 3.1, Grafana 11  |
-| Infra           | Pulumi on Google Kubernetes Engine                      |
+| Layer           | Technology                                                          |
+|-----------------|---------------------------------------------------------------------|
+| Runtime         | Python 3.12+                                                        |
+| Package manager | [uv](https://github.com/astral-sh/uv)                               |
+| Web framework   | FastAPI + Uvicorn                                                   |
+| ORM / migrations| SQLModel / SQLAlchemy (async) + Alembic                             |
+| Database        | PostgreSQL 16 (asyncpg driver)                                      |
+| Workflows       | Temporal 1.26                                                       |
+| Vector search   | Pinecone (async SDK)                                                |
+| LLM             | OpenAI                                                              |
+| SMS gateway     | Twilio                                                              |
+| Observability   | OpenTelemetry, Jaeger 2.16, Prometheus 3.1, Grafana 11, Braintrust  |
+| Infra           | Pulumi on Google Kubernetes Engine                                  |
 
 ## Prerequisites
 
