@@ -118,44 +118,50 @@
 
 ## Traceability
 
-| REQ-ID | Phase | Status |
-|--------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
-| INFRA-04 | Phase 1 | Pending |
-| INFRA-05 | Phase 1 | Pending |
-| INFRA-06 | Phase 1 | Pending |
-| INFRA-07 | Phase 1 | Pending |
-| DB-01 | Phase 2 | Pending |
-| DB-02 | Phase 2 | Pending |
-| DB-03 | Phase 2 | Pending |
-| DB-04 | Phase 2 | Pending |
-| DB-05 | Phase 2 | Pending |
-| SECRETS-01 | Phase 2 | Pending |
-| SECRETS-02 | Phase 2 | Pending |
-| SECRETS-03 | Phase 2 | Pending |
-| SECRETS-04 | Phase 2 | Pending |
-| SECRETS-05 | Phase 2 | Pending |
-| TEMPORAL-01 | Phase 3 | Pending |
-| TEMPORAL-02 | Phase 3 | Pending |
-| TEMPORAL-03 | Phase 3 | Pending |
-| TEMPORAL-04 | Phase 3 | Pending |
-| TEMPORAL-05 | Phase 3 | Pending |
-| TEMPORAL-06 | Phase 3 | Pending |
-| OBS-01 | Phase 4 | Pending |
-| OBS-02 | Phase 4 | Pending |
-| OBS-03 | Phase 4 | Pending |
-| OBS-04 | Phase 4 | Pending |
-| OBS-05 | Phase 4 | Pending |
-| APP-01 | Phase 5 | Pending |
-| APP-02 | Phase 5 | Pending |
-| APP-03 | Phase 5 | Pending |
-| APP-04 | Phase 5 | Pending |
-| APP-05 | Phase 5 | Pending |
-| APP-06 | Phase 5 | Pending |
-| CD-01 | Phase 5 | Pending |
-| CD-02 | Phase 5 | Pending |
-| CD-03 | Phase 5 | Pending |
-| CD-04 | Phase 5 | Pending |
-| CD-05 | Phase 5 | Pending |
+Status legend:
+- `Code-Verified`: phase verification (automated + manual code review) passed; live-cluster behavior still pending.
+- `Human-Needed`: code-level verification passed; live-cluster / live-DNS / GitHub-dashboard confirmation pending.
+- `Complete`: both code-level and runtime-observable verification passed.
+- `Pending`: phase has not executed yet.
+
+| REQ-ID | Phase | Status | Notes |
+|--------|-------|--------|-------|
+| INFRA-01 | Phase 1 | Code-Verified | 4 SUMMARY.md artifacts; live dev cluster provisioned during 01-04. No formal VERIFICATION.md (documentation debt per v1.0-MILESTONE-AUDIT.md). |
+| INFRA-02 | Phase 1 | Code-Verified | Single Pulumi program, three stack configs. |
+| INFRA-03 | Phase 1 | Code-Verified | Workload Identity enabled at cluster creation per 01-02. |
+| INFRA-04 | Phase 1 | Code-Verified | ignore_changes guards on dns_config and node_version per 01-02. |
+| INFRA-05 | Phase 1 | Code-Verified | GCS state backend, per-env buckets. |
+| INFRA-06 | Phase 1 | Code-Verified | All five namespaces (vici, temporal, observability, cert-manager, external-secrets) declared in 01-03. |
+| INFRA-07 | Phase 1 | Code-Verified | vici-images Artifact Registry repo in us-central1; CI push SA bound to artifactregistry.writer. |
+| DB-01 | Phase 2 | Human-Needed | Code-verified; live cluster reachability via Auth Proxy socket pending. |
+| DB-02 | Phase 2 | Human-Needed | Dedicated Temporal Cloud SQL instance per env; runtime validation pending. |
+| DB-03 | Phase 2 | Human-Needed | Cloud SQL Auth Proxy native sidecar annotation; live behavior pending. |
+| DB-04 | Phase 2 | Human-Needed | Alembic migration Job; runtime completion pending. |
+| DB-05 | Phase 2 | Human-Needed | DATABASE_URL Auth Proxy socket format; runtime connectivity pending. |
+| SECRETS-01 | Phase 2 | Human-Needed | All 11 external secrets declared in GCP Secret Manager. |
+| SECRETS-02 | Phase 2 | Human-Needed | ESO Helm release with depends_on ordering. |
+| SECRETS-03 | Phase 2 | Human-Needed | Namespace-scoped SecretStore per namespace. |
+| SECRETS-04 | Phase 2 | Human-Needed | ExternalSecret CRs for every secret; Ready=True confirmation pending live cluster. |
+| SECRETS-05 | Phase 2 | Human-Needed | Minimum IAM roles (secretmanager.secretAccessor, cloudsql.client). |
+| OBS-01 | Phase 3 | Code-Verified | **Moved from Phase 4 to Phase 3** (mapping error identified in v1.0-MILESTONE-AUDIT.md). OpenSearch is deployed by Phase 3 opensearch.py, not Phase 4. number_of_replicas: 0 for single-node safety confirmed in code. |
+| TEMPORAL-01 | Phase 3 | Code-Verified | temporaltech/temporal chart 0.74.0; live deployment confirmed in 03-03 SUMMARY. |
+| TEMPORAL-02 | Phase 3 | Code-Verified | OpenSearch for visibility; bundled Elasticsearch disabled. |
+| TEMPORAL-03 | Phase 3 | Code-Verified | opensearch readiness guard via depends_on. |
+| TEMPORAL-04 | Phase 3 | Code-Verified | Temporal schema Job runs before server Deployment. |
+| TEMPORAL-05 | Phase 3 | Code-Verified | TEMPORAL_HOST secret pins to temporal-frontend.temporal.svc.cluster.local:7233. |
+| TEMPORAL-06 | Phase 3 | Code-Verified | ClusterIP UI service; no formal VERIFICATION.md (documentation debt). |
+| OBS-02 | Phase 4 | Human-Needed | Jaeger v2 deployed; live trace collection pending Phase 5 app deploy. |
+| OBS-03 | Phase 4 | Human-Needed | kube-prometheus-stack + ServiceMonitor; scrape success pending live app. |
+| OBS-04 | Phase 4 | Human-Needed | Grafana dashboard provisioning; Temporal dashboard downloaded at pulumi up time with placeholder fallback (tech debt). |
+| OBS-05 | Phase 4 | Human-Needed | OTEL_EXPORTER_OTLP_ENDPOINT ExternalSecret sync pending live cluster. |
+| APP-01 | Phase 5 | Code-Verified | FastAPI Deployment in vici namespace; Auth Proxy sidecar annotation + envFrom ExternalSecret wiring verified. |
+| APP-02 | Phase 5 | Human-Needed | Temporal worker lifespan wiring verified in code; live connectivity to in-cluster Temporal pending. |
+| APP-03 | Phase 5 | Code-Verified | HPA min 1 max 3 CPU 70% per 05-01. |
+| APP-04 | Phase 5 | Code-Verified | GKE Ingress + cert-manager + Let's Encrypt wiring per 05-02; live cert issuance pending DNS cutover. |
+| APP-05 | Phase 5 | Human-Needed | GET /health returns 200 from public hostname — requires live DNS + TLS cert. |
+| APP-06 | Phase 5 | Code-Verified | WEBHOOK_BASE_URL secret derived from APP_HOSTNAME. |
+| CD-01 | Phase 5.1 | Code-Verified + Runtime-Validated | Re-delivered by Phase 5.1. Runtime-validated 4× on `main` in the 05.1 deploy cycle (final success: run 24291614628). |
+| CD-02 | Phase 5.1 | Code-Verified | Re-delivered by Phase 5.1. Staging is dispatch-only per locked D-05; PR preview is intentionally deferred. |
+| CD-03 | Phase 5.1 | Human-Needed | Re-delivered by Phase 5.1. cd-prod.yml passes `environment: prod`; GitHub Environment `prod` created via gh api with `ahcarpenter` as required reviewer (2026-04-11). Runtime gate validation pending (UAT item 4). |
+| CD-04 | Phase 5.1 | Code-Verified + Runtime-Validated | Re-delivered by Phase 5.1. WIF auth confirmed on build and deploy jobs; no static keys. |
+| CD-05 | Phase 5.1 | Code-Verified | Re-delivered by Phase 5.1. ci.yml unchanged from Phase 5; static test pins the no-GCP invariant. |
