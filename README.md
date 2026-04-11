@@ -1,7 +1,15 @@
 <!-- generated-by: gsd-doc-writer -->
 # Vici
 
-An SMS-driven job-matching backend that ingests inbound Twilio text messages, extracts structured job postings and worker goals with OpenAI, indexes them in Pinecone for semantic search, and orchestrates the pipeline with Temporal workflows on a FastAPI + PostgreSQL stack.
+An SMS-driven platform for the gig economy
+
+## How It Works
+
+Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with the relevant details (desc, pay, duration, expected done date). GPT classifies each inbound message and extracts structured data from both. Matching algorithm surfaces the gig(s) on-demand that the worker can then do to achieve their earnings goal in the shortest amount of time possible.
+
+## Roadmap
+
+See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) for the current roadmap, and progress.
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
