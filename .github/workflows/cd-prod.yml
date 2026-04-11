@@ -3,8 +3,13 @@ name: CD Prod
 "on":
   workflow_dispatch:
 
-# IN-01 note: no top-level `permissions:` block. Reusable workflow
-# call inherits from cd-base.yml's job-level permissions declarations.
+# IN-01 revisited: top-level permissions ARE required on callers of a
+# reusable workflow that needs elevated scopes. Without this block
+# cd-base.yml cannot claim id-token: write for WIF auth (see commit
+# 7835bcd + CD Dev startup_failure run 24291482351).
+permissions:
+  contents: read
+  id-token: write
 
 # WR-02 fix: serialize prod deploys per stack. cancel-in-progress is
 # false because an approved prod deploy must never be silently

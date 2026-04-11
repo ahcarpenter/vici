@@ -12,10 +12,16 @@ name: CD Dev
       - 'CLAUDE.md'
       - 'AGENTS.md'
 
-# IN-01 note: no top-level `permissions:` block. A reusable workflow
-# call inherits its job permissions from the *called* workflow
-# (cd-base.yml, which sets id-token: write on each job), not from the
-# caller. Declaring them here would be dead config.
+# IN-01 revisited: top-level permissions ARE required on callers of a
+# reusable workflow that needs elevated scopes. The caller's workflow
+# permissions form the upper bound for what the called workflow's
+# jobs can claim. Without `id-token: write` here, cd-base.yml cannot
+# get an OIDC token for WIF auth (verified empirically: CD Dev run
+# 24291482351 failed at startup when this block was removed). The
+# original review finding IN-01 was incorrect on this point.
+permissions:
+  contents: read
+  id-token: write
 
 # WR-02 fix: serialize dev deploys per stack so two quick pushes to
 # main never race two `pulumi up` calls against the same GCS state
