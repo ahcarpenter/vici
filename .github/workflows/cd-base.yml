@@ -75,6 +75,13 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
+      # The Pulumi Kubernetes provider in infra/ reads a kubeconfig whose auth
+      # stanza uses the gke-gcloud-auth-plugin exec provider. Ubuntu runners
+      # ship with gcloud but not this plugin component, so we install it here.
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
