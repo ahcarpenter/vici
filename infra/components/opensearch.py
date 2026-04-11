@@ -107,6 +107,10 @@ opensearch_index_template_job = k8s.batch.v1.Job(
                         image=_CURL_IMAGE,
                         command=["sh", "-c"],
                         args=[_INDEX_TEMPLATE_ARGS],
+                        resources=k8s.core.v1.ResourceRequirementsArgs(
+                            requests={"cpu": "50m", "memory": "64Mi"},
+                            limits={"cpu": "100m", "memory": "128Mi"},
+                        ),
                     ),
                 ],
             ),

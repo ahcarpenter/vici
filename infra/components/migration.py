@@ -60,6 +60,10 @@ migration_job = k8s.batch.v1.Job(
                             run_as_non_root=True,
                             run_as_user=_AUTH_PROXY_RUN_AS_USER,
                         ),
+                        resources=k8s.core.v1.ResourceRequirementsArgs(
+                            requests={"cpu": "100m", "memory": "128Mi"},
+                            limits={"cpu": "200m", "memory": "256Mi"},
+                        ),
                         volume_mounts=[
                             k8s.core.v1.VolumeMountArgs(
                                 name=_VOLUME_NAME,
@@ -74,6 +78,10 @@ migration_job = k8s.batch.v1.Job(
                         image=pulumi.Output.concat(registry_url, "/vici:", ENV),
                         image_pull_policy="Always",
                         command=["uv", "run", "alembic", "upgrade", "head"],
+                        resources=k8s.core.v1.ResourceRequirementsArgs(
+                            requests={"cpu": "100m", "memory": "256Mi"},
+                            limits={"cpu": "500m", "memory": "512Mi"},
+                        ),
                         env_from=[
                             k8s.core.v1.EnvFromSourceArgs(
                                 secret_ref=k8s.core.v1.SecretEnvSourceArgs(
