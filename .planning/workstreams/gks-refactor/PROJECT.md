@@ -111,4 +111,4 @@ Workload Identity
 - **Local dev**: `docker-compose.yml` unchanged — GKE is production path only
 
 ---
-*Last updated: 2026-04-04 — Milestone v1.0 started*
+*Last updated: 2026-04-06 — Phase 5 (Application Deployment and CI/CD) complete. FastAPI Deployment, Ingress with TLS, HPA, and GitHub Actions CD pipeline deployed. This is the last phase in the gks-refactor workstream.*

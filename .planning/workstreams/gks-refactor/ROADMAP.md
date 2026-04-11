@@ -10,12 +10,13 @@ Migrate Vici from Render.com to GKE Autopilot across dev, staging, and prod envi
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: GKE Cluster and Networking Baseline** - Provision GKE Autopilot clusters with Workload Identity, Pulumi state backend, and Artifact Registry
-- [ ] **Phase 2: Database and Secrets Infrastructure** - Cloud SQL instances, ESO, Secret Manager integration, and Alembic migration Job
-- [ ] **Phase 3: Temporal In-Cluster** - Temporal Server on dedicated Cloud SQL with OpenSearch visibility
-- [ ] **Phase 4: Observability Stack** - Jaeger, Prometheus, Grafana deployed and configured for application monitoring
-- [x] **Phase 5: Application Deployment** - FastAPI app, Ingress with TLS, HPA, cert-manager, and full stack verification
-- [ ] **Phase 5.1: GitHub Actions CI/CD** *(INSERTED)* - WIF pool, reusable CD workflows, per-environment deploy triggers
+- [x] **Phase 1: GKE Cluster and Networking Baseline** - Provision GKE Autopilot clusters with Workload Identity, Pulumi state backend, and Artifact Registry
+- [x] **Phase 2: Database and Secrets Infrastructure** - Cloud SQL instances, ESO, Secret Manager integration, and Alembic migration Job
+- [x] **Phase 3: Temporal In-Cluster** - Temporal Server on dedicated Cloud SQL with OpenSearch visibility
+- [x] **Phase 4: Observability Stack** - Jaeger, Prometheus, Grafana deployed and configured for application monitoring
+- [x] **Phase 5: Application Deployment and CI/CD** - FastAPI app, Ingress with TLS, HPA, and GitHub Actions CD pipeline
+- [ ] **Phase 5.1: GitHub Actions CI/CD Hardening** (INSERTED) - Rewrite CD workflows to match locked decisions: two-job base, Docker cache, SHA tagging, staging dispatch-only, prod approval gate
+- [ ] **Phase 6: Infra Best-Practice Audit and Edge-Case Hardening** - Pulumi resource protection, network policies, PDBs, Temporal credential migration to ESO, and operational runbook
 
 ## Phase Details
 
@@ -29,10 +30,13 @@ Migrate Vici from Render.com to GKE Autopilot across dev, staging, and prod envi
   3. `pulumi up` run a second time proposes zero changes (idempotent; `ignore_changes` guards prevent cluster replacement)
   4. Namespaces `vici`, `temporal`, `observability`, `cert-manager`, and `external-secrets` exist in the cluster
   5. Artifact Registry repository exists and a test image can be pushed from CI credentials
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: TBD
+- [x] 01-01-PLAN.md
+- [x] 01-02-PLAN.md
+- [x] 01-03-PLAN.md
+- [x] 01-04-PLAN.md
 
 ### Phase 2: Database and Secrets Infrastructure
 **Goal**: Application secrets are synced from GCP Secret Manager to Kubernetes Secrets via ESO, Cloud SQL instances are reachable from pods via Auth Proxy, and Alembic migrations run successfully
@@ -44,10 +48,10 @@ Plans:
   3. `kubectl get externalsecret -A` shows all ExternalSecret resources in `Ready=True` state after `pulumi up`
   4. Each namespace (`vici`, `temporal`, `observability`) has its own namespace-scoped SecretStore pointing at GCP Secret Manager
   5. Alembic migration Job completes successfully and the app database schema is current
-**Plans**: TBD
+**Plans**: Executed inline (verified)
 
 Plans:
-- [ ] 02-01: TBD
+- [x] Completed (see 02-VERIFICATION.md)
 
 ### Phase 3: Temporal In-Cluster
 **Goal**: Temporal Server runs in-cluster with OpenSearch-backed visibility, schema migrations complete, and workers can connect via the cluster-internal endpoint
@@ -61,9 +65,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Deploy OpenSearch single-node in observability namespace
-- [ ] 03-02-PLAN.md — Create Temporal schema migration Job and Temporal Helm release
-- [ ] 03-03-PLAN.md — Wire components into Pulumi entry point and verify deployment
+- [x] 03-01-PLAN.md — Deploy OpenSearch single-node in observability namespace
+- [x] 03-02-PLAN.md — Create Temporal schema migration Job and Temporal Helm release
+- [x] 03-03-PLAN.md — Wire components into Pulumi entry point and verify deployment
 
 ### Phase 4: Observability Stack
 **Goal**: All application and infrastructure metrics, traces, and dashboards are operational so the first real request through the app generates observable telemetry
@@ -95,31 +99,54 @@ Plans:
 Plans:
 - [x] 05-01-PLAN.md — FastAPI Deployment + Service + HPA with Auth Proxy sidecar and stack config updates
 - [x] 05-02-PLAN.md — cert-manager Helm release and GKE Ingress with TLS Issuers
+- [x] 05-03-PLAN.md — WIF pool + CI/CD workflows + wire all Phase 5 components into __main__.py
 
-### Phase 5.1: GitHub Actions CI/CD *(INSERTED)*
-**Goal**: Pushing to `main` triggers automated build, push, and deploy to dev; staging and prod have appropriate gating
+### Phase 5.1: GitHub Actions CI/CD Hardening (INSERTED)
+**Goal**: CD workflow files fully match locked decisions — two-job reusable base, Docker GHA layer cache, SHA-only tagging with Pulumi config-map passthrough, staging dispatch-only, prod environment approval gate, and post-deploy health check
 **Depends on**: Phase 5
 **Requirements**: CD-01, CD-02, CD-03, CD-04, CD-05
 **Success Criteria** (what must be TRUE):
-  1. Pushing to `main` triggers a GitHub Actions job that builds, pushes to Artifact Registry, and runs `pulumi up --stack dev` with no static GCP credentials
-  2. PRs to `main` run `pulumi preview --stack staging` automatically
-  3. `pulumi up --stack prod` requires manual workflow dispatch with GitHub environment approval gate
-  4. No static GCP service account keys exist; all auth uses WIF OIDC tokens
-**Plans**: 1 plan
+  1. `cd-base.yml` has two jobs (`build` and `deploy`) with WIF auth, Docker GHA cache, and SHA-only image tagging
+  2. `cd-dev.yml` triggers on push to `main` and calls `cd-base.yml` with `command=up` and `stack=dev`
+  3. `cd-staging.yml` triggers only on `workflow_dispatch` (no `pull_request` trigger)
+  4. `cd-prod.yml` triggers on `workflow_dispatch` with `environment: prod` approval gate
+  5. `config.py` exports `IMAGE_TAG` from `cfg.get("imageTag")` with `ENV` fallback; `app.py` uses `IMAGE_TAG`
+  6. Static test suite validates all CD contracts via YAML and AST parsing
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05.1-01-PLAN.md — WIF pool + CI/CD workflows + wire CD components into __main__.py
+- [ ] 05.1-01-PLAN.md — Test scaffold and IMAGE_TAG config key for Pulumi
+- [ ] 05.1-02-PLAN.md — Rewrite all four CD workflow files to match locked decisions
+
+### Phase 6: Infra Best-Practice Audit and Edge-Case Hardening
+**Goal**: All stateful infrastructure is protected from accidental deletion, namespaces enforce least-privilege network access, Temporal credentials follow the ESO pattern, and operators have a runbook for edge-case scenarios
+**Depends on**: Phase 5
+**Requirements**: None (hardening phase — success criteria below)
+**Success Criteria** (what must be TRUE):
+  1. `pulumi preview` shows `protect: true` on Cloud SQL instances, GKE cluster, Artifact Registry, and GCS state bucket across all environments
+  2. Each of the 5 namespaces (vici, temporal, observability, cert-manager, external-secrets) has a default-deny NetworkPolicy and explicit allow rules matching actual traffic patterns
+  3. Temporal DB credentials are sourced from GCP Secret Manager via ESO (not Pulumi stack secrets) and the Temporal Helm release uses `existingSecret`
+  4. PDBs exist for vici-app, temporal-frontend, and temporal-history in staging and prod (not dev)
+  5. `infra/OPERATIONS.md` documents cold-start ordering, secret rotation, and cluster upgrade procedures
+**Plans**: 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Test scaffold and protect=True on stateful resources
+- [ ] 06-02-PLAN.md — NetworkPolicies for all 5 namespaces
+- [ ] 06-03-PLAN.md — Temporal DB credential migration to ESO
+- [ ] 06-04-PLAN.md — PDBs, resource limits, OPERATIONS.md, and __main__.py wiring
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 5.1 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. GKE Cluster and Networking Baseline | 0/? | Not started | - |
-| 2. Database and Secrets Infrastructure | 0/? | Not started | - |
-| 3. Temporal In-Cluster | 0/3 | Planned | - |
+| 1. GKE Cluster and Networking Baseline | 4/4 | Complete | 2026-04-04 |
+| 2. Database and Secrets Infrastructure | -/- | Verified | 2026-04-04 |
+| 3. Temporal In-Cluster | 3/3 | Complete | 2026-04-05 |
 | 4. Observability Stack | 3/3 | Validated | 2026-04-05 |
-| 5. Application Deployment | 2/2 | Complete | 2026-04-09 |
-| 5.1 GitHub Actions CI/CD *(INSERTED)* | 0/1 | Not started | - |
+| 5. Application Deployment and CI/CD | 3/3 | Validated | 2026-04-06 |
+| 5.1 GitHub Actions CI/CD Hardening | 0/2 | Planned | - |
+| 6. Infra Best-Practice Audit | 0/4 | Planned | - |

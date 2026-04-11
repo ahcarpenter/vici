@@ -1,6 +1,7 @@
 """
-Tests for MessageRepository and AuditLogRepository (RED until Task 3 creates repositories).
+Tests for MessageRepository and AuditLogRepository.
 """
+
 import pytest
 
 from src.sms.constants import MAX_MESSAGES_PER_WINDOW
@@ -38,7 +39,7 @@ async def test_enforce_rate_limit_under_limit(async_session, make_user):
 
 @pytest.mark.asyncio
 async def test_enforce_rate_limit_over_limit(async_session, make_user):
-    """enforce_rate_limit raises RateLimitExceeded after MAX_MESSAGES_PER_WINDOW calls."""
+    """enforce_rate_limit raises RateLimitExceeded after max calls."""
     from src.sms.repository import MessageRepository
 
     user = await make_user()

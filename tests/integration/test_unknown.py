@@ -1,6 +1,7 @@
 """
 Integration / handler tests: unknown message type.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -61,7 +62,7 @@ async def test_unknown_twilio_failure_does_not_raise():
 
 @pytest.mark.asyncio
 async def test_unknown_handler_span_uses_hashed_phone():
-    """UnknownMessageHandler.handle() emits twilio.send_sms span with hashed phone, not raw E.164."""
+    """UnknownMessageHandler emits twilio.send_sms span with hashed phone."""
     import src.pipeline.handlers.unknown as unknown_module
     from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.unknown import UnknownMessageHandler

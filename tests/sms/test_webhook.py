@@ -20,9 +20,12 @@ HEADERS = {"X-Twilio-Signature": "valid_sig"}
 
 
 async def test_invalid_signature(client: AsyncClient):
-    with patch("src.sms.dependencies.get_settings") as mock_settings, patch(
-        "twilio.request_validator.RequestValidator.validate",
-        return_value=False,
+    with (
+        patch("src.sms.dependencies.get_settings") as mock_settings,
+        patch(
+            "twilio.request_validator.RequestValidator.validate",
+            return_value=False,
+        ),
     ):
         mock_settings.return_value.env = "production"
         mock_settings.return_value.twilio_auth_token = "test_twilio_auth_token"
@@ -112,10 +115,9 @@ async def test_phone_auto_register(
     form = {**VALID_FORM, "MessageSid": "SM_phone_001", "From": phone}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
     from src.sms.service import hash_phone
+
     ph = hash_phone(phone)
-    result = await async_session.execute(
-        select(User).where(User.phone_hash == ph)
-    )
+    result = await async_session.execute(select(User).where(User.phone_hash == ph))
     row = result.scalar_one_or_none()
     assert row is not None
     assert row.id is not None  # integer PK
@@ -130,10 +132,9 @@ async def test_phone_created_at(
     form = {**VALID_FORM, "MessageSid": "SM_phone_002", "From": phone}
     await client.post("/webhook/sms", data=form, headers=HEADERS)
     from src.sms.service import hash_phone
+
     ph = hash_phone(phone)
-    result = await async_session.execute(
-        select(User).where(User.phone_hash == ph)
-    )
+    result = await async_session.execute(select(User).where(User.phone_hash == ph))
     row = result.scalar_one_or_none()
     assert row is not None
     assert row.created_at is not None

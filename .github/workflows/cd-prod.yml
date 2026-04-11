@@ -1,0 +1,20 @@
+name: CD Prod
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-prod:
+    uses: ./.github/workflows/cd-base.yml
+    with:
+      stack: prod
+      command: up
+      environment: prod
+    secrets:
+      WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_PROD }}
+      WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SA_PROD }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}

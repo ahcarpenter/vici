@@ -11,10 +11,10 @@ from sqlmodel import SQLModel
 
 import src.models  # noqa: F401 — ensure all SQLModel tables registered before create_all
 from src.config import get_settings
-from src.money import dollars_to_cents
 from src.database import get_engine, get_session
 from src.jobs.models import Job
 from src.main import create_app
+from src.money import dollars_to_cents
 from src.sms.models import Message
 from src.users.models import User
 from src.work_goals.models import WorkGoal
@@ -115,7 +115,9 @@ def mock_twilio_validator():
 async def make_user(async_session):
     _counter = {"n": 0}
 
-    async def _factory(phone_hash: str | None = None, phone_e164: str | None = None) -> User:
+    async def _factory(
+        phone_hash: str | None = None, phone_e164: str | None = None
+    ) -> User:
         if phone_hash is None:
             _counter["n"] += 1
             phone_hash = hashlib.sha256(f"phone_{_counter['n']}".encode()).hexdigest()
@@ -159,7 +161,9 @@ async def make_job(async_session, make_user, make_message):
             message_id=kwargs.get("message_id", message.id),
             description=kwargs.get("description", "Test job description"),
             location=kwargs.get("location", None),
-            pay_rate=dollars_to_cents(pay_rate_arg) if pay_rate_arg is not None else None,
+            pay_rate=dollars_to_cents(pay_rate_arg)
+            if pay_rate_arg is not None
+            else None,
             pay_type=kwargs.get("pay_type", "hourly"),
             estimated_duration_hours=kwargs.get("estimated_duration_hours", None),
             ideal_datetime=kwargs.get("ideal_datetime", None),

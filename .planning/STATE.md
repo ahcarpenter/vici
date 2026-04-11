@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 Phase: 03 (temporal-in-cluster) — EXECUTING
 Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-05 - Completed quick task 260405-oux: Install MCP servers and Claude skills
+Last activity: 2026-04-06 - Completed quick task 260406-m06: Ensure GitHub Actions CI build fails if tests don't pass
 
 Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
 
@@ -197,14 +197,20 @@ Recent decisions affecting current work:
 | 260405-05t | Fix hardcoded Temporal DB credentials in temporal.py — pull from Secret Manager | 2026-04-05 | 4db2701 | [260405-05t-fix-hardcoded-temporal-db-credentials-in](./quick/260405-05t-fix-hardcoded-temporal-db-credentials-in/) |
 | 260405-nbr | Upgrade ESO to v1 API and update all api_version references | 2026-04-05 | fb89423 | [260405-nbr-upgrade-eso-to-v1-api-and-update-all-api](./quick/260405-nbr-upgrade-eso-to-v1-api-and-update-all-api/) |
 | 260405-oux | Install MCP servers and Claude skills for vici tech stack | 2026-04-05 | 7ead7a1 | [260405-oux-install-mcp-servers-and-claude-skills-fo](./quick/260405-oux-install-mcp-servers-and-claude-skills-fo/) |
+| 260405-wai | Verify ingress status + add domain setup runbook for Squarespace DNS | 2026-04-06 | 6682159 | [260405-wai-double-check-that-the-ingress-was-create](./quick/260405-wai-double-check-that-the-ingress-was-create/) |
+| 260405-wjc | Fix Pulumi pending ops, Temporal DNS mismatch, WorkflowAlreadyStartedError | 2026-04-06 | d0a29ab | [260405-wjc-fix-pulumi-pending-operations-and-resolv](./quick/260405-wjc-fix-pulumi-pending-operations-and-resolv/) |
+| 260406-0zi | Redeploy dev — fix TLS cert issuance, ACME solver IP mismatch, switch to prod LE | 2026-04-06 | 6010f62 | [260406-0zi-redeploy-dev-now-that-the-dns-has-propog](./quick/260406-0zi-redeploy-dev-now-that-the-dns-has-propog/) |
+| 260406-j8u | Update README env var tables to match actual .env.*.example files | 2026-04-06 | 0b6d69c | [260406-j8u-ensure-the-readme-reflects-the-latest-se](./quick/260406-j8u-ensure-the-readme-reflects-the-latest-se/) |
+| 260406-m06 | Ensure GitHub Actions CI build fails if tests don't pass | 2026-04-06 | a254ef9 | [260406-m06-ensure-github-actions-ci-build-fails-if-](./quick/260406-m06-ensure-github-actions-ci-build-fails-if-/) |
 
 ### Blockers/Concerns
 
-- [Phase 4]: Render.com production deploy has not been executed yet — first deploy validation is part of Phase 4
+- [Infra]: Pinecone sync cron query references `j.user_id` which was removed in Phase 02.14 (3NF normalization) — non-fatal background error
+- [Infra]: Temporal schema migration job fails on re-run (schemas already exist) — needs idempotent create-or-skip logic
 
 ## Session Continuity
 
-Last session: 2026-04-05T22:34:00Z
-Stopped at: Completed quick task 260405-oux: Install MCP servers and Claude skills
+Last session: 2026-04-06T05:10:00Z
+Stopped at: Completed quick task 260406-0zi: Redeploy dev — HTTPS working with prod LE cert
 Resume file: None
-Next action: `/gsd:plan-phase 4` or `/gsd:execute-phase 4`
+Next action: Fix Pinecone sync query (j.user_id removed in 3NF), fix Temporal schema migration idempotency

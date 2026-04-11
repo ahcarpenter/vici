@@ -1,11 +1,14 @@
 <!-- generated-by: gsd-doc-writer -->
 # Getting Started
 
+This guide walks a new contributor from zero to a running Vici stack. For the complete reference of environment variables and service-by-service setup, see [../README.md](../README.md) and [CONFIGURATION.md](CONFIGURATION.md).
+
 ## Prerequisites
 
-- **Python >= 3.12** (see `pyproject.toml` `requires-python` and Dockerfile `FROM python:3.12-slim`)
-- **[uv](https://docs.astral.sh/uv/)** -- the project uses uv for dependency management and script execution
-- **Docker and Docker Compose** -- required to run PostgreSQL, Temporal, OpenSearch, Jaeger, Prometheus, and Grafana locally
+- **Python >= 3.12** -- required by `pyproject.toml` (`requires-python = ">=3.12"`) and the `python:3.12-slim` base image in `Dockerfile`.
+- **[uv](https://docs.astral.sh/uv/)** -- used for dependency management and task execution. Install with `pip install uv` or follow the upstream instructions.
+- **Docker** and **Docker Compose v2** -- required to run the full local stack (Postgres, OpenSearch, Jaeger, Temporal, Temporal UI, Prometheus, Grafana) from `docker-compose.yml`.
+- **API accounts** for Twilio, OpenAI, Pinecone, and (optionally) Braintrust. Required credentials are enforced at startup by `src/config.py::Settings._validate_required_credentials`.
 
 ## Installation
 
@@ -16,78 +19,105 @@
    cd vici
    ```
 
-2. Install Python dependencies:
+2. Install Python dependencies (creates `.venv/` via uv):
 
    ```bash
    uv sync
    ```
 
-3. Create your environment files. The application reads from `.env` (via Pydantic Settings) and Docker Compose reads from service-specific env files:
+3. Copy the per-service example env files and fill in secrets. Docker Compose reads a separate env file for each container, so all seven must exist before `docker compose up`:
 
    ```bash
-   # App-level env file (loaded by Pydantic Settings and docker-compose .env.app)
-   cp .env.app.example .env.app   # if an example exists, otherwise create manually
+   cp .env.app.example .env.app
+   cp .env.postgres.example .env.postgres
+   cp .env.opensearch.example .env.opensearch
+   cp .env.jaeger-query.example .env.jaeger-query
+   cp .env.temporal.example .env.temporal
+   cp .env.temporal-ui.example .env.temporal-ui
+   cp .env.grafana.example .env.grafana
    ```
 
-   At minimum, the following environment variables must be set (the app will fail at startup if any are empty):
+   See the tables in [../README.md](../README.md) (the `Environment Variables` section) and [CONFIGURATION.md](CONFIGURATION.md) for the full list of variables and where to obtain each value.
 
-   | Variable | Description |
-   |----------|-------------|
-   | `DATABASE_URL` | PostgreSQL connection string (e.g., `postgresql+asyncpg://vici:password@localhost:5432/vici`) |
-   | `TWILIO_AUTH_TOKEN` | Twilio authentication token |
-   | `OPENAI_API_KEY` | OpenAI API key |
-   | `PINECONE_API_KEY` | Pinecone vector database API key |
-   | `TEMPORAL_ADDRESS` | Temporal server address (e.g., `localhost:7233`) |
-   | `WEBHOOK_BASE_URL` | Base URL for webhook callbacks (e.g., `http://localhost:8000`) |
-   | `ENV` | Environment name (e.g., `local`, `staging`, `production`) |
+   The application's Pydantic `Settings` validator will raise `ValueError: Required credentials are missing or empty: ...` at startup if any of the following are empty in `.env.app`:
 
-   Docker Compose also expects `.env.postgres`, `.env.opensearch`, `.env.temporal`, `.env.temporal-ui`, `.env.jaeger-query`, and `.env.grafana` files for the supporting services.
+   - `DATABASE_URL`
+   - `TWILIO_AUTH_TOKEN`
+   - `OPENAI_API_KEY`
+   - `PINECONE_API_KEY`
+   - `TEMPORAL_ADDRESS`
+   - `WEBHOOK_BASE_URL`
+   - `ENV`
 
 ## First Run
 
-The simplest way to start the full stack is with Docker Compose:
+Start the full stack with Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-This will:
+The `app` service (defined in `docker-compose.yml`) runs:
 
-1. Start PostgreSQL (port 5432), OpenSearch (port 9200), and Temporal (port 7233)
-2. Run Alembic migrations automatically (`alembic upgrade head`)
-3. Start the FastAPI app on **http://localhost:8000** with hot reload
-4. Start Temporal UI on port 8080, Jaeger UI on port 16686, Prometheus on port 9090, and Grafana on port 3000
+```text
+uv run alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-Verify the app is running:
+So Alembic migrations apply automatically before Uvicorn starts. The container depends on `postgres` (health-checked), `jaeger-collector` (started), and `temporal` (health-checked) -- if Temporal is still warming up on first boot, the app may restart once or twice while it waits.
+
+Once the stack is up, verify the API liveness and readiness endpoints defined in `src/main.py`:
 
 ```bash
 curl http://localhost:8000/health
 # {"status":"ok"}
+
+curl http://localhost:8000/readyz
+# {"status":"ok","db":"connected"}
 ```
 
-### Running Without Docker
+Exposed ports (from `docker-compose.yml`):
 
-If you prefer to run the app directly (with external services already available):
+| Service      | URL                     |
+|--------------|-------------------------|
+| FastAPI app  | http://localhost:8000   |
+| Postgres     | localhost:5432          |
+| OpenSearch   | http://localhost:9200   |
+| Temporal     | localhost:7233          |
+| Temporal UI  | http://localhost:8080   |
+| Jaeger UI    | http://localhost:16686  |
+| Prometheus   | http://localhost:9090   |
+| Grafana      | http://localhost:3000   |
+| OTLP gRPC    | localhost:4317          |
+| OTLP HTTP    | localhost:4318          |
+
+### Running the App Outside Docker
+
+If Postgres, Temporal, and OpenSearch are already reachable on your machine, you can run the FastAPI app directly with uv. In this mode Pydantic Settings loads variables from a `.env` file at the repo root (see `model_config = SettingsConfigDict(env_file=".env", ...)` in `src/config.py`), not from `.env.app`:
 
 ```bash
-# Run migrations
+# Apply migrations
 uv run alembic upgrade head
 
-# Start the server
+# Start the API with hot reload
 uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Make sure `DATABASE_URL` in `.env` points at a reachable host -- `postgresql+asyncpg://vici:<password>@localhost:5432/vici` if Postgres is running via Docker Compose with the default port mapping.
+
 ## Common Setup Issues
 
-- **Missing environment variables at startup** -- The app validates required credentials on boot via `Settings._validate_required_credentials`. If any of the seven required variables listed above are empty, you will see: `ValueError: Required credentials are missing or empty: ...`. Double-check your `.env` or `.env.app` file.
+- **Missing environment variables at startup** -- `Settings._validate_required_credentials` (in `src/config.py`) fails fast if any of the seven required variables listed above are empty. The error message lists exactly which ones are missing; populate them in `.env.app` (Docker) or `.env` (running locally).
 
-- **PostgreSQL connection refused** -- If running the app outside Docker while PostgreSQL runs inside Docker Compose, ensure your `DATABASE_URL` points to `localhost:5432` (the mapped port) rather than the Docker internal hostname `postgres`.
+- **Postgres connection refused** -- When running the app outside Docker while Postgres runs inside Docker Compose, point `DATABASE_URL` at `localhost:5432`, not the Compose hostname `postgres`. The driver must be `postgresql+asyncpg` (SQLAlchemy async).
 
-- **Temporal not ready** -- The app container depends on Temporal being healthy. If Temporal takes longer than expected to start (especially on first run when it auto-sets-up), the app container may restart a few times. This is normal -- Docker Compose will retry based on the health check.
+- **Temporal health check flapping** -- The `temporal` service uses `temporalio/auto-setup:1.26.2` with a `start_period: 30s` health check. On first boot it provisions its Postgres schema, and the `app` container (which `depends_on: temporal: service_healthy`) will wait. If the app keeps restarting, check `docker compose logs temporal` for migration progress before assuming a misconfiguration.
 
-- **Port conflicts** -- The stack uses ports 3000 (Grafana), 5432 (Postgres), 7233 (Temporal), 8000 (app), 8080 (Temporal UI), 9090 (Prometheus), 9200 (OpenSearch), and 16686 (Jaeger). Ensure these are not already in use.
+- **Port conflicts** -- The stack binds host ports 3000, 4317, 4318, 5432, 7233, 8000, 8080, 9090, 9200, and 16686. Stop any local services using these ports (a common culprit is a host Postgres on 5432) before running `docker compose up`.
+
+- **uv not found** -- All tasks are invoked via `uv run ...`. If `uv` is not on your PATH after `pip install uv`, check your Python user-site `bin/` directory or reinstall via the uv standalone installer.
 
 ## Next Steps
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) -- Understand the system design and component relationships
-- [CONFIGURATION.md](CONFIGURATION.md) -- Full reference of environment variables and settings
+- [../README.md](../README.md) -- Full project overview, environment variable reference per service, and testing instructions.
+- [ARCHITECTURE.md](ARCHITECTURE.md) -- System design, domain layout under `src/`, and the inbound SMS pipeline flow.
+- [CONFIGURATION.md](CONFIGURATION.md) -- Complete settings reference, defaults, and per-environment overrides.

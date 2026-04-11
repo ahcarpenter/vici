@@ -5,7 +5,6 @@ MatchRepository.persist_matches, and format_match_sms.
 Covers: MATCH-01, MATCH-02, MATCH-03
 """
 
-import hashlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -14,9 +13,8 @@ import structlog.testing
 from src.jobs.repository import JobRepository
 from src.matches.formatter import format_match_sms
 from src.matches.repository import MatchRepository
-from src.matches.schemas import JobCandidate, MatchResult
+from src.matches.schemas import MatchResult
 from src.matches.service import MatchService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -35,7 +33,10 @@ def _make_service() -> MatchService:
 @pytest.mark.asyncio
 async def test_null_pay_rate_excluded(async_session, make_job, make_work_goal):
     job = await make_job(
-        pay_rate=None, pay_type="hourly", estimated_duration_hours=2.0, status="available"
+        pay_rate=None,
+        pay_type="hourly",
+        estimated_duration_hours=2.0,
+        status="available",
     )
     await make_work_goal(target_earnings=50.0)
 
@@ -53,7 +54,10 @@ async def test_null_pay_rate_excluded(async_session, make_job, make_work_goal):
 @pytest.mark.asyncio
 async def test_null_duration_hourly_excluded(async_session, make_job, make_work_goal):
     job = await make_job(
-        pay_rate=25.0, pay_type="hourly", estimated_duration_hours=None, status="available"
+        pay_rate=25.0,
+        pay_type="hourly",
+        estimated_duration_hours=None,
+        status="available",
     )
     await make_work_goal(target_earnings=50.0)
 
@@ -73,7 +77,10 @@ async def test_null_duration_hourly_excluded(async_session, make_job, make_work_
 async def test_null_duration_flat_allowed(async_session, make_job):
     """Flat-rate jobs with NULL estimated_duration_hours are valid candidates (D-02)."""
     job = await make_job(
-        pay_rate=100.0, pay_type="flat", estimated_duration_hours=None, status="available"
+        pay_rate=100.0,
+        pay_type="flat",
+        estimated_duration_hours=None,
+        status="available",
     )
     repo = JobRepository()
     candidates = await repo.find_candidates_for_goal(async_session)
@@ -83,7 +90,10 @@ async def test_null_duration_flat_allowed(async_session, make_job):
 @pytest.mark.asyncio
 async def test_unknown_pay_type_excluded(async_session, make_job):
     job = await make_job(
-        pay_rate=25.0, pay_type="unknown", estimated_duration_hours=2.0, status="available"
+        pay_rate=25.0,
+        pay_type="unknown",
+        estimated_duration_hours=2.0,
+        status="available",
     )
     repo = JobRepository()
     candidates = await repo.find_candidates_for_goal(async_session)
@@ -94,7 +104,10 @@ async def test_unknown_pay_type_excluded(async_session, make_job):
 async def test_status_filter(async_session, make_job):
     """Jobs with status != 'available' are excluded (D-06a)."""
     accepted_job = await make_job(
-        pay_rate=25.0, pay_type="hourly", estimated_duration_hours=2.0, status="accepted"
+        pay_rate=25.0,
+        pay_type="hourly",
+        estimated_duration_hours=2.0,
+        status="accepted",
     )
     repo = JobRepository()
     candidates = await repo.find_candidates_for_goal(async_session)
@@ -110,7 +123,10 @@ async def test_status_filter(async_session, make_job):
 async def test_dp_meets_goal(async_session, make_job, make_work_goal):
     """Happy path: seeded hourly jobs, goal is met."""
     job = await make_job(
-        pay_rate=25.0, pay_type="hourly", estimated_duration_hours=2.0, status="available"
+        pay_rate=25.0,
+        pay_type="hourly",
+        estimated_duration_hours=2.0,
+        status="available",
     )
     goal = await make_work_goal(target_earnings=40.0)
 
@@ -126,7 +142,10 @@ async def test_dp_meets_goal(async_session, make_job, make_work_goal):
 async def test_dp_meets_goal_flat(async_session, make_job, make_work_goal):
     """Flat-rate earnings = pay_rate only, not pay_rate * duration (D-02)."""
     job = await make_job(
-        pay_rate=200.0, pay_type="flat", estimated_duration_hours=None, status="available"
+        pay_rate=200.0,
+        pay_type="flat",
+        estimated_duration_hours=None,
+        status="available",
     )
     goal = await make_work_goal(target_earnings=150.0)
 
@@ -141,7 +160,7 @@ async def test_dp_meets_goal_flat(async_session, make_job, make_work_goal):
 
 @pytest.mark.asyncio
 async def test_dp_partial_match(async_session, make_job, make_work_goal):
-    """When no combination meets goal, returns best-effort subset with is_partial=True (D-05)."""
+    """No combination meets goal: returns best-effort subset (D-05)."""
     await make_job(pay_rate=10.0, pay_type="flat", status="available")
     goal = await make_work_goal(target_earnings=500.0)
 
@@ -155,7 +174,7 @@ async def test_dp_partial_match(async_session, make_job, make_work_goal):
 
 @pytest.mark.asyncio
 async def test_empty_match(async_session, make_work_goal):
-    """No jobs in DB -- MatchResult.is_empty=True, format returns graceful string (D-13)."""
+    """No jobs in DB: is_empty=True, graceful string (D-13)."""
     goal = await make_work_goal(target_earnings=100.0)
 
     svc = _make_service()
@@ -285,7 +304,7 @@ async def test_sms_format_empty():
 
 @pytest.mark.asyncio
 async def test_sms_max_5_jobs(async_session, make_job, make_work_goal):
-    """SMS output includes at most 5 job lines regardless of DP selection size (D-08)."""
+    """SMS output includes at most 5 job lines (D-08)."""
     for _ in range(8):
         await make_job(pay_rate=5.0, pay_type="flat", status="available")
     goal = await make_work_goal(target_earnings=1.0)

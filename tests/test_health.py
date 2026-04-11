@@ -1,5 +1,3 @@
-
-
 async def test_health_endpoint(client):
     """GET /health returns 200 with status field."""
     response = await client.get("/health")

@@ -129,6 +129,9 @@ app_deployment = k8s.apps.v1.Deployment(
                                 name="http",
                             ),
                         ],
+                        env=[
+                            k8s.core.v1.EnvVarArgs(name="ENV", value=ENV),
+                        ],
                         env_from=[
                             k8s.core.v1.EnvFromSourceArgs(
                                 secret_ref=k8s.core.v1.SecretEnvSourceArgs(name=slug),

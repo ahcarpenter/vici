@@ -1,6 +1,6 @@
-import structlog
 from datetime import UTC, datetime, timezone
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -20,7 +20,8 @@ class JobRepository(BaseRepository):
           - status != 'available' (filtered in SQL)
           - pay_type == 'unknown' (filtered in SQL)
           - pay_rate is NULL (logged + excluded)
-          - pay_type == 'hourly' and estimated_duration_hours is NULL (logged + excluded)
+          - pay_type == 'hourly' and estimated_duration_hours
+            is NULL (logged + excluded)
         """
         stmt = (
             select(Job)

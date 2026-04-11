@@ -1,10 +1,9 @@
 from datetime import UTC, datetime
+from typing import Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-
-from typing import Optional
 
 from src.users.models import User
 

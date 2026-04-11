@@ -1,4 +1,3 @@
-
 import structlog
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import TracerProvider

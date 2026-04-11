@@ -28,7 +28,9 @@ certmanager_release = k8s.helm.v3.Release(
         values={
             "crds": {"enabled": True},
             "global": {
-                "leaderElection": {"namespace": "cert-manager"},
+                "leaderElection": {
+                    "namespace": "cert-manager",
+                },
             },
         },
     ),

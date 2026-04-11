@@ -1,4 +1,5 @@
 """Tests for OTel span emission in temporal activities."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,9 +61,7 @@ async def test_process_message_emits_temporal_span(span_exporter):
             return_value=mock_sessionmaker,
         ),
         patch("src.temporal.activities._orchestrator", mock_orchestrator),
-        patch(
-            "src.temporal.activities.hash_phone", return_value="hashed"
-        ),
+        patch("src.temporal.activities.hash_phone", return_value="hashed"),
     ):
         await process_message_activity(inp)
 
@@ -70,9 +69,7 @@ async def test_process_message_emits_temporal_span(span_exporter):
     span_names = [s.name for s in spans]
     assert "temporal.process_message" in span_names
 
-    temporal_span = next(
-        s for s in spans if s.name == "temporal.process_message"
-    )
+    temporal_span = next(s for s in spans if s.name == "temporal.process_message")
     from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 
     attrs = dict(temporal_span.attributes)
@@ -85,8 +82,8 @@ async def test_process_message_emits_temporal_span(span_exporter):
 @pytest.mark.asyncio
 async def test_sync_pinecone_queue_emits_span(span_exporter):
     """Activity emits span named temporal.sync_pinecone_queue with row attributes."""
-    from src.temporal.activities import sync_pinecone_queue_activity
     import src.temporal.activities as acts
+    from src.temporal.activities import sync_pinecone_queue_activity
 
     row = {"id": 1, "job_id": 10, "description": "Mover needed", "phone_hash": "abc"}
 
@@ -141,8 +138,8 @@ async def test_sync_pinecone_queue_emits_span(span_exporter):
 @pytest.mark.asyncio
 async def test_sync_pinecone_queue_span_records_failure_event(span_exporter):
     """Failed row adds row_upsert_failed event to span."""
-    from src.temporal.activities import sync_pinecone_queue_activity
     import src.temporal.activities as acts
+    from src.temporal.activities import sync_pinecone_queue_activity
 
     row = {"id": 2, "job_id": 20, "description": "Test", "phone_hash": "xyz"}
 
@@ -222,9 +219,7 @@ async def test_span_emitted_when_message_missing(span_exporter):
             "src.temporal.activities.get_sessionmaker",
             return_value=mock_sessionmaker,
         ),
-        patch(
-            "src.temporal.activities.hash_phone", return_value="hashed"
-        ),
+        patch("src.temporal.activities.hash_phone", return_value="hashed"),
     ):
         with pytest.raises(ApplicationError):
             await process_message_activity(inp)

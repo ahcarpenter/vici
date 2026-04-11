@@ -33,9 +33,7 @@ def _make_message_row(message_id=1, user_id=42):
 def _setup_session_mock():
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(return_value=None)
-        )
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
     )
     mock_sessionmaker = MagicMock(
         return_value=MagicMock(
@@ -54,9 +52,7 @@ async def test_process_message_job():
 
     mock_session, mock_sessionmaker = _setup_session_mock()
     mock_session.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(return_value=mock_message)
-        )
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_message))
     )
 
     mock_orchestrator = AsyncMock()
@@ -89,9 +85,7 @@ async def test_process_message_worker():
 
     mock_session, mock_sessionmaker = _setup_session_mock()
     mock_session.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(return_value=mock_message)
-        )
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_message))
     )
 
     mock_orchestrator = AsyncMock()
@@ -120,9 +114,7 @@ async def test_process_message_unknown():
 
     mock_session, mock_sessionmaker = _setup_session_mock()
     mock_session.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(return_value=mock_message)
-        )
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_message))
     )
 
     mock_orchestrator = AsyncMock()
@@ -178,13 +170,9 @@ async def test_on_failure_increments_counter():
 
     inp = _make_input(message_sid="SM123")
 
-    before = pipeline_failures_total.labels(
-        function="process-message"
-    )._value.get()
+    before = pipeline_failures_total.labels(function="process-message")._value.get()
     await handle_process_message_failure_activity(inp)
-    after = pipeline_failures_total.labels(
-        function="process-message"
-    )._value.get()
+    after = pipeline_failures_total.labels(function="process-message")._value.get()
     assert after == before + 1
 
 
@@ -374,9 +362,7 @@ async def test_sync_pinecone_queue_mixed_rows():
     row1 = _make_pending_row(row_id=1, job_id=10)
     row2 = _make_pending_row(row_id=2, job_id=20)
 
-    mock_write = AsyncMock(
-        side_effect=[None, Exception("Pinecone error")]
-    )
+    mock_write = AsyncMock(side_effect=[None, Exception("Pinecone error")])
     mock_openai = MagicMock()
 
     select_session = AsyncMock()
