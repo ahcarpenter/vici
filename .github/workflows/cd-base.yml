@@ -108,6 +108,13 @@ jobs:
       # exist in Artifact Registry. That diff is advisory — it shows
       # the intended image change, not a pull-tested image. Apply
       # (`command: up`) always builds and pushes first.
+      # Clear stale Pulumi locks left by cancelled runs (cancel-in-progress
+      # kills the process before it can release its GCS lock file).
+      - name: Clear stale Pulumi locks
+        run: cd infra && uv run pulumi cancel --stack ${{ inputs.stack }} --cloud-url gs://vici-app-pulumi-state-${{ inputs.stack }} --yes 2>/dev/null || true
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
       - uses: pulumi/actions@v6
         with:
           command: ${{ inputs.command }}
