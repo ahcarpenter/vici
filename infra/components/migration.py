@@ -1,3 +1,5 @@
+import time
+
 import pulumi
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
@@ -23,11 +25,14 @@ _JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
 # Alembic migration Job with Cloud SQL Auth Proxy native sidecar
 # ---------------------------------------------------------------------------
 
+_DEPLOY_TIMESTAMP = str(int(time.time()))
+
 migration_job = k8s.batch.v1.Job(
     "alembic-migration",
     metadata=k8s.meta.v1.ObjectMetaArgs(
         name=f"alembic-migration-{ENV}",
         namespace="vici",
+        annotations={"deploy-timestamp": _DEPLOY_TIMESTAMP},
     ),
     spec=k8s.batch.v1.JobSpecArgs(
         backoff_limit=_JOB_BACKOFF_LIMIT,
@@ -102,6 +107,7 @@ migration_job = k8s.batch.v1.Job(
     ),
     opts=ResourceOptions(
         provider=k8s_provider,
+        delete_before_replace=True,
         depends_on=[
             app_db_instance,
             external_secrets["database-url"],

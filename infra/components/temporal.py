@@ -1,3 +1,5 @@
+import time
+
 import pulumi
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
@@ -60,11 +62,14 @@ _SCHEMA_COMMANDS = " && ".join(
     ]
 )
 
+_DEPLOY_TIMESTAMP = str(int(time.time()))
+
 temporal_schema_job = k8s.batch.v1.Job(
     "temporal-schema-migration",
     metadata=k8s.meta.v1.ObjectMetaArgs(
         name=f"temporal-schema-migration-{ENV}",
         namespace="temporal",
+        annotations={"deploy-timestamp": _DEPLOY_TIMESTAMP},
     ),
     spec=k8s.batch.v1.JobSpecArgs(
         backoff_limit=_SCHEMA_JOB_BACKOFF_LIMIT,
@@ -122,6 +127,7 @@ temporal_schema_job = k8s.batch.v1.Job(
     ),
     opts=ResourceOptions(
         provider=k8s_provider,
+        delete_before_replace=True,
         depends_on=[
             temporal_db_instance,
             temporal_app_ksa,
