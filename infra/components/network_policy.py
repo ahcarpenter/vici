@@ -236,9 +236,11 @@ allow_policies["vici-egress"] = k8s.networking.v1.NetworkPolicy(
                 ],
             ),
             # -> External APIs (GCP Secret Manager, Twilio, OpenAI, Pinecone) over HTTPS
+            # and Cloud SQL private IP on port 3307 (Auth Proxy data path)
             k8s.networking.v1.NetworkPolicyEgressRuleArgs(
                 ports=[
-                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=3307, protocol="TCP"),
                 ],
                 to=[
                     k8s.networking.v1.NetworkPolicyPeerArgs(
@@ -251,9 +253,9 @@ allow_policies["vici-egress"] = k8s.networking.v1.NetworkPolicy(
     opts=ResourceOptions(provider=k8s_provider, depends_on=[namespaces["vici"]]),
 )
 
-# Egress: Cloud SQL Auth Proxy in migration Jobs needs HTTPS to reach Cloud SQL API.
-# The app egress policy above is scoped to app=vici; migration Job pods lack that
-# label and need their own rule.
+# Egress: Cloud SQL Auth Proxy in migration Jobs needs HTTPS (443) for GCP API auth
+# and port 3307 for the Cloud SQL private IP connection. The app egress policy above
+# is scoped to app=vici; migration Job pods lack that label and need their own rule.
 allow_policies["vici-migration-egress"] = k8s.networking.v1.NetworkPolicy(
     "netpol-vici-migration-egress",
     metadata=k8s.meta.v1.ObjectMetaArgs(
@@ -267,7 +269,8 @@ allow_policies["vici-migration-egress"] = k8s.networking.v1.NetworkPolicy(
         egress=[
             k8s.networking.v1.NetworkPolicyEgressRuleArgs(
                 ports=[
-                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=3307, protocol="TCP"),
                 ],
                 to=[
                     k8s.networking.v1.NetworkPolicyPeerArgs(
@@ -334,10 +337,12 @@ allow_policies["temporal-egress"] = k8s.networking.v1.NetworkPolicy(
                     )
                 ],
             ),
-            # -> GCP APIs for Auth Proxy WIF token exchange
+            # -> GCP APIs for Auth Proxy WIF token exchange (443)
+            # and Cloud SQL private IP data path (3307)
             k8s.networking.v1.NetworkPolicyEgressRuleArgs(
                 ports=[
-                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=3307, protocol="TCP"),
                 ],
                 to=[
                     k8s.networking.v1.NetworkPolicyPeerArgs(
