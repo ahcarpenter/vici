@@ -110,5 +110,18 @@ Workload Identity
 - **Environments**: dev, staging, prod — identical infrastructure, environment-scoped names
 - **Local dev**: `docker-compose.yml` unchanged — GKE is production path only
 
+## Current State
+
+**v1.0 GKE Migration — SHIPPED 2026-04-12**
+
+7 phases, 19 plans, ~4400 LOC Python (Pulumi IaC + tests), 295 LOC YAML (GitHub Actions).
+
+Infrastructure: GKE Autopilot cluster, Cloud SQL (app + Temporal), Artifact Registry, ESO, cert-manager, Ingress with TLS, Temporal Server with OpenSearch visibility, full observability stack (Prometheus, Grafana, Jaeger), GitHub Actions CI/CD with WIF auth, NetworkPolicies, PDBs, resource protection, and operational runbook.
+
+Known tech debt:
+- Phases 1 and 3 lack formal VERIFICATION.md (functionally complete per SUMMARY.md and live deployment)
+- Grafana Temporal dashboard downloaded at `pulumi up` time with placeholder fallback
+- Requirement checkboxes in REQUIREMENTS.md were not maintained (all 40 requirements traced in traceability table)
+
 ---
-*Last updated: 2026-04-06 — Phase 5 (Application Deployment and CI/CD) complete. FastAPI Deployment, Ingress with TLS, HPA, and GitHub Actions CD pipeline deployed. This is the last phase in the gks-refactor workstream.*
+*Last updated: 2026-04-12 after v1.0 milestone — all 7 phases complete, all 40 requirements traced, live UAT passed for Phase 6.*
