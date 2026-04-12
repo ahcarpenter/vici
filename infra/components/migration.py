@@ -58,6 +58,7 @@ migration_job = k8s.batch.v1.Job(
                             "--private-ip",
                             "--health-check",
                             f"--http-port={_PROXY_HEALTH_PORT}",
+                            "--http-address=0.0.0.0",
                             pulumi.Output.concat(
                                 "--unix-socket=",
                                 _SOCKET_MOUNT_PATH,

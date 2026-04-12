@@ -90,6 +90,7 @@ temporal_schema_job = k8s.batch.v1.Job(
                             "--private-ip",
                             "--health-check",
                             f"--http-port={_PROXY_HEALTH_PORT}",
+                            "--http-address=0.0.0.0",
                             temporal_db_instance.connection_name,
                         ],
                         startup_probe=k8s.core.v1.ProbeArgs(
