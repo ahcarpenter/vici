@@ -28,6 +28,7 @@ import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
 from components.namespaces import k8s_provider, namespaces
+from config import ENV
 
 _NAMESPACES = [
     "vici",
@@ -36,6 +37,12 @@ _NAMESPACES = [
     "cert-manager",
     "external-secrets",
 ]
+
+# GKE Workload Identity token exchange requires access to the node metadata
+# server at the link-local address 169.254.169.254:80 (HTTP). Without this,
+# any pod using WI (Cloud SQL Auth Proxy, ESO, etc.) cannot authenticate.
+_GKE_METADATA_CIDR = "169.254.169.254/32"
+_GKE_METADATA_PORT = 80
 
 # ---------------------------------------------------------------------------
 # Default-deny-all and DNS-egress-allow per namespace
@@ -108,6 +115,46 @@ dns_allow_policies["cert-manager"] = _dns_allow("cert-manager")  # allow-dns-egr
 dns_allow_policies["external-secrets"] = _dns_allow(
     "external-secrets"
 )  # allow-dns-egress
+
+# metadata_allow_policies: one NetworkPolicy per namespace allowing egress to the
+# GKE node metadata server (169.254.169.254:80). Required for Workload Identity
+# token exchange used by Cloud SQL Auth Proxy, ESO, and cert-manager.
+metadata_allow_policies: dict[str, k8s.networking.v1.NetworkPolicy] = {}
+
+
+def _metadata_allow(ns: str) -> k8s.networking.v1.NetworkPolicy:
+    """Return an allow-metadata-egress NetworkPolicy for the given namespace."""
+    return k8s.networking.v1.NetworkPolicy(
+        f"netpol-allow-metadata-{ns}",
+        metadata=k8s.meta.v1.ObjectMetaArgs(
+            name="allow-metadata-egress", namespace=ns
+        ),
+        spec=k8s.networking.v1.NetworkPolicySpecArgs(
+            pod_selector=k8s.meta.v1.LabelSelectorArgs(),
+            policy_types=["Egress"],
+            egress=[
+                k8s.networking.v1.NetworkPolicyEgressRuleArgs(
+                    ports=[
+                        k8s.networking.v1.NetworkPolicyPortArgs(
+                            port=_GKE_METADATA_PORT, protocol="TCP"
+                        ),
+                    ],
+                    to=[
+                        k8s.networking.v1.NetworkPolicyPeerArgs(
+                            ip_block=k8s.networking.v1.IPBlockArgs(
+                                cidr=_GKE_METADATA_CIDR
+                            ),
+                        )
+                    ],
+                )
+            ],
+        ),
+        opts=ResourceOptions(provider=k8s_provider, depends_on=[namespaces[ns]]),
+    )
+
+
+for _ns in _NAMESPACES:
+    metadata_allow_policies[_ns] = _metadata_allow(_ns)
 
 # ---------------------------------------------------------------------------
 # Per-namespace traffic allow rules
@@ -189,6 +236,35 @@ allow_policies["vici-egress"] = k8s.networking.v1.NetworkPolicy(
                 ],
             ),
             # -> External APIs (GCP Secret Manager, Twilio, OpenAI, Pinecone) over HTTPS
+            k8s.networking.v1.NetworkPolicyEgressRuleArgs(
+                ports=[
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                ],
+                to=[
+                    k8s.networking.v1.NetworkPolicyPeerArgs(
+                        ip_block=k8s.networking.v1.IPBlockArgs(cidr="0.0.0.0/0"),
+                    )
+                ],
+            ),
+        ],
+    ),
+    opts=ResourceOptions(provider=k8s_provider, depends_on=[namespaces["vici"]]),
+)
+
+# Egress: Cloud SQL Auth Proxy in migration Jobs needs HTTPS to reach Cloud SQL API.
+# The app egress policy above is scoped to app=vici; migration Job pods lack that
+# label and need their own rule.
+allow_policies["vici-migration-egress"] = k8s.networking.v1.NetworkPolicy(
+    "netpol-vici-migration-egress",
+    metadata=k8s.meta.v1.ObjectMetaArgs(
+        name="allow-egress-migration", namespace="vici"
+    ),
+    spec=k8s.networking.v1.NetworkPolicySpecArgs(
+        pod_selector=k8s.meta.v1.LabelSelectorArgs(
+            match_labels={"job-name": f"alembic-migration-{ENV}"},
+        ),
+        policy_types=["Egress"],
+        egress=[
             k8s.networking.v1.NetworkPolicyEgressRuleArgs(
                 ports=[
                     k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
