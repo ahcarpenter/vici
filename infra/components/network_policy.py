@@ -385,8 +385,9 @@ allow_policies["obs-egress"] = k8s.networking.v1.NetworkPolicy(
 
 # --- cert-manager namespace ---
 
-# Ingress: webhook validation from kube-apiserver on port 443.
-# Same GKE Autopilot data-plane routing issue as external-secrets above.
+# Ingress: webhook validation + metrics from kube-apiserver.
+# Same GKE Autopilot data-plane routing as external-secrets.
+# cert-manager webhook listens on 10250, healthz on 6080, metrics on 9402.
 allow_policies["certmgr-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
     "netpol-certmgr-webhook-ingress",
     metadata=k8s.meta.v1.ObjectMetaArgs(
@@ -398,7 +399,10 @@ allow_policies["certmgr-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
         ingress=[
             k8s.networking.v1.NetworkPolicyIngressRuleArgs(
                 ports=[
-                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=10250, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=6080, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=9402, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=9403, protocol="TCP"),
                 ],
             )
         ],
@@ -437,11 +441,11 @@ allow_policies["certmgr-egress"] = k8s.networking.v1.NetworkPolicy(
 
 # --- external-secrets namespace ---
 
-# Ingress: webhook validation from kube-apiserver on port 443.
-# The apiserver is not a pod, so its traffic bypasses pod-to-pod
-# NetworkPolicy rules on most CNIs — but GKE Autopilot routes webhook
-# calls through the data plane, which IS subject to NetworkPolicy.
-# Without this rule, ExternalSecret creation fails with webhook timeout.
+# Ingress: webhook validation from kube-apiserver.
+# GKE Autopilot routes webhook calls through the data plane, which IS
+# subject to NetworkPolicy. The ESO webhook pod listens on port 10250
+# (not 443 — the Service translates 443 -> 10250). Without this rule,
+# ExternalSecret creation fails with webhook timeout.
 allow_policies["eso-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
     "netpol-eso-webhook-ingress",
     metadata=k8s.meta.v1.ObjectMetaArgs(
@@ -453,7 +457,9 @@ allow_policies["eso-webhook-ingress"] = k8s.networking.v1.NetworkPolicy(
         ingress=[
             k8s.networking.v1.NetworkPolicyIngressRuleArgs(
                 ports=[
-                    k8s.networking.v1.NetworkPolicyPortArgs(port=443, protocol="TCP")
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=10250, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=8080, protocol="TCP"),
+                    k8s.networking.v1.NetworkPolicyPortArgs(port=8081, protocol="TCP"),
                 ],
             )
         ],
