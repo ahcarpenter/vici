@@ -20,6 +20,7 @@ _SOCKET_MOUNT_PATH = "/cloudsql"
 _VOLUME_NAME = "cloudsql-socket"
 _JOB_BACKOFF_LIMIT = 0  # Fail fast, no retries (D-12)
 _JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
+_PROXY_WAIT_SECONDS = 30  # Max seconds to wait for Auth Proxy readiness
 
 # ---------------------------------------------------------------------------
 # Alembic migration Job with Cloud SQL Auth Proxy native sidecar
@@ -82,7 +83,15 @@ migration_job = k8s.batch.v1.Job(
                         name="alembic-migration",
                         image=pulumi.Output.concat(registry_url, "/vici:", ENV),
                         image_pull_policy="Always",
-                        command=["uv", "run", "alembic", "upgrade", "head"],
+                        command=["sh", "-c"],
+                        args=[
+                            f"echo 'Waiting for Cloud SQL Auth Proxy socket...' && "
+                            f"for i in $(seq 1 {_PROXY_WAIT_SECONDS}); do "
+                            f"  if ls {_SOCKET_MOUNT_PATH}/*/.s.PGSQL.* 1>/dev/null 2>&1; then break; fi; "
+                            f"  sleep 1; "
+                            f"done && "
+                            f"uv run alembic upgrade head"
+                        ],
                         resources=k8s.core.v1.ResourceRequirementsArgs(
                             requests={"cpu": "100m", "memory": "256Mi"},
                             limits={"cpu": "500m", "memory": "512Mi"},

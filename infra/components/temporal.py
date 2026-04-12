@@ -22,6 +22,7 @@ _AUTH_PROXY_RUN_AS_USER = 65532
 _ADMIN_TOOLS_IMAGE = "temporalio/admin-tools:1.29.1-tctl-1.18"
 _SCHEMA_JOB_BACKOFF_LIMIT = 0  # D-12: fail fast, no retries
 _SCHEMA_JOB_TTL_SECONDS = 300  # Clean up after 5 minutes
+_PROXY_WAIT_SECONDS = 30  # Max seconds to wait for Auth Proxy readiness
 
 _TEMPORAL_CHART_VERSION = "0.74.0"
 _TEMPORAL_REPO = "https://go.temporal.io/helm-charts"
@@ -104,7 +105,14 @@ temporal_schema_job = k8s.batch.v1.Job(
                         name="temporal-schema-migration",
                         image=_ADMIN_TOOLS_IMAGE,
                         command=["sh", "-c"],
-                        args=[_SCHEMA_COMMANDS],
+                        args=[
+                            f"echo 'Waiting for Cloud SQL Auth Proxy...' && "
+                            f"for i in $(seq 1 {_PROXY_WAIT_SECONDS}); do "
+                            f"  if nc -z localhost 5432 2>/dev/null; then break; fi; "
+                            f"  sleep 1; "
+                            f"done && "
+                            + _SCHEMA_COMMANDS
+                        ],
                         env=[
                             k8s.core.v1.EnvVarArgs(
                                 name="TEMPORAL_DB_PASSWORD",
