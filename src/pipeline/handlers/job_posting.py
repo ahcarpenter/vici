@@ -43,7 +43,6 @@ class JobPostingHandler(MessageHandler):
     async def handle(self, ctx: PipelineContext) -> None:
         result = ctx.result
         job_create = JobCreate(
-            user_id=ctx.user_id,
             message_id=ctx.message_id,
             description=result.job.description,
             location=result.job.location,
