@@ -1,191 +1,184 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-22
 
 ## Naming Patterns
 
 **Files:**
-- Use `snake_case.py` for all Python modules
-- Domain modules follow a canonical set: `models.py`, `schemas.py`, `repository.py`, `service.py`, `router.py`, `constants.py`, `exceptions.py`, `dependencies.py`, `utils.py`
-- Test files: `test_{module_or_feature}.py` in a mirrored `tests/{domain}/` directory
+- `snake_case.py` throughout — no exceptions observed
+- Domain modules use single-word names: `router.py`, `service.py`, `schemas.py`, `models.py`, `repository.py`, `constants.py`, `exceptions.py`, `dependencies.py`, `utils.py`
+- Module-level aggregator at root: `src/models.py` re-exports all SQLModel table classes for Alembic discovery
 
-**Functions:**
-- Use `snake_case` for all functions and methods
-- Prefix private methods/functions with a single underscore: `_persist()`, `_call_with_retry()`, `_make_service()`
-- Prefix private module-level constants with underscore: `_GAUGE_POLL_INTERVAL_SECONDS`, `_bt_logger`
-- Factory fixtures use `make_{entity}` pattern: `make_user`, `make_job`, `make_work_goal`, `make_message`
+**Functions / Methods:**
+- `snake_case` for all functions, methods, and module-level helpers
+- Private helpers prefixed with `_`: `_configure_structlog()`, `_configure_otel()`, `_add_otel_context()`, `_update_gauges()` (`src/main.py`)
+- Private repository / service methods prefixed with `_`: `_persist()` (`src/repository.py`), `_dp_select()`, `_build_candidates()`, `_sort_results()` (`src/matches/service.py`)
+- Static methods on repository classes are named imperatively: `check_idempotency`, `enforce_rate_limit`, `get_or_create`
+
+**Classes:**
+- `PascalCase` throughout
+- Domain-specific suffixes: `Service`, `Repository`, `Handler`, `Settings`, `Workflow`, `Activity`
+- Exception classes use descriptive names: `TwilioSignatureInvalid`, `DuplicateMessageSid`, `RateLimitExceeded`, `EarlyReturn`
 
 **Variables:**
-- Use `snake_case` for all variables
-- Use ALL_CAPS for module-level constants: `CENTS_PER_DOLLAR`, `GPT_MODEL`, `EMPTY_TWIML`
-- OTel attribute keys: `OTEL_ATTR_` prefix, e.g. `OTEL_ATTR_MESSAGE_ID` in `src/pipeline/constants.py`
+- `snake_case` for all local and module-level variables
+- Module-level singletons use leading underscore: `_orchestrator`, `_openai_client` (`src/temporal/activities.py`)
+- Tracer instances consistently named `tracer` at module level
+- Logger instances consistently named `log` at module level
 
-**Types/Classes:**
-- Use `PascalCase` for classes: `ExtractionService`, `JobPostingHandler`, `PipelineContext`
-- Pydantic models: `PascalCase`, descriptive nouns: `ExtractionResult`, `JobCreate`, `SmsSettings`
-- SQLModel tables: singular `PascalCase`: `Job`, `User`, `Message`, `WorkGoal`, `Match`
-- Abstract base classes: `MessageHandler`, `BaseRepository`
+**Constants:**
+- `UPPER_SNAKE_CASE` for all constants; type-annotated
+- Grouped per domain in `constants.py` files — no magic numbers in logic files
+- Examples: `GPT_CALL_TIMEOUT_SECONDS`, `MAX_MESSAGES_PER_WINDOW`, `WORKER_SHUTDOWN_TIMEOUT_SECONDS`, `CENTS_PER_DOLLAR`
 
 **Database Tables:**
-- Singular `snake_case`: `job`, `user`, `message`, `work_goal`, `match`, `audit_log`
-- DateTime columns suffixed `_at`: `created_at`
-- Composite tables with prefix: `pinecone_sync_queue`
+- `lower_snake_case` singular: `user`, `message`, `job`, `work_goal`, `audit_log`, `rate_limit`, `match`
+- `_at` suffix for datetime columns: `created_at`
+- Explicit FK/index names via `POSTGRES_INDEXES_NAMING_CONVENTION` in `src/database.py`
 
 ## Code Style
 
-**Formatting:**
-- ruff format (configured in `pyproject.toml`)
-- Target version: Python 3.12
+**Formatter:**
+- `ruff format` — enforced in CI via `uv run ruff format --check src/ tests/ infra/`
+- Config in `pyproject.toml` (`[tool.ruff]`) targeting `py312`
 
-**Linting:**
-- ruff check with rules: `E` (pycodestyle errors), `F` (pyflakes), `I` (isort)
-- Per-file exception: `src/extraction/prompts.py` ignores `E501` for long LLM prompt strings
-- Config location: `pyproject.toml` under `[tool.ruff]` and `[tool.ruff.lint]`
+**Linter:**
+- `ruff check` with rules `E` (pycodestyle), `F` (pyflakes), `I` (isort)
+- Per-file ignore: `src/extraction/prompts.py` exempts `E501` (long lines in LLM prompts)
+- No `W`, `N`, `ANN`, `D` (pydocstyle) rules — type checking and docstring completeness are **not** linter-enforced
 
-**Run commands:**
-```bash
-ruff check --fix src
-ruff format src
-```
+**Static Type Checking:**
+- **No mypy or pyright configured.** There is no `mypy.ini`, `.mypy.ini`, or pyright config in the project root.
+- Type annotations are present but incomplete. Notable gaps:
+  - `run_worker(client: Client, orchestrator, openai_client)` in `src/temporal/worker.py:28` — `orchestrator` and `openai_client` parameters lack type annotations
+  - `ExtractionService.__init__(self, openai_client, settings)` in `src/extraction/service.py:41` — both constructor parameters untyped
+  - Route handler `receive_sms(... gates=Depends(enforce_rate_limit))` in `src/sms/router.py:28` — `gates` lacks annotation
+- Python 3.12 builtins used in annotations (`list[T]`, `dict[K,V]`) — correct modern style, no `from __future__ import annotations` needed
+- `Optional[T]` from `typing` still used in SQLModel models (required for SQLModel compatibility)
 
 ## Import Organization
 
-**Order:**
-1. Standard library (`asyncio`, `json`, `hashlib`, `datetime`, `typing`, `dataclasses`)
-2. Third-party (`fastapi`, `sqlmodel`, `structlog`, `opentelemetry`, `pydantic`, `temporalio`)
-3. Local imports (`src.*`)
+**Order enforced by ruff isort (`I` rules):**
+1. Standard library (`from datetime import ...`, `import asyncio`)
+2. Third-party (`from fastapi import ...`, `import structlog`)
+3. First-party src (`from src.config import ...`)
 
-**Import style:**
-- Use explicit module aliasing for cross-domain imports:
-  ```python
-  from src.sms import service as sms_service
-  import src.temporal.activities as acts
-  ```
-- Use `from` imports for specific symbols within same domain or from `src.*`:
-  ```python
-  from src.extraction.schemas import ExtractionResult
-  from src.pipeline.handlers.base import MessageHandler
-  ```
-- `TYPE_CHECKING` guard for circular imports:
-  ```python
-  from typing import TYPE_CHECKING
-  if TYPE_CHECKING:
-      from src.pipeline.orchestrator import PipelineOrchestrator
-  ```
+**Path Aliases:** None — always `from src.<domain>.<module> import <name>`
 
-**Path Aliases:**
-- No path aliases. All imports are absolute from `src.*`.
+**Cross-domain imports:** Use explicit module path, not relative:
+```python
+from src.sms import service as sms_service        # src/sms/dependencies.py
+from src.pipeline.handlers.job_posting import JobPostingHandler
+```
+
+**`noqa` usage:**
+- `# noqa: F401` used legitimately in `src/models.py` (import-for-side-effect) and `tests/conftest.py`
+- No suppression of logic-relevant lint warnings found
 
 ## Error Handling
 
-**Domain exceptions** live in `src/{domain}/exceptions.py`:
-- `src/sms/exceptions.py`: `TwilioSignatureInvalid`, `EarlyReturn`, `DuplicateMessageSid`, `RateLimitExceeded`
-- `src/exceptions.py`: Global exception handlers (e.g., `twilio_signature_invalid_handler`)
-
 **Patterns:**
-- Twilio webhook path: NEVER raise `HTTPException` for 4xx -- Twilio retries on 4xx. Use custom `EarlyReturn` subclasses that return HTTP 200 with empty TwiML
-- FastAPI exception handlers registered in `create_app()` in `src/main.py`
-- Temporal activities: use `ApplicationError(message, non_retryable=True/False)` for Temporal-aware error semantics
-- External API failures (Pinecone, OpenAI): catch, log with structlog, and degrade gracefully (e.g., enqueue for retry)
-- Input validation: use Pydantic `Field` constraints (`min_length`, `max_length`, `gt`, `ge`)
-- Config validation: `model_validator` in `src/config.py` fails fast on missing required credentials at startup
-
-**Error hierarchy example:**
-```python
-class EarlyReturn(Exception):
-    def __init__(self, reason: str = ""):
-        self.reason = reason
-        super().__init__(reason)
-
-class DuplicateMessageSid(EarlyReturn): pass
-class RateLimitExceeded(EarlyReturn): pass
-```
+- Domain exceptions live in `<domain>/exceptions.py` — e.g., `src/sms/exceptions.py`
+- Exception hierarchy uses inheritance for grouping: `DuplicateMessageSid(EarlyReturn)`, `RateLimitExceeded(EarlyReturn)`
+- FastAPI exception handlers registered in `create_app()` in `src/main.py`: `TwilioSignatureInvalid` → 403 JSON, `EarlyReturn` → 200 empty TwiML
+- Never raise `HTTPException` on Twilio webhook paths — Twilio retries on 4xx (enforced by `EarlyReturn` pattern, documented in `src/sms/exceptions.py:12`)
+- Temporal activities raise `ApplicationError(non_retryable=True)` for unrecoverable errors and `ApplicationError(non_retryable=False)` for retriable ones
+- External I/O failures (Pinecone, Twilio) are caught at handler level, logged, and swallowed to prevent pipeline abort — `src/pipeline/handlers/job_posting.py`, `src/pipeline/handlers/unknown.py`
+- Bare `except Exception as exc:` used (not `except BaseException`) in retry/fallback blocks
 
 ## Logging
 
-**Framework:** structlog (JSON-rendered, with OTel trace context injection)
+**Framework:** `structlog` — configured in `src/main.py:_configure_structlog()`
 
-**Configuration:** `src/main.py` `_configure_structlog()` -- processors chain:
-1. `structlog.stdlib.add_log_level`
-2. `_add_otel_context` (custom -- injects `trace_id`, `span_id`)
-3. `structlog.processors.TimeStamper(fmt="iso")`
-4. `structlog.processors.JSONRenderer()`
+**Configuration:**
+- `structlog.configure()` called once at lifespan startup
+- Processors: `add_log_level` → `_add_otel_context` (injects `trace_id`, `span_id`) → `TimeStamper(fmt="iso")` → `JSONRenderer()`
+- Level: `INFO` and above (`make_filtering_bound_logger(logging.INFO)`)
+- Output: stdout via `PrintLoggerFactory`
 
-**Usage pattern:**
+**Usage Pattern:**
 ```python
-import structlog
-log = structlog.get_logger()
+log = structlog.get_logger()  # module-level singleton, acquired once
 
-# Module-level logger assignment
 log.info("gpt_classified", message_type=result.message_type, phone_hash=phone_hash)
-log.warning("match.job_excluded", job_id=job.id, reason="null_pay_rate")
-log.error("pinecone_write_failed", job_id=job.id, error=str(e))
+log.warning("sync-pinecone-queue: upsert failed", job_id=row["job_id"], error=str(exc))
+log.error("unknown_reply_failed", message_sid=ctx.message_sid, error=str(exc))
+log.critical("gauge_updater: repeated DB failures, metric unreliable", ...)
 ```
 
-**Rules:**
-- Use structured key-value pairs, never string interpolation in log messages
-- Event names use `snake_case` with dot-separated domain prefix: `"gpt_classified"`, `"match.job_excluded"`, `"pinecone_write_failed"`
-- Always include contextual identifiers: `job_id`, `phone_hash`, `message_sid`
-- Never log raw phone numbers or PII -- use `phone_hash` instead
+**Key rules:**
+- Log event string is a `snake_case` or `kebab-case` identifier. Context passed as keyword arguments.
+- Phone numbers are hashed with SHA-256 before logging. `phone_e164` never appears in logs — only `phone_hash`.
 
-## Observability
+## Comments
 
-**Distributed tracing:** OpenTelemetry with OTLP gRPC exporter to Jaeger
-- `TracerProvider` configured in `src/main.py` `_configure_otel()`
-- Module-level tracer: `tracer = otel_trace.get_tracer(__name__)`
-- Manual span creation with `with tracer.start_as_current_span("span.name") as span:`
-- Auto-instrumentation for FastAPI and SQLAlchemy
-- Semantic conventions for attributes defined in `src/pipeline/constants.py`
+**When to Comment:**
+- Class/function-level docstrings on public APIs and non-obvious abstractions
+- Inline comments for non-obvious design constraints, referencing decision codes as `D-XX`, `SEC-XX` where applicable (e.g., `# per D-06`, `# SEC-04`)
+- `# noqa: F401` with explanation where imports are side-effect-only
 
-**Metrics:** Prometheus via `prometheus_client` + `prometheus-fastapi-instrumentator`
-- Metric singletons defined in `src/metrics.py` (import once at module level)
-- Custom metrics: `gpt_calls_total`, `gpt_call_duration_seconds`, `gpt_input_tokens_total`, `gpt_output_tokens_total`, `pinecone_sync_queue_depth`, `pipeline_failures_total`
-- Auto HTTP metrics via `Instrumentator().instrument(app).expose(app)` at `/metrics`
-- Gauge updater: background task polls DB every 15s for `pinecone_sync_queue` depth
+**Docstring style:** Single-line or short multi-line. No formal parameter documentation (`:param:`, `:returns:`) — not enforced by linter.
 
-**LLM observability:** Braintrust via `braintrust.wrap_openai()` wrapper on OpenAI client
+```python
+"""SHA-256 hash of E.164 phone number. Twilio From is already E.164."""
+
+"""Raised by dependencies to short-circuit processing with HTTP 200 TwiML response.
+FastAPI exception handlers converts this to HTTP 200. Never raise HTTPException
+for Twilio webhook paths — Twilio retries on 4xx responses."""
+```
 
 ## Function Design
 
-**Size:** Keep functions focused on single responsibility. Service methods typically 10-30 lines.
+**Async / Sync:**
+- `async def` for all I/O-bound routes, dependencies, service methods, and repository methods
+- `def` for pure computation: `_dp_select()`, `_sort_results()`, `dollars_to_cents()`, `format_match_sms()`
+- Blocking sync library calls (`twilio_client.messages.create`) wrapped with `asyncio.to_thread()` — see `src/pipeline/handlers/unknown.py:45`
 
 **Parameters:**
-- Constructor injection for dependencies (repositories, services, clients)
-- `AsyncSession` passed as first arg to repository methods
-- Use `@dataclass` for structured input bags: `PipelineContext`, `ProcessMessageInput`
+- Services accept dependencies via constructor injection; never call `get_settings()` inside service methods
+- Repository methods receive `AsyncSession` as first parameter after `self`/`cls`
+- All `@staticmethod` repository class methods still accept `session` as first arg
 
-**Return Values:**
-- Repository methods return domain model instances
-- Service methods return Pydantic schema instances (`ExtractionResult`, `MatchResult`)
-- Activities return `str` ("ok") for Temporal compatibility
+**Return values:**
+- Repositories return the persisted entity (flush-only — caller commits)
+- Services return domain objects or Pydantic schemas
+- Temporal activities return `"ok"` string on success
 
 ## Module Design
 
-**Exports:**
-- No `__all__` declarations. Import specific symbols.
-- `src/models.py` is a barrel file that imports all SQLModel tables to ensure registration
+**Exports:** No `__all__` defined — not a library; all public symbols discoverable by linter
+**Barrel files:** `src/models.py` is the only barrel — exists solely to trigger SQLModel table registration before Alembic `create_all`
+**`__init__.py` files:** Present but empty in all domain directories
 
-**Design Patterns:**
-- **Repository pattern**: `BaseRepository` with `_persist()` template method in `src/repository.py`. Domain repos extend it.
-- **Chain of Responsibility**: `MessageHandler` ABC in `src/pipeline/handlers/base.py` with `can_handle()` + `handle()`. Orchestrator iterates handlers.
-- **Dependency Injection**: Constructor injection throughout. DI graph wired in `lifespan()` in `src/main.py`.
-- **FastAPI dependency chain**: Validation gates chained via `Depends()` in `src/sms/dependencies.py` (signature -> idempotency -> user upsert -> rate limit).
-- **Factory pattern**: Test fixtures use factory functions (`make_user`, `make_job`, etc.)
+## Pydantic / SQLModel Patterns
 
-## Money Handling
+**Schema validation:**
+- `Field(min_length=..., max_length=..., gt=0)` validators on all Pydantic input schemas (see `src/extraction/schemas.py`)
+- `Literal["hourly", "flat", "unknown"]` used to constrain enumerable fields at schema level
+- DB-level `CheckConstraint` mirrors schema-level validation for defense-in-depth (e.g., `src/jobs/models.py:11-21`)
 
-- All monetary values stored as **integer cents** in the database
-- Conversion utilities in `src/money.py`: `dollars_to_cents()` and `cents_to_dollars()`
-- `dollars_to_cents` called at persistence boundary (LLM extraction -> DB)
-- `cents_to_dollars` called at display boundary (DB -> SMS reply)
+**Settings:**
+- `Settings(BaseSettings)` with flat env vars remapped into nested sub-models via `@model_validator(mode="after")` — see `src/config.py`
+- `lru_cache(maxsize=1)` on `get_settings()` ensures singleton; `get_settings.cache_clear()` called in tests to reset
+- Fail-fast `@model_validator` raises `ValueError` on empty required credentials at startup
 
-## Transaction Discipline
+## Pre-commit Hooks
 
-- Repositories use `_persist()` (flush only) -- caller owns the transaction
-- Route handlers and pipeline handlers call `session.commit()` explicitly
-- Pinecone writes happen AFTER commit (fire-and-forget with fallback queue)
-- Separate sessions for fallback writes to avoid polluting the main transaction
+**No pre-commit configuration exists.** There is no `.pre-commit-config.yaml` in the project root. All lint and format checks run only in CI, not locally before commit.
+
+## CI Gates
+
+CI runs on push/PR to `main` via `.github/workflows/ci.yml`:
+
+1. `uv run ruff check src/ tests/ infra/` — lint
+2. `uv run ruff format --check src/ tests/ infra/` — format diff check
+3. `uv run pytest tests/ -x --tb=short -q` — full test suite (fail-fast `-x`)
+
+**Gaps:**
+- No type-check step (`mypy` or `pyright` absent from CI)
+- No coverage threshold enforcement (`pytest-cov` installed as dev dep but not invoked in CI)
+- `INNGEST_DEV` and `INNGEST_BASE_URL` still present as CI env vars (`ci.yml:34-35`) despite Inngest having been removed; these are dead config
 
 ---
 
-*Convention analysis: 2026-04-06*
+*Convention analysis: 2026-04-22*

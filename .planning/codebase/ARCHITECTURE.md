@@ -1,263 +1,256 @@
 # Architecture
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-22
 
 ## Pattern Overview
 
-**Overall:** Event-driven pipeline with Temporal workflow orchestration
+**Overall:** Modular monolith with durable workflow orchestration
+
+The application is a single deployable Python process (FastAPI + embedded Temporal worker). It exposes one HTTP endpoint (`POST /webhook/sms`) and runs a co-located Temporal worker coroutine within the same asyncio event loop. There are no microservices; all domain logic is in-process.
 
 **Key Characteristics:**
-- SMS-first labor marketplace: inbound Twilio SMS is the sole entry point for all user interaction
-- GPT-powered extraction classifies messages into domain actions (job postings, work goals, unknown)
-- Temporal durable workflows handle all async processing with retry semantics
-- Chain of Responsibility pattern dispatches classified messages to domain-specific handlers
-- Constructor-based dependency injection wired in the FastAPI lifespan
-- Repository pattern with flush-only persistence (caller owns the transaction)
-- All monetary values stored as integer cents; conversion at system boundaries only
-
-## Layers
-
-**HTTP / Webhook Layer:**
-- Purpose: Receive inbound Twilio SMS webhooks, run pre-flight validation gates, persist raw message, emit Temporal workflow
-- Location: `src/sms/router.py`, `src/sms/dependencies.py`
-- Contains: Single POST endpoint `POST /webhook/sms`, dependency chain for validation/idempotency/rate-limiting
-- Depends on: `src/sms/service.py`, `src/sms/repository.py`, `src/users/repository.py`, `src/temporal/`
-- Used by: Twilio (external)
-
-**Temporal Workflow Layer:**
-- Purpose: Durable execution of message processing with automatic retries and failure handling
-- Location: `src/temporal/workflows.py`, `src/temporal/activities.py`, `src/temporal/worker.py`
-- Contains: `ProcessMessageWorkflow` (per-message), `SyncPineconeQueueWorkflow` (cron)
-- Depends on: `src/pipeline/orchestrator.py`, `src/extraction/`, `src/database.py`
-- Used by: SMS webhook (starts workflows), Temporal scheduler (cron)
-
-**Pipeline Layer:**
-- Purpose: Classify SMS via GPT, then dispatch to the correct domain handler
-- Location: `src/pipeline/orchestrator.py`, `src/pipeline/context.py`, `src/pipeline/handlers/`
-- Contains: `PipelineOrchestrator`, `PipelineContext` dataclass, `MessageHandler` ABC, concrete handlers
-- Depends on: `src/extraction/service.py`, domain handlers, `src/sms/audit_repository.py`
-- Used by: `src/temporal/activities.py` (`process_message_activity`)
-
-**Extraction Layer:**
-- Purpose: GPT classification and structured data extraction from SMS text
-- Location: `src/extraction/service.py`, `src/extraction/schemas.py`, `src/extraction/prompts.py`, `src/extraction/utils.py`
-- Contains: `ExtractionService` (GPT calls with retry), Pydantic extraction schemas, Pinecone embedding utility
-- Depends on: OpenAI API, Pinecone API, Braintrust (logging)
-- Used by: `src/pipeline/orchestrator.py`, `src/pipeline/handlers/job_posting.py`
-
-**Domain Layer (Jobs):**
-- Purpose: Persist job postings extracted from SMS, find candidates for matching
-- Location: `src/jobs/models.py`, `src/jobs/repository.py`, `src/jobs/schemas.py`
-- Contains: `Job` SQLModel, `JobRepository`, `JobCreate` Pydantic schema
-- Depends on: `src/repository.py` (BaseRepository)
-- Used by: `src/pipeline/handlers/job_posting.py`, `src/matches/service.py`
-
-**Domain Layer (Work Goals):**
-- Purpose: Persist worker earnings goals extracted from SMS
-- Location: `src/work_goals/models.py`, `src/work_goals/repository.py`, `src/work_goals/schemas.py`
-- Contains: `WorkGoal` SQLModel, `WorkGoalRepository`, `WorkGoalCreate` Pydantic schema
-- Depends on: `src/repository.py` (BaseRepository)
-- Used by: `src/pipeline/handlers/worker_goal.py`, `src/matches/service.py`
-
-**Domain Layer (Matches):**
-- Purpose: Match available jobs to work goals using 0/1 knapsack DP algorithm, format SMS replies
-- Location: `src/matches/service.py`, `src/matches/repository.py`, `src/matches/schemas.py`, `src/matches/formatter.py`
-- Contains: `MatchService` (DP knapsack), `MatchRepository`, `JobCandidate`/`MatchResult` dataclasses, `format_match_sms()`
-- Depends on: `src/jobs/repository.py`, `src/users/models.py`, `src/money.py`
-- Used by: Not yet wired into pipeline handlers (future integration)
-
-**Domain Layer (Users):**
-- Purpose: User identity via phone hash; upsert-on-first-contact pattern
-- Location: `src/users/models.py`, `src/users/repository.py`
-- Contains: `User` SQLModel, `UserRepository` with static `get_or_create`
-- Depends on: Database
-- Used by: `src/sms/dependencies.py` (Gate 3)
-
-**Infrastructure Layer:**
-- Purpose: Pulumi IaC for GKE deployment
-- Location: `infra/__main__.py`, `infra/components/`
-- Contains: Cluster, database, secrets, cert-manager, ingress, Temporal, observability stack components
-- Depends on: GCP (GKE, Cloud SQL, GCR), Pulumi
-- Used by: CI/CD deployment
-
-## Data Flow
-
-**Inbound SMS Processing (primary flow):**
-
-1. Twilio POST `/webhook/sms` hits `src/sms/router.py`
-2. FastAPI dependency chain in `src/sms/dependencies.py` runs four gates sequentially:
-   - Gate 1: `validate_twilio_request` -- signature verification (skipped in development)
-   - Gate 2: `check_idempotency` -- reject duplicate `MessageSid` via `MessageRepository.check_idempotency()`
-   - Gate 3: `get_or_create_user` -- upsert user by `phone_hash` via `UserRepository.get_or_create()`
-   - Gate 4: `enforce_rate_limit` -- rolling-window rate limiter via `MessageRepository.enforce_rate_limit()`
-3. Route body persists `Message` row and `AuditLog` entry within a single transaction
-4. `sms_service.emit_message_received_event()` starts `ProcessMessageWorkflow` in Temporal (fire-and-forget)
-5. HTTP 200 with empty TwiML returned immediately
-6. Temporal executes `process_message_activity`:
-   a. Resolves `message_id`/`user_id` from DB by looking up the `Message` row
-   b. Calls `PipelineOrchestrator.run()`
-   c. Orchestrator calls `ExtractionService.process()` -- GPT classifies + extracts structured data
-   d. Orchestrator iterates handler chain (Chain of Responsibility):
-      - `JobPostingHandler.can_handle()` -- true if `message_type == "job_posting"`
-      - `WorkerGoalHandler.can_handle()` -- true if `message_type == "work_goal"`
-      - `UnknownMessageHandler.can_handle()` -- always true (catch-all, must be last)
-   e. Matching handler persists domain entity, updates `message.message_type`, writes audit log, commits
-7. On permanent failure after retries: `handle_process_message_failure_activity` logs and increments `pipeline_failures_total` Prometheus counter
-
-**Pinecone Sync (background cron):**
-
-1. `SyncPineconeQueueWorkflow` runs on cron schedule (default: every 5 minutes)
-2. `sync_pinecone_queue_activity` queries `pinecone_sync_queue` for up to 50 pending rows
-3. For each row: generates embedding via OpenAI (`text-embedding-3-small`), upserts to Pinecone index
-4. Updates row status to `success` or `failed` with retry count increment
-
-**Job Matching (implemented but not yet wired into pipeline):**
-
-1. `MatchService.match()` receives a `WorkGoal`
-2. `JobRepository.find_candidates_for_goal()` fetches available jobs with computable earnings (excludes `pay_type == "unknown"`, null pay rates, hourly jobs without duration)
-3. `_build_candidates()` computes earnings per job (cents), loads poster phone via message->user join (batched to avoid N+1)
-4. `_dp_select()` runs 0/1 knapsack DP to maximize total earnings toward target, with secondary objective of minimizing total duration
-5. `_sort_results()` sorts by soonest `ideal_datetime` first, then shortest duration; NULL datetimes sort last
-6. `MatchRepository.persist_matches()` saves `(job_id, work_goal_id)` pairs, skipping duplicates via IntegrityError catch
-7. `format_match_sms()` builds SMS reply text (max 5 jobs, partial-match summary)
-
-**State Management:**
-- PostgreSQL is the single source of truth for all domain state
-- Pinecone is a derived index (job embeddings) with eventual consistency via `pinecone_sync_queue`
-- Temporal provides durable workflow state and retry semantics
-- No in-memory caching beyond `lru_cache` on `get_settings()` and `get_engine()`
-
-## DI Graph (Lifespan Wiring)
-
-Constructed in `src/main.py` `lifespan()`:
-
-```
-AsyncOpenAI (wrapped by Braintrust) -> ExtractionService
-TwilioClient -> UnknownMessageHandler
-
-ExtractionService + AuditLogRepository -> PipelineOrchestrator
-  handlers list (ordered):
-    1. JobPostingHandler(JobRepository, AuditLogRepository, write_job_embedding, ExtractionService)
-    2. WorkerGoalHandler(WorkGoalRepository, AuditLogRepository)
-    3. UnknownMessageHandler(TwilioClient, ExtractionService)
-
-PipelineOrchestrator -> app.state.orchestrator
-Temporal Client (with TracingInterceptor) -> app.state.temporal_client
-Temporal Worker task -> asyncio.create_task(run_worker(...))
-```
-
-Temporal activities access the orchestrator and OpenAI client via module-level singletons set in `src/temporal/activities.py` (`_orchestrator`, `_openai_client`), initialized by `run_worker()` before worker starts.
-
-## Key Abstractions
-
-**BaseRepository:**
-- Purpose: Template Method for flush-only persistence; caller owns the transaction
-- Location: `src/repository.py`
-- Pattern: All domain repositories extend this, call `self._persist(session, entity)` which does `session.add()` + `session.flush()`
-
-**MessageHandler (Chain of Responsibility):**
-- Purpose: Polymorphic dispatch of classified messages to domain logic
-- Location: `src/pipeline/handlers/base.py`
-- Implementations: `src/pipeline/handlers/job_posting.py`, `src/pipeline/handlers/worker_goal.py`, `src/pipeline/handlers/unknown.py`
-- Pattern: `can_handle(result) -> bool` + `handle(ctx) -> None`; first match wins; ordering matters (unknown must be last)
-
-**PipelineContext:**
-- Purpose: Immutable value bag passed through the handler chain
-- Location: `src/pipeline/context.py`
-- Pattern: Dataclass carrying `session`, `result`, `sms_text`, `phone_hash`, `message_id`, `user_id`, `message_sid`, `from_number`
-
-**ExtractionResult:**
-- Purpose: Typed GPT output -- classification + extracted structured data
-- Location: `src/extraction/schemas.py`
-- Pattern: Pydantic model with `message_type` Literal discriminator and optional sub-models (`JobExtraction`, `WorkerExtraction`, `UnknownMessage`)
-
-**EarlyReturn Exception Hierarchy:**
-- Purpose: Short-circuit webhook processing with HTTP 200 (Twilio retries on 4xx)
-- Location: `src/sms/exceptions.py`
-- Pattern: `EarlyReturn` base, `DuplicateMessageSid` and `RateLimitExceeded` subclasses; caught by FastAPI exception handler returning empty TwiML
-
-## Entry Points
-
-**FastAPI Application:**
-- Location: `src/main.py` -- `create_app()` factory, `app` module-level singleton
-- Triggers: `uvicorn src.main:app`
-- Responsibilities: Wire DI graph in lifespan, configure OTel/structlog, start Temporal worker, register routes and exception handlers
-
-**Temporal Worker (in-process):**
-- Location: `src/temporal/worker.py` -- `run_worker()` coroutine
-- Triggers: Started as `asyncio.create_task` in FastAPI lifespan
-- Responsibilities: Execute `ProcessMessageWorkflow` and `SyncPineconeQueueWorkflow` activities
-
-**Webhook Endpoint:**
-- Location: `src/sms/router.py` -- `POST /webhook/sms`
-- Triggers: Twilio HTTP callback on inbound SMS
-- Responsibilities: Validate, persist raw message, emit Temporal workflow, return TwiML
-
-**Health Endpoints:**
-- Location: `src/main.py` -- `GET /health` (liveness), `GET /readyz` (readiness with DB connectivity check)
-- Triggers: Kubernetes probes, load balancer health checks
-
-## Error Handling
-
-**Strategy:** Fail-fast at boundaries, retry in workflows, graceful degradation for non-critical paths
-
-**Patterns:**
-- Webhook dependency gates raise `EarlyReturn` subclasses -> exception handler returns HTTP 200 empty TwiML (Twilio never sees 4xx, preventing retries)
-- `TwilioSignatureInvalid` returns HTTP 403 via dedicated handler in `src/exceptions.py`
-- GPT calls use `tenacity` retry with random exponential backoff for `RateLimitError`/`APIStatusError` (up to 4 attempts, 1-60s wait) in `src/extraction/service.py`
-- Temporal `ProcessMessageWorkflow` retries up to 4 attempts with exponential backoff (1s initial, 2x coefficient, 5min max); on permanent failure, `handle_process_message_failure_activity` logs + increments `pipeline_failures_total` Prometheus counter
-- Pinecone writes fail gracefully: on error, job is enqueued to `pinecone_sync_queue` for retry by cron workflow
-- Unparseable GPT response raises `ApplicationError(non_retryable=False)` to allow Temporal retry
-- Settings validation in `src/config.py` raises `ValueError` at startup if required credentials are missing
-
-## Cross-Cutting Concerns
-
-**Logging:**
-- structlog with JSON rendering and OTel trace/span ID injection (`src/main.py` -- `_add_otel_context` processor)
-- All domain modules use `structlog.get_logger()` for structured contextual logging
-- Braintrust logger for GPT call observability (`src/extraction/service.py`)
-
-**Tracing:**
-- OpenTelemetry with OTLP/gRPC exporter to Jaeger (`src/main.py` -- `_configure_otel`)
-- Auto-instrumentation: FastAPI routes (`FastAPIInstrumentor`), SQLAlchemy queries (`SQLAlchemyInstrumentor`)
-- Manual spans: pipeline orchestration, GPT calls, Pinecone upserts, Twilio sends, Temporal activities
-- Temporal `TracingInterceptor` propagates trace context across workflow/activity boundaries (`src/temporal/worker.py`)
-- Semantic convention attributes defined in `src/pipeline/constants.py` (messaging.*, db.*, app.*)
-
-**Metrics:**
-- Prometheus via `prometheus-fastapi-instrumentator` (automatic HTTP metrics) + custom metrics in `src/metrics.py`
-- Custom metrics: `gpt_calls_total` (by classification_result), `gpt_call_duration_seconds`, `gpt_input_tokens_total`, `gpt_output_tokens_total`, `pinecone_sync_queue_depth`, `pipeline_failures_total` (by function)
-- Background gauge updater polls `pinecone_sync_queue` every 15s (`_update_gauges` in `src/main.py`)
-
-**Validation:**
-- Pydantic schemas for all domain create operations (`JobCreate`, `WorkGoalCreate`, `TwilioWebhookPayload`)
-- Database-level CHECK constraints on `job` (positive pay_rate, valid status) and `work_goal` (positive target_earnings)
-- FastAPI dependency chain for request-level validation (signature, idempotency, rate limit)
-
-**Authentication:**
-- Twilio webhook signature validation via `twilio.request_validator.RequestValidator` (bypassed when `env == "development"`)
-- No user authentication beyond phone identity (SHA-256 hash of E.164 number)
-
-**Money:**
-- All monetary values stored as integer cents in the database
-- `dollars_to_cents()` called at persistence boundary (after GPT extraction)
-- `cents_to_dollars()` called at SMS reply boundary (formatting)
-- Utility module: `src/money.py`
-
-## Database Schema (3NF)
-
-**Tables:**
-- `user` -- identity by `phone_hash` (unique), optional `phone_e164`
-- `message` -- inbound SMS; FK to `user`; `message_type` updated after classification
-- `job` -- extracted job posting; FK to `message` (unique); `pay_rate` in cents; `status` enum
-- `work_goal` -- extracted earnings goal; FK to `message` (unique); `target_earnings` in cents
-- `match` -- join table `(job_id, work_goal_id)` with UNIQUE constraint
-- `rate_limit` -- rolling-window rate limit rows; FK to `user`
-- `audit_log` -- append-only event log; FK to `message` (optional)
-- `pinecone_sync_queue` -- retry queue for failed Pinecone upserts; FK to `job`
-
-**Migrations:** Alembic in `migrations/versions/`, 6 migration files from `2026-03-05` to `2026-04-04`
+- Domain-per-directory layout under `src/` (sms, jobs, work_goals, matches, extraction, pipeline, temporal, users)
+- Temporal used for durable, retryable message processing — not for workflow decomposition across services
+- Chain of Responsibility pattern for SMS classification dispatch (`pipeline/`)
+- Repository pattern with a shared `BaseRepository` flush-only base class
+- All monetary values stored and passed internally as integer cents; dollar conversion only at extraction and SMS output boundaries
+- OpenTelemetry traces propagated from FastAPI → SQLAlchemy → Temporal worker via TracingInterceptor
 
 ---
 
-*Architecture analysis: 2026-04-06*
+## High-Level ASCII Diagram
+
+```
+Twilio
+  │
+  ▼ POST /webhook/sms
+┌─────────────────────────────────┐
+│   FastAPI (src/main.py)         │
+│                                 │
+│  Dependency Chain (sms/deps)    │
+│  1. validate_twilio_request     │
+│  2. check_idempotency           │
+│  3. get_or_create_user          │
+│  4. enforce_rate_limit          │
+│         │                       │
+│  sms/router.py                  │
+│  1. persist Message row         │
+│  2. write audit_log 'received'  │
+│  3. emit_message_received_event─┼──────────────────────┐
+└─────────────────────────────────┘                      │
+                                                         ▼
+                                            ┌─────────────────────────┐
+                                            │  Temporal               │
+                                            │  ProcessMessageWorkflow  │
+                                            │         │               │
+                                            │  process_message_activity│
+                                            │         │               │
+                                            │  PipelineOrchestrator   │
+                                            │  1. ExtractionService   │
+                                            │     (GPT classify)      │
+                                            │  2. audit gpt_classified │
+                                            │  3. Chain of Resp. ─────┤
+                                            │     JobPostingHandler   │
+                                            │     WorkerGoalHandler   │
+                                            │     UnknownMsgHandler   │
+                                            └─────────────────────────┘
+
+Cron (every 5 min):
+  SyncPineconeQueueWorkflow
+    └─ sync_pinecone_queue_activity
+         └─ SELECT pending from pinecone_sync_queue → upsert to Pinecone
+```
+
+---
+
+## Layers
+
+**HTTP Ingress (sms domain):**
+- Purpose: Twilio webhook reception, pre-flight validation gates
+- Location: `src/sms/router.py`, `src/sms/dependencies.py`
+- Contains: FastAPI router, chained dependency gates (validation, idempotency, user upsert, rate limit)
+- Depends on: `src/database.py`, `src/sms/repository.py`, `src/users/repository.py`, `src/sms/audit_repository.py`
+- Used by: `src/main.py` via `app.include_router(sms_router)`
+
+**Workflow Orchestration (temporal domain):**
+- Purpose: Durable, retryable processing of inbound SMS; cron for Pinecone sync
+- Location: `src/temporal/workflows.py`, `src/temporal/activities.py`, `src/temporal/worker.py`
+- Contains: Two `@workflow.defn` classes, three `@activity.defn` functions, worker lifecycle
+- Depends on: `src/pipeline/orchestrator.py`, `src/database.py`, `src/extraction/utils.py`
+- Used by: `src/main.py` lifespan (spawned as asyncio task)
+
+**Pipeline (pipeline domain):**
+- Purpose: Classify SMS text, dispatch to appropriate domain handler via Chain of Responsibility
+- Location: `src/pipeline/orchestrator.py`, `src/pipeline/handlers/`, `src/pipeline/context.py`
+- Contains: `PipelineOrchestrator`, `MessageHandler` ABC, three concrete handlers, `PipelineContext` dataclass
+- Depends on: `src/extraction/`, `src/jobs/`, `src/work_goals/`, `src/sms/audit_repository.py`
+- Used by: `src/temporal/activities.py::process_message_activity`
+
+**Extraction (extraction domain):**
+- Purpose: GPT-based SMS classification and structured data extraction; Pinecone embedding writes
+- Location: `src/extraction/service.py`, `src/extraction/utils.py`, `src/extraction/schemas.py`, `src/extraction/prompts.py`
+- Contains: `ExtractionService` class, `write_job_embedding` async function, Pydantic output schemas
+- Depends on: OpenAI SDK, Pinecone SDK; no DB access
+- Used by: `src/pipeline/orchestrator.py`, `src/pipeline/handlers/job_posting.py`, `src/temporal/activities.py`
+
+**Domain Repositories (jobs, work_goals, matches, users, sms):**
+- Purpose: Persist and query domain entities; flush-only (caller owns transaction)
+- Location: `src/jobs/repository.py`, `src/work_goals/repository.py`, `src/matches/repository.py`, `src/users/repository.py`, `src/sms/repository.py`, `src/sms/audit_repository.py`
+- Contains: SQLModel + SQLAlchemy async queries; all extend `src/repository.py::BaseRepository`
+- Depends on: `src/database.py`, domain `models.py`
+- Used by: pipeline handlers, sms dependencies, temporal activities (sync activity only)
+
+**Models (per-domain + global registry):**
+- Purpose: SQLModel table definitions; `src/models.py` is the global import registry for Alembic
+- Location: `src/jobs/models.py`, `src/work_goals/models.py`, `src/matches/models.py`, `src/sms/models.py`, `src/users/models.py`, `src/extraction/models.py`, `src/models.py`
+- Contains: SQLModel table classes with SA column annotations, check constraints, FK relationships
+- Depends on: `src/database.py::metadata` (naming convention)
+
+**Infrastructure / Config:**
+- Purpose: Settings injection, DB engine, metrics, money utilities
+- Location: `src/config.py`, `src/database.py`, `src/metrics.py`, `src/money.py`
+- Contains: Pydantic `BaseSettings` with sub-model remapping, `lru_cache`-guarded engine/settings singletons, Prometheus metric singletons, cent/dollar converters
+
+---
+
+## Data Flow
+
+**Inbound SMS to Persistence:**
+
+1. Twilio POSTs to `POST /webhook/sms` (`src/sms/router.py:24`)
+2. `enforce_rate_limit` dependency chain runs sequentially: signature validation → idempotency check → user upsert → rate limit check (`src/sms/dependencies.py`)
+3. Router opens explicit transaction (`session.begin()`), creates `Message` row, writes audit log `received`, commits
+4. `emit_message_received_event` starts `ProcessMessageWorkflow` in Temporal — fire-and-forget (`src/sms/service.py:15`)
+5. Router returns empty TwiML `<Response/>` to Twilio immediately
+
+**Temporal Workflow to Classification to Persistence:**
+
+1. `ProcessMessageWorkflow.run` executes `process_message_activity` with up to 4 retries (`src/temporal/workflows.py:31`)
+2. Activity opens its own DB session, loads the `Message` row by `message_sid` to resolve `message_id` and `user_id` (`src/temporal/activities.py:54`)
+3. `PipelineOrchestrator.run` invoked: calls `ExtractionService.process` (GPT classify, no DB) → writes audit `gpt_classified` → dispatches to first matching `MessageHandler` (`src/pipeline/orchestrator.py:29`)
+4. Matching handler (e.g., `JobPostingHandler`) creates the domain record (job/work_goal), updates `message.message_type`, writes audit, then calls `session.commit()` — this is the single commit point for the whole pipeline (`src/pipeline/handlers/job_posting.py:76`, `src/pipeline/handlers/worker_goal.py:57`)
+5. For job postings: after commit, `JobPostingHandler` attempts Pinecone upsert; on failure inserts to `pinecone_sync_queue` in a fresh session (`src/pipeline/handlers/job_posting.py:78-108`)
+6. On activity failure after retries: `handle_process_message_failure_activity` logs and increments `pipeline_failures_total` counter (`src/temporal/activities.py:82`)
+
+**Pinecone Sync (Cron):**
+
+1. `SyncPineconeQueueWorkflow` runs on cron schedule (default `*/5 * * * *`) as a persistent workflow (`src/temporal/worker.py:47`)
+2. `sync_pinecone_queue_activity` fetches up to 50 pending rows via raw SQL JOIN across `pinecone_sync_queue`, `job`, `user` tables (`src/temporal/activities.py:105`)
+3. For each row: calls `write_job_embedding`, updates status to `success` or `failed` in separate sessions per row
+
+**Matching (not wired into live pipeline):**
+
+- `MatchService` (`src/matches/service.py`) and `format_match_sms` (`src/matches/formatter.py`) are fully implemented but not invoked by any workflow, activity, or route handler. The matching subsystem is dead code from the live pipeline perspective.
+
+---
+
+## Entry Points
+
+**HTTP Server:**
+- Location: `src/main.py:223` — `app = create_app()`
+- Triggers: Uvicorn process start (via Docker CMD or `uvicorn src.main:app`)
+- Responsibilities: OTEL setup, DI graph construction, Temporal worker launch, Prometheus exposure, router registration
+
+**Temporal Worker:**
+- Location: `src/temporal/worker.py:28` — `run_worker()`
+- Triggers: `asyncio.create_task(run_worker(...))` in `lifespan()` (`src/main.py:169`)
+- Responsibilities: Long-running coroutine blocking on `worker.run()`; processes both `ProcessMessageWorkflow` and `SyncPineconeQueueWorkflow`
+
+**Health/Readiness:**
+- `GET /health` — liveness, always 200 (`src/main.py:202`)
+- `GET /readyz` — readiness, runs `SELECT 1` against DB (`src/main.py:209`)
+
+---
+
+## Async/Sync Boundaries
+
+| Location | Pattern | Notes |
+|---|---|---|
+| All FastAPI routes and dependencies | `async def` | Non-blocking I/O throughout |
+| `ExtractionService._call_with_retry` | `async def` with `await` | AsyncOpenAI client |
+| `write_job_embedding` | `async def` | PineconeAsyncio context manager |
+| `UnknownMessageHandler.handle` | `asyncio.to_thread(twilio_client.messages.create)` | Sync Twilio SDK wrapped in threadpool (`src/pipeline/handlers/unknown.py:45`) |
+| Temporal Worker | `asyncio.create_task(run_worker(...))` | Co-runs with FastAPI event loop; shares event loop |
+| `_update_gauges` | `asyncio.create_task(...)` | Background polling coroutine, same loop |
+| SQLAlchemy | `create_async_engine` + `AsyncSession` | All DB access is async via asyncpg |
+
+---
+
+## Transaction Boundaries
+
+The session lifecycle has two distinct patterns:
+
+**Pattern A — FastAPI Dependency-Injected Session (webhook path):**
+- `get_session()` in `src/database.py:30` provides one `AsyncSession` per request via `Depends(get_session)`
+- The router and each dependency each open explicit `session.begin()` sub-transactions
+- This creates multiple `begin()` calls on the same session object across chained dependencies — session reuse across dependency chain (`src/sms/dependencies.py:75, 91, 105`, `src/sms/router.py:46`)
+- Final commit is in the router (`session.begin()` block at line 46)
+
+**Pattern B — Temporal Activity Sessions:**
+- `get_sessionmaker()()` is called directly (not via FastAPI DI) to open fresh sessions
+- `process_message_activity` opens one session for the full pipeline run (`src/temporal/activities.py:54`)
+- Session is passed via `PipelineContext` to handlers; handlers call `session.commit()` themselves
+- `sync_pinecone_queue_activity` opens a new session per row update (`src/temporal/activities.py:130, 147`) — creates N sessions for N rows
+- `JobPostingHandler` opens a second session `s2` on Pinecone failure for queue insert (`src/pipeline/handlers/job_posting.py:94`)
+
+Transaction ownership is caller-defined by convention (documented in `BaseRepository._persist` docstring) but not enforced by the type system.
+
+---
+
+## Error Handling
+
+**Strategy:** Exception-per-gate with FastAPI exception handlers for the HTTP path; Temporal retry policies for the async path.
+
+**Patterns:**
+- `EarlyReturn` base exception + subclasses (`DuplicateMessageSid`, `RateLimitExceeded`) signal HTTP 200 + empty TwiML to Twilio — prevents retry storms (`src/sms/exceptions.py`)
+- `TwilioSignatureInvalid` maps to 403 response (`src/exceptions.py`)
+- Temporal `ApplicationError(non_retryable=True)` used when message row not found after webhook write — prevents futile retries (`src/temporal/activities.py:62`)
+- `tenacity` retry with exponential backoff on GPT `RateLimitError` / `APIStatusError` (`src/extraction/service.py:80`)
+- Pinecone upsert failure in `JobPostingHandler`: caught, logged, enqueued to `pinecone_sync_queue` fallback — error is never re-raised, so pipeline always commits even on Pinecone failure
+
+---
+
+## Cross-Cutting Concerns
+
+**Logging:** structlog with JSON renderer + OTel trace/span ID injection (`src/main.py:56`). Structured fields: `message_sid`, `phone_hash`, `job_id`, `error`.
+
+**Observability:** OpenTelemetry with OTLP gRPC exporter to Jaeger. `FastAPIInstrumentor` auto-instruments HTTP; `SQLAlchemyInstrumentor` auto-instruments DB; Temporal `TracingInterceptor` propagates context into workflows/activities. Manual `tracer.start_as_current_span()` in orchestrator, handlers, and activities.
+
+**Metrics:** Prometheus via `prometheus-fastapi-instrumentator`. Custom metrics in `src/metrics.py`: GPT call counters/histograms, Pinecone queue depth gauge, pipeline failure counter.
+
+**Validation:** Pydantic `BaseModel` for all API input/output schemas and `BaseSettings` for config. `model_validator(mode="after")` enforces required credentials at startup.
+
+**Authentication:** Twilio HMAC signature validation in `validate_twilio_request` dependency; bypassed when `settings.env == "development"` (`src/sms/dependencies.py:57`).
+
+**Money:** Dollar-to-cent conversion at extraction boundary (`src/money.py`); cent-to-dollar only at SMS reply boundary (`src/matches/formatter.py`). All DB columns and internal arithmetic are integer cents.
+
+**DI Graph:** Constructed manually in `lifespan()` in `src/main.py:122`; stored on `app.state`. No DI framework — explicit constructor injection for services and repositories.
+
+---
+
+## Architectural Smells
+
+**1. MatchService is orphaned dead code:**
+`MatchService` (`src/matches/service.py`), `MatchRepository` (`src/matches/repository.py`), and `format_match_sms` (`src/matches/formatter.py`) are fully implemented but never invoked in any workflow, activity, or route. `WorkerGoalHandler` persists a `WorkGoal` record and commits but never calls `MatchService.match()`. The entire matches domain is unreachable from the live pipeline.
+
+**2. Module-level mutable singletons in activities (`src/temporal/activities.py:24-25`):**
+`_orchestrator` and `_openai_client` are `None`-initialized module globals mutated by `run_worker()` before worker start (`src/temporal/worker.py:30-31`). If activities are unit-tested without calling `run_worker()`, they will fail on `None._orchestrator`. Both are annotated `| None` but the `None` path is never handled in the activity bodies.
+
+**3. `JobCreate.user_id` silently dropped (`src/jobs/schemas.py`, `src/pipeline/handlers/job_posting.py:46`):**
+`JobPostingHandler` passes `user_id=ctx.user_id` to `JobCreate(...)` but `JobCreate` does not declare a `user_id` field. Pydantic `BaseModel` without `model_config(extra='forbid')` silently ignores unknown fields. The `Job` model also has no `user_id` column — ownership is traced via `job.message_id → message.user_id`. This is intentional by 3NF design but the handler silently passes an extra kwarg, which is misleading and could mask future field omissions.
+
+**4. `WorkGoalCreate.raw_sms` and `JobCreate.raw_sms` never persisted:**
+Both create-schemas declare `raw_sms: str` (`src/work_goals/schemas.py:8`, `src/jobs/schemas.py:19`) and handlers pass it. However, `WorkGoalRepository.create` (`src/work_goals/repository.py:14`) constructs `WorkGoal(...)` without mapping `raw_sms`, and the `WorkGoal` model has no such column. `JobRepository.create` has the same issue. The field is validated and passed but silently dropped.
+
+**5. `sync_pinecone_queue_activity` opens N DB sessions for N rows (`src/temporal/activities.py:130, 147`):**
+For a batch of 50 rows, this opens up to 100 DB connections (two per row: success update + failure update). A single bulk UPDATE within the activity's already-open session would be correct and efficient.
+
+**6. Chained dependency session reuse with multiple nested `begin()` calls (`src/sms/dependencies.py`):**
+`validate_twilio_request`, `check_idempotency`, `get_or_create_user`, and `enforce_rate_limit` each call `Depends(get_session)`. FastAPI caches the session per request, so they share one `AsyncSession` — but each opens its own `session.begin()` nested transaction. If any sub-transaction rolls back, the shared session state could become inconsistent. The pattern is functional but fragile and non-obvious.
+
+**7. Inline raw SQL for `UPDATE message SET message_type` duplicated across three handlers:**
+`src/pipeline/handlers/job_posting.py:65`, `src/pipeline/handlers/worker_goal.py:47`, `src/pipeline/handlers/unknown.py:33` all execute the same raw `sa_text("UPDATE message SET message_type = '...' WHERE id = :mid")` rather than using ORM attribute assignment or a shared repository method.
+
+---
+
+*Architecture analysis: 2026-04-22*

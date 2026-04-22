@@ -1,221 +1,315 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-04-06
-
-## Tech Debt
-
-**Migration 003 references renamed table `work_request` instead of `work_goal`:**
-- Issue: Migration `2026-04-03_normalize_3nf.py` calls `op.drop_constraint("work_request_user_id_fkey", "work_request")` and `op.drop_column("work_request", "user_id")`, but the table was renamed to `work_goal` in a prior refactor. Running `alembic upgrade head` from scratch fails.
-- Files: `migrations/versions/2026-04-03_normalize_3nf.py` (lines 21-24)
-- Impact: Cold-start deployments (fresh DB) fail. New developer onboarding blocked until manually patched.
-- Fix approach: Create a new migration that corrects the table name reference, or amend migration 003 to use `work_goal` (if no production DB has run it yet).
-
-**Pinecone sync SQL joins on dropped `user_id` column:**
-- Issue: `sync_pinecone_queue_activity` uses raw SQL `JOIN job j ON j.id = q.job_id ... JOIN "user" u ON u.id = j.user_id`, but migration 003 dropped `job.user_id` (3NF normalization). The correct join path is `job -> message -> user`.
-- Files: `src/temporal/activities.py` (lines 108-114)
-- Impact: The Pinecone sync cron workflow fails every 5 minutes. Pinecone index never catches up with pending queue rows.
-- Fix approach: Rewrite SQL to `JOIN message m ON m.id = j.message_id JOIN "user" u ON u.id = m.user_id`.
-
-**Pinecone sync failure path uses wrong column name `retry_count`:**
-- Issue: The failure UPDATE uses `retry_count=retry_count+1` but the `PineconeSyncQueue` model defines the column as `attempts`.
-- Files: `src/temporal/activities.py` (line 150)
-- Impact: Pinecone sync failures trigger a secondary SQL error, masking the original failure. Failed rows never get their attempt counter incremented.
-- Fix approach: Change `retry_count` to `attempts` in the raw SQL UPDATE statement.
-
-**`PineconeSyncQueue.attempts` field vs `last_error` field unused in write path:**
-- Issue: The model defines `attempts` and `last_error` fields, but `sync_pinecone_queue_activity` never writes to `last_error`, and the `attempts` column is only updated in the broken SQL path.
-- Files: `src/extraction/models.py` (lines 18-19), `src/temporal/activities.py` (lines 147-155)
-- Impact: Debugging sync failures requires log analysis; no queryable failure state in DB.
-- Fix approach: Update the failure path to set `last_error = :error_msg` and use the correct `attempts` column.
-
-**MatchService not wired into DI graph or WorkerGoalHandler:**
-- Issue: `MatchService` exists in `src/matches/service.py` with full DP matching logic, but it is never instantiated in `src/main.py` lifespan and never called from `WorkerGoalHandler`. The worker goal flow ends at DB commit with no matching or SMS reply.
-- Files: `src/main.py` (lifespan, lines 122-183), `src/pipeline/handlers/worker_goal.py`, `src/matches/service.py`
-- Impact: The core worker-facing feature (text a goal, receive matched jobs) does not function end-to-end.
-- Fix approach: Inject `MatchService` and a `TwilioClient` into `WorkerGoalHandler`. After persisting the work goal, call `match_service.match()` then `format_match_sms()` and send via Twilio.
-
-**`format_match_sms()` never called outside tests:**
-- Issue: The SMS formatter at `src/matches/formatter.py` is fully implemented and tested, but never imported or called in production code.
-- Files: `src/matches/formatter.py`
-- Impact: Dead code until MatchService is wired into WorkerGoalHandler.
-- Fix approach: Wire into WorkerGoalHandler alongside MatchService integration.
-
-**`temporal_queue_depth` gauge is a permanent stub:**
-- Issue: The Prometheus gauge `temporal_queue_depth` always reads 0. Comment states "placeholder for future instrumentation."
-- Files: `src/metrics.py` (lines 37-41)
-- Impact: Grafana dashboards referencing this metric show meaningless data. No alerting on Temporal queue backlog.
-- Fix approach: Use Temporal SDK's `describe_task_queue` API to poll queue depth, or remove the stub gauge.
-
-**Rate limit table UNIQUE constraint migration pending:**
-- Issue: The `TODO` comment in `MessageRepository.enforce_rate_limit` notes that a migration to drop the UNIQUE constraint on `(user_id, created_at)` in `rate_limit` is needed. Migration 003 drops it, but the TODO comment remains.
-- Files: `src/sms/repository.py` (line 29)
-- Impact: Stale TODO; the migration may or may not have run successfully depending on the `work_request` bug. If migration 003 fails mid-way, this constraint may still exist.
-- Fix approach: Verify migration 003 succeeds end-to-end, then remove the TODO comment.
-
-**`user_id` not stored on `Job` model after 3NF normalization:**
-- Issue: `JobPostingHandler` passes `user_id` to `JobCreate` as a kwarg, but `JobCreate` schema does not have a `user_id` field. Pydantic silently ignores the extra field (no `extra="forbid"`).
-- Files: `src/pipeline/handlers/job_posting.py` (line 46), `src/jobs/schemas.py`
-- Impact: Silent data loss if `user_id` was intended for use. Currently benign because `user_id` is derivable via `message_id -> message.user_id`.
-- Fix approach: Remove `user_id` from `JobCreate` construction call, or add `model_config = ConfigDict(extra="forbid")` to `JobCreate` to catch such issues.
-
-## Known Bugs
-
-**`PipelineContext` claims to be immutable but is a plain `@dataclass`:**
-- Symptoms: Nothing prevents mutation of `PipelineContext` fields, despite the docstring saying "Immutable bag of values."
-- Files: `src/pipeline/context.py`
-- Trigger: Any handler mutating `ctx.session` or `ctx.result` could cause subtle bugs in downstream handlers.
-- Workaround: Use `@dataclass(frozen=True)` to enforce immutability.
-
-**`UnknownMessageHandler.handle()` logs `to=ctx.from_number` (raw phone number):**
-- Symptoms: PII (raw E.164 phone number) appears in structured logs.
-- Files: `src/pipeline/handlers/unknown.py` (line 59)
-- Trigger: Any unknown message triggers this log line.
-- Workaround: Log `phone_hash` instead of raw `from_number`.
-
-## Security Considerations
-
-**Raw phone number passed through Temporal workflow arguments:**
-- Risk: `ProcessMessageWorkflow.run()` receives `from_number` as a plain string argument. Temporal stores workflow inputs in its persistence layer (Postgres). Raw phone numbers are PII stored in a secondary data store.
-- Files: `src/temporal/workflows.py` (line 33), `src/sms/service.py` (lines 25-29)
-- Current mitigation: Phone numbers are hashed at the application boundary for logging/tracing, but the raw value persists in Temporal's workflow history.
-- Recommendations: Pass `phone_hash` through Temporal and resolve `from_number` from DB only when needed (e.g., for Twilio send). Or accept this as a known PII storage location and document it.
-
-**Twilio signature validation skipped in development mode:**
-- Risk: When `env == "development"`, `validate_twilio_request` bypasses signature verification entirely.
-- Files: `src/sms/dependencies.py` (lines 57-58)
-- Current mitigation: Only applies when `ENV=development`. Production uses real validation.
-- Recommendations: This is acceptable for local dev, but ensure `ENV` can never be set to `development` in production deployments. Add a startup warning log if `env == "development"`.
-
-**No authentication on `/health`, `/readyz`, or `/metrics` endpoints:**
-- Risk: These endpoints are publicly accessible. `/readyz` reveals database connectivity status. `/metrics` exposes Prometheus metrics including GPT call counts, token usage, and queue depths.
-- Files: `src/main.py` (lines 202-218, 190)
-- Current mitigation: None.
-- Recommendations: Restrict `/metrics` to internal network or require a bearer token. Health endpoints are typically fine to expose but `/readyz` should not leak implementation details.
-
-**Grafana default credentials in config:**
-- Risk: `grafana_admin_user` and `grafana_admin_password` default to `admin`/`admin` in `Settings`.
-- Files: `src/config.py` (lines 75-76)
-- Current mitigation: None in code. Depends on `.env` files overriding defaults.
-- Recommendations: Remove defaults or raise a warning when default credentials are used in non-development environments.
-
-**No input sanitization on SMS body before GPT processing:**
-- Risk: Malicious SMS content is passed directly to the OpenAI API as user input. Prompt injection could cause unexpected GPT behavior.
-- Files: `src/extraction/service.py` (line 56), `src/extraction/prompts.py`
-- Current mitigation: GPT structured output format (`response_format=ExtractionResult`) constrains the response schema.
-- Recommendations: The Pydantic schema validation on `ExtractionResult` provides reasonable defense. Consider adding a max-length check on SMS body before GPT processing.
-
-## Performance Bottlenecks
-
-**DP knapsack algorithm uses O(n * total_earnings) memory:**
-- Problem: `_dp_select` allocates arrays proportional to the sum of all candidate earnings in cents. For high-value jobs (e.g., 100 jobs at $1000 each = 10,000,000 capacity), this creates a 10M-element list plus an n x 10M boolean matrix.
-- Files: `src/matches/service.py` (lines 102-154)
-- Cause: Earnings stored in cents (integer) means the knapsack capacity can be very large.
-- Improvement path: Quantize earnings to dollars (divide by 100) for DP computation, or switch to a greedy heuristic for large candidate sets. Add a guard that falls back to greedy when `capacity > THRESHOLD`.
-
-**Pinecone sync processes rows sequentially with individual sessions:**
-- Problem: `sync_pinecone_queue_activity` fetches 50 rows but processes each with a separate `get_sessionmaker()()` call for the status update. Each row opens and closes a DB connection.
-- Files: `src/temporal/activities.py` (lines 121-155)
-- Cause: Error isolation per row, but at the cost of connection overhead.
-- Improvement path: Batch successful row IDs and update in a single query. Keep individual error handling but batch the success path.
-
-**Gauge updater polls every 15 seconds with a full COUNT query:**
-- Problem: `_update_gauges()` runs `SELECT COUNT(*) FROM pinecone_sync_queue WHERE status = 'pending'` every 15 seconds. On large tables this is a sequential scan.
-- Files: `src/main.py` (lines 90-119)
-- Cause: No index on `pinecone_sync_queue.status`.
-- Improvement path: Add an index on `pinecone_sync_queue(status)` or use a materialized counter.
-
-## Fragile Areas
-
-**Raw SQL strings scattered across the codebase:**
-- Files: `src/temporal/activities.py` (lines 107-155), `src/pipeline/handlers/job_posting.py` (lines 62-65, 93-97), `src/pipeline/handlers/worker_goal.py` (lines 46-49), `src/sms/repository.py` (lines 34-50), `src/users/repository.py` (lines 19-27)
-- Why fragile: Raw SQL strings are not validated at import time. Schema changes (column renames, table renames) silently break at runtime. Migration 003 already caused breakage in `activities.py` by dropping `job.user_id`.
-- Safe modification: Use SQLModel/SQLAlchemy ORM queries where possible. For raw SQL, add integration tests that exercise the exact queries against a test DB.
-- Test coverage: The Pinecone sync raw SQL paths have no test coverage. `UPDATE message SET message_type = ...` in handlers has no direct test.
-
-**Handler ordering in `PipelineOrchestrator` is implicit:**
-- Files: `src/main.py` (lines 142-157), `src/pipeline/orchestrator.py` (lines 67-70)
-- Why fragile: `UnknownMessageHandler.can_handle()` returns `True` unconditionally, so it must be last in the list. Handler order is set by list position in `main.py` lifespan with no enforcement.
-- Safe modification: Add a `priority` attribute or ordering mechanism to `MessageHandler`. Add a startup assertion that the catch-all handler is last.
-- Test coverage: No test verifies handler ordering or ensures the catch-all is last.
-
-**`_orchestrator` and `_openai_client` module-level singletons in activities:**
-- Files: `src/temporal/activities.py` (lines 24-25), `src/temporal/worker.py` (lines 30-31)
-- Why fragile: Module-level mutable singletons set by `run_worker()` before worker starts. If worker initialization order changes, activities run with `None` references causing `AttributeError`.
-- Safe modification: Add null checks with clear error messages in activity functions.
-- Test coverage: Tests mock these at the module level; no test verifies the actual initialization path.
-
-## Scaling Limits
-
-**Single Temporal worker co-located with FastAPI process:**
-- Current capacity: One worker task running inside the FastAPI process handles all workflow and activity executions.
-- Limit: CPU-bound OpenAI/Pinecone calls in activities block the single worker. Under high SMS volume, the Temporal task queue backs up.
-- Scaling path: Run Temporal workers as separate processes/containers. The worker code in `src/temporal/worker.py` is already decoupled enough to extract.
-
-**Rate limiting uses per-row inserts with rolling window COUNT:**
-- Current capacity: Adequate for low-to-moderate SMS volume.
-- Limit: Each SMS inserts a `rate_limit` row and counts rows in the window. The `rate_limit` table grows unboundedly (no cleanup/TTL).
-- Scaling path: Add a periodic cleanup job to delete `rate_limit` rows older than the window. Consider Redis-based rate limiting for higher throughput.
-
-## Dependencies at Risk
-
-**`braintrust` SDK pinned loosely (`>=0.0.100`):**
-- Risk: Pre-1.0 SDK with potentially breaking changes on minor version bumps. The `wrap_openai` and `init_logger` APIs could change.
-- Files: `pyproject.toml` (line 8), `src/main.py` (line 7), `src/extraction/service.py` (line 35)
-- Impact: Broken OpenAI client wrapping or logging on dependency update.
-- Migration plan: Pin to a specific version. Monitor release notes.
-
-**`sqlmodel` at `>=0.0.37` (pre-1.0):**
-- Risk: SQLModel is a wrapper around SQLAlchemy with its own quirks. Pre-1.0 API may change.
-- Files: `pyproject.toml` (line 23), all model files
-- Impact: Model definition changes could break on update.
-- Migration plan: Pin version. All models use `SQLModel` with `table=True`.
-
-## Missing Critical Features
-
-**No STOP/START opt-out mechanism (SEC-05):**
-- Problem: Users cannot opt out of receiving SMS messages. Regulatory compliance (TCPA/10DLC) typically requires STOP keyword handling.
-- Blocks: Production launch; potential legal/compliance issues with SMS messaging.
-
-**No job poster confirmation SMS (STR-03):**
-- Problem: When a job is successfully posted, the poster receives no confirmation. They have no feedback that their SMS was processed.
-- Blocks: User trust and basic UX expectations.
-
-**Worker goal flow does not return matched jobs (ASYNC-02):**
-- Problem: Workers can text their earnings goal, but the system stores it and stops. No matching runs, no SMS reply sent.
-- Blocks: The primary user-facing value proposition.
-
-## Test Coverage Gaps
-
-**No tests for Pinecone sync cron activity:**
-- What's not tested: `sync_pinecone_queue_activity` SQL queries, row processing, error handling, status updates.
-- Files: `src/temporal/activities.py` (lines 97-166)
-- Risk: Three known bugs exist in this code path (dropped column, wrong column name, missing `last_error` write). All would be caught by basic integration tests.
-- Priority: High
-
-**No tests for `_update_gauges` background task:**
-- What's not tested: The gauge polling loop, error handling, consecutive failure counting.
-- Files: `src/main.py` (lines 90-119)
-- Risk: Silent metric staleness if DB connection fails. The `-1` sentinel value on repeated failures is untested.
-- Priority: Medium
-
-**No tests for raw SQL UPDATE statements in handlers:**
-- What's not tested: `UPDATE message SET message_type = ...` in `JobPostingHandler`, `WorkerGoalHandler`, and `UnknownMessageHandler`.
-- Files: `src/pipeline/handlers/job_posting.py` (line 63), `src/pipeline/handlers/worker_goal.py` (line 47), `src/pipeline/handlers/unknown.py` (line 33)
-- Risk: Column rename or table change silently breaks these at runtime.
-- Priority: Medium
-
-**No tests for `UserRepository.get_or_create` raw SQL upsert:**
-- What's not tested: The `INSERT ... ON CONFLICT DO NOTHING` pattern and subsequent SELECT. Uses PostgreSQL-specific syntax but tests run against SQLite.
-- Files: `src/users/repository.py` (lines 14-35)
-- Risk: Dialect-specific SQL may behave differently in SQLite tests vs PostgreSQL production.
-- Priority: Medium
-
-**Worker goal integration test skipped:**
-- What's not tested: Full end-to-end worker goal flow through Temporal.
-- Files: `tests/integration/test_worker_goal.py`
-- Risk: The worker goal path is the least tested critical flow.
-- Priority: High
+**Analysis Date:** 2026-04-22
 
 ---
 
-*Concerns audit: 2026-04-06*
+## Security
+
+### [Critical] Twilio Signature Validation Bypassed in Development
+
+- **Evidence:** `src/sms/dependencies.py:57`
+- **Impact:** Any unauthenticated POST to `/webhook/sms` with a valid form body is accepted when `ENV=development`. If the application is deployed with `ENV=development` (or the variable is misconfigured), the entire authentication layer is disabled. An attacker who can reach the endpoint can inject arbitrary messages.
+- **Recommended fix:** Remove the bypass entirely. Use the real Twilio test credentials (the Twilio test magic numbers) to validate signatures in local/dev environments. If a bypass is truly needed, gate it behind an explicit `DISABLE_TWILIO_SIGNATURE_VALIDATION=true` flag that can never be set `"true"` in infra manifests, and add a startup warning.
+
+---
+
+### [High] Raw E.164 Phone Numbers Written to Structured Logs (PII Leak)
+
+- **Evidence:** `src/pipeline/handlers/unknown.py:61` — `log.info("unknown_reply_sent", message_sid=ctx.message_sid, to=ctx.from_number)`
+- **Impact:** Every time an unknown message is handled, the sender's E.164 phone number is emitted to stdout as a structured JSON log field. This log is shipped to Jaeger/OTLP and potentially to any log aggregator. Phone numbers are PII and in many jurisdictions are regulated under GDPR/CCPA.
+- **Recommended fix:** Replace `to=ctx.from_number` with `to_hash=hash_phone(ctx.from_number)` — consistent with how every other log site treats the number.
+
+---
+
+### [High] Raw E.164 Phone Number Persisted in Audit Log Detail Column
+
+- **Evidence:** `src/sms/router.py:52` — `detail=json.dumps(dict(form_data))` where `form_data` contains `"From": "+1XXXXXXXXXX"`
+- **Impact:** The full Twilio form payload (including the sender's E.164 phone number) is stored verbatim in `audit_log.detail`. The `audit_log` table has no row-level encryption, so any DB read exposes PII. This is a GDPR/CCPA compliance concern.
+- **Recommended fix:** Scrub PII fields before writing to the audit log: `{**form_data, "From": hash_phone(form_data.get("From", ""))}`.
+
+---
+
+### [High] Unsalted SHA-256 Phone Hash — Vulnerable to Enumeration Attack
+
+- **Evidence:** `src/sms/service.py:6-12`
+- **Impact:** SHA-256 of E.164 numbers is deterministic and enumerable. The E.164 namespace for US numbers is ~10 billion values — trivially enumerable with a GPU. An attacker with DB access can reverse all `phone_hash` values to real numbers using a precomputed lookup table.
+- **Recommended fix:** Use HMAC-SHA-256 with a secret key from env: `hmac.new(key=secret.encode(), msg=number.encode(), digestmod='sha256').hexdigest()`. Store the key as `PHONE_HASH_SECRET` in the same secrets store as other credentials.
+
+---
+
+### [High] `/metrics` Endpoint Publicly Exposed Without Authentication
+
+- **Evidence:** `src/main.py:190` — `Instrumentator().instrument(app).expose(app)`
+- **Impact:** The Prometheus `/metrics` endpoint is mounted on the same public port (8000) as the webhook, with no authentication. It exposes internal counters, queue depths, and service topology. An attacker can use it to understand system internals and detect anomalies in processing rates.
+- **Recommended fix:** Either expose `/metrics` on a separate internal port only reachable within the cluster, or restrict via network policy. Minimally, the Kubernetes `NetworkPolicy` should block external traffic to `/metrics`.
+
+---
+
+### [High] OpenAPI/Swagger Docs Always Exposed — No Production Gate
+
+- **Evidence:** `src/main.py:187` — `app = FastAPI(lifespan=lifespan)` with no `openapi_url=None` in production
+- **Impact:** FastAPI serves `/docs` and `/openapi.json` in production by default. This exposes the full API schema, endpoint signatures, and request/response shapes publicly, aiding reconnaissance.
+- **Recommended fix:** Per `AGENTS.md` guidance: add `"openapi_url": None, "docs_url": None, "redoc_url": None` to `app_configs` when `settings.env == "production"`.
+
+---
+
+### [Medium] `phone_e164` Never Populated from SMS Inbound Path
+
+- **Evidence:** `src/sms/dependencies.py:92` — `UserRepository.get_or_create(session, phone_hash)` — `phone_e164` argument omitted
+- **Impact:** Every user created through the SMS webhook has `phone_e164=None`. The match SMS formatter (`src/matches/formatter.py:50`) outputs `phone = cand.poster_phone or "N/A"` — workers receive "N/A" instead of a callable phone number. The core business function (workers calling job posters) is silently broken for all SMS-originated users.
+- **Recommended fix:** Pass `from_number` to `get_or_create`: `UserRepository.get_or_create(session, phone_hash, phone_e164=from_number)`. Update the `ON CONFLICT` clause to backfill `phone_e164 WHERE user.phone_e164 IS NULL`.
+
+---
+
+## Correctness / Bugs
+
+### [Critical] `pinecone_sync_queue` Check Constraint Rejects Application Writes
+
+- **Evidence:** `migrations/versions/2026-03-06_extraction_additions.py:66` — check constraint: `status IN ('pending', 'synced', 'failed')`. Application writes: `src/temporal/activities.py:134` — `SET status='success'`
+- **Impact:** Every successful Pinecone sync attempt violates the DB check constraint, causing the UPDATE to fail with an `IntegrityError`. The row stays `pending` forever. The sync queue grows without bound. All job embeddings that needed a retry will never reach Pinecone, breaking job-to-worker matching via vector search.
+- **Recommended fix:** Add a migration that changes the constraint to `status IN ('pending', 'success', 'failed')`, or change the application code to write `'synced'` consistently. Pick one and add a test.
+
+---
+
+### [High] Migration 003 References Non-Existent `work_request` Table
+
+- **Evidence:** `migrations/versions/2026-04-03_normalize_3nf.py:22-24` — `op.drop_constraint("work_request_user_id_fkey", "work_request", ...)` and `op.drop_column("work_request", "user_id")`. The initial schema at `migrations/versions/2026-03-05_initial_schema.py:75` creates `work_goal`, never `work_request`.
+- **Impact:** Running `alembic upgrade head` on a fresh database fails at revision 003. The application cannot be deployed to a new environment. Any deployment pipeline that applies migrations from scratch is broken.
+- **Recommended fix:** Update lines 22–24 and 55–68 in `2026-04-03_normalize_3nf.py` to reference `work_goal` instead of `work_request`. Verify with a full `alembic upgrade head` run in CI.
+
+---
+
+### [High] Rate Limit INSERT Inserts Row Before Checking Count — TOCTOU + Schema Mismatch
+
+- **Evidence:** `src/sms/repository.py:29-53` — The TODO comment acknowledges the production DB may still have `UNIQUE(user_id, created_at)` which causes an `IntegrityError` on every INSERT. The rolling-window code inserts a row then counts. The constraint from migration 001 was dropped in migration 003, but if any environment has not run 003, the INSERT raises and returns a 500 to Twilio (which retries, compounding the problem).
+- **Impact:** Rate limiting silently fails in any environment not on revision >= 003. Additionally, inserting before checking means a rate-limited user still gets a `rate_limit` row added to the DB — slightly inflating future counts by 1.
+- **Recommended fix:** Remove the TODO after confirming all environments are on revision >= 003. Restructure to COUNT first, then INSERT only if within the limit.
+
+---
+
+### [High] `process_message_activity` Session Lacks Explicit Transaction Context
+
+- **Evidence:** `src/temporal/activities.py:54` — `async with get_sessionmaker()() as session:` opens a session without `async with session.begin():`. Handlers call `session.commit()` directly inside their `handle()` method.
+- **Impact:** On Temporal retry (e.g., after a GPT timeout), handlers re-run against the same DB session context. If a partial flush occurred before the exception, the retry may hit `UNIQUE(message_id)` on the `job` or `work_goal` tables, raise an `IntegrityError`, and trip the `non_retryable=True` path — permanently failing the workflow for a transient error.
+- **Recommended fix:** Wrap the handler body with `async with session.begin():` in `process_message_activity`, so that any exception rolls back the partial state and the retry starts clean.
+
+---
+
+### [Medium] `JobCreate` Schema Has `raw_sms` Field That Is Never Persisted
+
+- **Evidence:** `src/jobs/schemas.py:19` — `raw_sms: str = Field(min_length=1, max_length=1600)`. `src/jobs/models.py` — no `raw_sms` column. `src/jobs/repository.py:61-75` — `Job(...)` constructor never passes `raw_sms`.
+- **Impact:** `raw_sms` is validated by Pydantic in `JobCreate` and `WorkGoalCreate` but silently discarded. Audit trail for what raw SMS produced a given job is lost.
+- **Recommended fix:** Add a migration to add `raw_sms TEXT` columns to `job` and `work_goal` tables, or remove the field from both schemas.
+
+---
+
+### [Medium] `_dp_select` `keep` Matrix Causes Memory Explosion Under Realistic Job Volumes
+
+- **Evidence:** `src/matches/service.py:117-126` — `capacity = sum(c.earnings for c in candidates)`, then `keep = [[False] * (capacity + 1) for _ in range(n)]`
+- **Impact:** For 1,000 jobs at average $200 pay (20,000 cents each), `capacity = 20,000,000`. The `keep` matrix is `1000 × 20,000,001 ≈ 19 GB`. A single `MatchService.match()` call OOMs the container. Even at 100 jobs × $500, the matrix is ~50 MB with O(n × capacity) time.
+- **Recommended fix:** Cap `capacity` to `work_goal.target_earnings`: `capacity = min(sum(c.earnings for c in candidates), work_goal.target_earnings)`. No solution ever needs to exceed the goal. Additionally cap `n` at a practical maximum (e.g., 500 jobs).
+
+---
+
+### [Medium] `find_candidates_for_goal` Returns All Available Jobs With No Scope Filter
+
+- **Evidence:** `src/jobs/repository.py:15-32` — no `work_goal` or user scope parameter. `src/matches/service.py:33` — called with `session` only.
+- **Impact:** The DP algorithm evaluates every available job in the database regardless of geography, timing, or work goal target. As the platform scales, this is both a performance issue and produces semantically incorrect matches (e.g., Chicago worker matched to LA jobs).
+- **Recommended fix:** Pass `work_goal` to `find_candidates_for_goal` and add a date-range filter based on `target_timeframe`. Add a `LIMIT` clause (see Performance section).
+
+---
+
+## Reliability / Availability
+
+### [High] Temporal Emission Failure Produces Orphan Message Rows
+
+- **Evidence:** `src/sms/router.py:46-58` — `async with session.begin():` persists message and audit row, then `await sms_service.emit_message_received_event(...)` is called outside the transaction with no try/except.
+- **Impact:** If the Temporal server is unreachable, `client.start_workflow()` raises. FastAPI returns a 500 to Twilio. Twilio retries. The idempotency check detects the existing `message_sid` row and returns 200 without re-emitting to Temporal. The message is permanently stuck — DB row exists, no workflow ever runs, no pipeline processing occurs, user gets no response.
+- **Recommended fix:** Wrap `emit_message_received_event` in try/except. On failure, log an error and return `EMPTY_TWIML` with HTTP 200 (so Twilio stops retrying), but also enqueue a retry in a persistent table drained by the cron worker.
+
+---
+
+### [High] `_gauge_task` Not Awaited on Shutdown — Potential Connection Leak
+
+- **Evidence:** `src/main.py:182` — `_gauge_task.cancel()` followed by `provider.force_flush()`. There is no `await asyncio.wait_for(_gauge_task, ...)` after cancellation.
+- **Impact:** The gauge updater may be mid-DB-query when cancelled. The task is cancelled but never awaited, suppressing `CancelledError` silently. On GKE rolling deploys, this causes unclosed DB connection warnings and may leave transactions open.
+- **Recommended fix:** `try: await asyncio.wait_for(_gauge_task, timeout=5.0) except (asyncio.CancelledError, asyncio.TimeoutError): pass`
+
+---
+
+### [High] `sync_pinecone_queue_activity` Has No Row-Level Locking
+
+- **Evidence:** `src/temporal/activities.py:105-115` — `SELECT ... WHERE q.status = 'pending' LIMIT 50` with no `FOR UPDATE SKIP LOCKED`. Status updates happen in a separate session opened per row.
+- **Impact:** If Temporal schedules two concurrent `SyncPineconeQueueWorkflow` runs (cron overlap or manual trigger), both workers fetch the same 50 rows. Double-upserts to Pinecone and double OpenAI embedding calls occur, inflating cost. Status updates race.
+- **Recommended fix:** Add `FOR UPDATE SKIP LOCKED` to the fetch query. Update status in the same session/transaction as the fetch.
+
+---
+
+### [Medium] `rate_limit` Table Grows Without Bound — No Pruning
+
+- **Evidence:** `src/sms/repository.py:34-37` — one row inserted per inbound message. No `DELETE` or TTL anywhere in the codebase.
+- **Impact:** On a production system receiving thousands of messages per day, the `rate_limit` table grows indefinitely. Index scans on `(user_id, created_at)` degrade over time.
+- **Recommended fix:** Add a periodic cleanup: `DELETE FROM rate_limit WHERE created_at < NOW() - INTERVAL '24 hours'`. Run as a Temporal scheduled activity alongside the Pinecone sync.
+
+---
+
+### [Medium] DB Connection Pool Uses SQLAlchemy Defaults — No Explicit Sizing or Pre-Ping
+
+- **Evidence:** `src/database.py:22-23` — `create_async_engine(settings.database_url, echo=False)` — no `pool_size`, `max_overflow`, `pool_timeout`, or `pool_pre_ping`.
+- **Impact:** Default `pool_size=5`, `max_overflow=10`. Under concurrent Temporal activity execution, the gauge updater, and webhook handlers, connection exhaustion is possible. Without `pool_pre_ping=True`, stale connections after network interruptions fail silently until a request hits them.
+- **Recommended fix:** `create_async_engine(url, pool_size=10, max_overflow=20, pool_pre_ping=True, pool_timeout=30)`.
+
+---
+
+### [Low] `provider.force_flush()` Called Without Timeout — Blocks Event Loop on Shutdown
+
+- **Evidence:** `src/main.py:183`
+- **Impact:** If the Jaeger/OTLP endpoint is unreachable during shutdown, `force_flush()` blocks the event loop for the full exporter timeout (up to 30 seconds by default), delaying pod termination.
+- **Recommended fix:** `provider.force_flush(timeout_millis=5000)`.
+
+---
+
+## Performance
+
+### [High] Unbounded DP `keep` Matrix (Duplicate of Correctness Finding)
+
+- **Evidence:** `src/matches/service.py:117-126`
+- See Correctness section for full analysis. Caps `capacity` at `work_goal.target_earnings` to bound memory.
+
+---
+
+### [Medium] `find_candidates_for_goal` Loads All Available Jobs Into Python Heap
+
+- **Evidence:** `src/jobs/repository.py:28-32` — `result.scalars().all()` with no LIMIT.
+- **Impact:** With a large job corpus, all `Job` ORM objects are loaded into heap before DP processing. At 100 KB per ORM object × 10,000 rows ≈ 1 GB RAM per `match()` call.
+- **Recommended fix:** Add `.limit(MAX_CANDIDATES)` to the query (e.g., `MAX_CANDIDATES = 500`).
+
+---
+
+### [Medium] Pinecone Client Opens New HTTP Connection Per Sync Row
+
+- **Evidence:** `src/extraction/utils.py:20-28` — `async with PineconeAsyncio(...) as pc: async with pc.IndexAsyncio(...) as idx:` opened inside the per-row loop in `src/temporal/activities.py:122-128`.
+- **Impact:** For 50 pending rows per sweep, 50 independent Pinecone connections are established and torn down. HTTP connection setup overhead dominates latency.
+- **Recommended fix:** Move the `PineconeAsyncio` context manager outside the per-row loop in `sync_pinecone_queue_activity` and reuse the client across all rows.
+
+---
+
+### [Low] `UserRepository.get_or_create` Uses Two DB Round-Trips on Hot Path
+
+- **Evidence:** `src/users/repository.py:17-34` — `INSERT ... ON CONFLICT DO NOTHING` then a separate `SELECT`.
+- **Impact:** Two round-trips per webhook call.
+- **Recommended fix:** Use `INSERT ... ON CONFLICT DO NOTHING RETURNING *` and fall back to SELECT only when RETURNING is empty (PostgreSQL-safe since production is PostgreSQL).
+
+---
+
+## Tech Debt
+
+### [High] Migration 003 Wrong Table Name (Stale `work_request` References)
+
+- **Evidence:** `migrations/versions/2026-04-03_normalize_3nf.py:20-24, 55-68`
+- See Correctness section. Blocks fresh-instance deployment.
+
+---
+
+### [High] TODO Comment Acknowledges Undeployed Schema Dependency in Production Code
+
+- **Evidence:** `src/sms/repository.py:29-31`
+- The migration (003) was written but the TODO was never removed. It creates confusion about whether the code is safe to deploy.
+- **Recommended fix:** Remove the comment after confirming all environments are on revision >= 003.
+
+---
+
+### [High] `MatchService` and `format_match_sms` Are Fully Implemented but Never Invoked
+
+- **Evidence:** `src/matches/service.py`, `src/matches/formatter.py` — no callers in `src/`. `WorkerGoalHandler` (`src/pipeline/handlers/worker_goal.py`) creates the work goal and commits, but never calls `MatchService.match()` or sends a reply SMS.
+- **Impact:** The matching and SMS reply features are completely non-functional end-to-end. A worker who texts their earnings goal receives no job matches. The core product loop is incomplete.
+- **Recommended fix:** In `WorkerGoalHandler._do_handle`, after committing the work goal, instantiate `MatchService`, call `match()`, format with `format_match_sms()`, and send the result via `asyncio.to_thread(twilio_client.messages.create, ...)`.
+
+---
+
+### [Medium] `temporal_queue_depth` Prometheus Gauge Is a Permanent Zero-Value Stub
+
+- **Evidence:** `src/metrics.py:38-41` — comment: `"always reads 0; placeholder for future instrumentation"`
+- **Impact:** Alerting on Temporal backpressure is impossible. During an incident, on-call engineers see a flat-zero gauge that provides no signal.
+- **Recommended fix:** Implement real depth measurement via the Temporal SDK's `WorkflowService.count_workflows` with status filters, or remove the metric until it can be properly implemented.
+
+---
+
+### [Low] Dead `user_id` Field Passed to `JobCreate` Constructor
+
+- **Evidence:** `src/pipeline/handlers/job_posting.py:45` — `JobCreate(user_id=ctx.user_id, ...)`. `src/jobs/schemas.py` does not define `user_id`. Pydantic silently discards the extra field.
+- **Impact:** Silent field discard. No runtime error. Can mislead future developers who assume `user_id` flows through `JobCreate`.
+- **Recommended fix:** Remove `user_id=ctx.user_id` from the `JobCreate(...)` constructor call.
+
+---
+
+### [Low] Accidental `~/` Directory Committed to Repo Root
+
+- **Evidence:** Literal directory `~/` at repo root containing `.gemini/` subdirectory.
+- **Impact:** Appears to be an accidental path expansion failure. Clutters the repo and may contain user-local configuration.
+- **Recommended fix:** `git rm -r "~"` and add `~/` to `.gitignore`.
+
+---
+
+## Operational
+
+### [High] Matching Feature Is Silently Non-Functional With No Operational Signal
+
+- **Evidence:** `src/pipeline/handlers/worker_goal.py` — no `MatchService` call, no warning log, no metric increment when matching is skipped.
+- **Impact:** Workers text earnings goals and receive no job matches. There is no operational signal that the matching path is incomplete. On-call has no visibility into this failure mode.
+- **Recommended fix:** At minimum, add `log.warning("match_not_implemented", work_goal_id=wg.id)` post-commit until matching is wired up. Once implemented, add `match_attempts_total` counter and `match_duration_seconds` histogram.
+
+---
+
+### [Medium] `readyz` Probe Does Not Enforce a DB Query Timeout
+
+- **Evidence:** `src/main.py:211-218` — `await session.execute(text("SELECT 1"))` with no timeout guard.
+- **Impact:** If the DB is slow (not down), the readiness probe blocks indefinitely until the kubelet's probe timeout (default 1s) fires. The application is marked unready, but the DB connection is still held open. Under sustained DB slowness, this can exhaust the connection pool.
+- **Recommended fix:** `await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=2.0)` and catch `asyncio.TimeoutError` to return 503.
+
+---
+
+### [Medium] Braintrust Logger Initialized at Import Time Without Credential Validation
+
+- **Evidence:** `src/extraction/service.py:35` — `_bt_logger = init_logger(project="vici")` — `braintrust_api_key` is not in `_validate_required_credentials` (`src/config.py:88-108`).
+- **Impact:** If `BRAINTRUST_API_KEY` is missing, `init_logger()` initializes silently. LLM call observability is degraded without any startup error or warning.
+- **Recommended fix:** Add `braintrust_api_key` to `_validate_required_credentials`, or make the Braintrust wrapper conditional on key presence.
+
+---
+
+### [Low] Stale `INNGEST_DEV` and `INNGEST_BASE_URL` Vars in CI Workflow
+
+- **Evidence:** `.github/workflows/ci.yml:36-37`
+- **Impact:** Inngest is not a dependency anywhere in `src/` or `pyproject.toml`. These are stale references from a previous architecture. They create confusion for new engineers about active integrations.
+- **Recommended fix:** Remove the Inngest env vars from `ci.yml`.
+
+---
+
+## Dependency Hygiene
+
+### [Medium] `psycopg2-binary` Is a Production Dependency When Only Needed for Migrations
+
+- **Evidence:** `pyproject.toml:19` — `psycopg2-binary>=2.9.11` listed under `[project] dependencies`
+- **Impact:** `psycopg2-binary` is only needed by Alembic's sync migration runner. The application uses `asyncpg` for all async DB traffic. Including `-binary` in the production image pulls in pre-compiled C extensions with a bundled OpenSSL version the psycopg2 maintainers explicitly warn against for production.
+- **Recommended fix:** Move `psycopg2-binary` to `[dependency-groups] dev` or a dedicated `migration` extra if the migration K8s Job has a separate image.
+
+---
+
+### [Low] `openai` Dependency Has No Upper Version Bound
+
+- **Evidence:** `pyproject.toml:11` — `"openai>=1.0.0"`. Locked at `2.26.0`.
+- **Impact:** `uv update` can pull in a future major version (3.x) that breaks the `beta.chat.completions.parse` API used in `src/extraction/service.py:90`.
+- **Recommended fix:** `openai>=2.0.0,<3.0.0`.
+
+---
+
+### [Low] No CVE Scanning in CI Pipeline
+
+- **Evidence:** `.github/workflows/ci.yml` — no `pip-audit` or `uv audit` step.
+- **Impact:** Transitive dependencies (e.g., `pyjwt 2.11.0`, `requests 2.32.5`) are not checked for known CVEs on each PR. Vulnerabilities can accumulate undetected.
+- **Recommended fix:** Add `uv run pip-audit` or `uv audit` as a CI step. Run on every push to main.
+
+---
+
+*Concerns audit: 2026-04-22*

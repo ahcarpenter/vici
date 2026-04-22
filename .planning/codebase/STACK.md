@@ -1,148 +1,177 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-22
+
+---
 
 ## Languages
 
 **Primary:**
-- Python 3.12+ - Application code (`src/`), infrastructure-as-code (`infra/`)
+- Python 3.12 — all application and infrastructure code
+  - `pyproject.toml`: `requires-python = ">=3.12"`
+  - `.venv/pyvenv.cfg`: `version_info = 3.12.7`
+  - **Flag:** No `.python-version` file at repo root; runtime version is implicit from venv only.
 
 **Secondary:**
-- YAML - Docker Compose, CI/CD workflows, Jaeger/Prometheus config
-- Pulumi Python - Infrastructure definitions (`infra/components/`)
+- YAML — Kubernetes manifests, GitHub Actions, Helm values (via Pulumi Python dicts)
+- SQL — Alembic migrations in `migrations/versions/`
+
+---
 
 ## Runtime
 
 **Environment:**
-- Python 3.12 (specified in `pyproject.toml` `requires-python = ">=3.12"`, Docker base `python:3.12-slim`)
+- CPython 3.12.7 (local venv via homebrew `python@3.12`)
+- GKE Autopilot (us-central1) in production
 
 **Package Manager:**
-- uv (Astral) - lockfile-based dependency management
-- Lockfile: `uv.lock` (present, frozen installs used in CI and Docker)
-- No pip/poetry usage; all commands use `uv run` or `uv sync`
+- `uv` (Astral) — `uv sync --frozen` enforced in CI and Dockerfile
+- Lockfile: `uv.lock` present at repo root (committed). `infra/uv.lock` present for infra sub-project.
+
+**Container base image:**
+- `python:3.12-slim` (Dockerfile lines 2, 11)
+- `ghcr.io/astral-sh/uv:latest` copied into builder and runtime stages — **unpinned tag**; breaks reproducibility if Astral pushes a breaking change.
+
+---
 
 ## Frameworks
 
-**Core:**
-- FastAPI (>=0.135.1) - HTTP framework, async-first, lifespan-based DI
-- SQLModel (>=0.0.37) - ORM layer (SQLAlchemy 2.x + Pydantic hybrid)
-- SQLAlchemy async (`create_async_engine`, `AsyncSession`) - Database access via `src/database.py`
-- Pydantic Settings (>=2.13.1) - Configuration management via `src/config.py`
+**Core Web:**
+- `fastapi 0.135.1` (`pyproject.toml` lower bound `>=0.135.1`; lockfile resolves to `0.135.1`) — async API framework
+- `uvicorn[standard] 0.41.0` — ASGI server
+
+**ORM / Database:**
+- `sqlmodel 0.0.37` — SQLModel (SQLAlchemy + Pydantic hybrid)
+- `sqlalchemy 2.0.48` — async engine (`create_async_engine`), `src/database.py`
+- `alembic 1.18.4` — migrations, `alembic.ini`, `migrations/`
 
 **Workflow Orchestration:**
-- Temporal SDK (>=1.24.0, server 1.26.2) - Durable workflow execution
-  - Workflows: `src/temporal/workflows.py`
-  - Activities: `src/temporal/activities.py`
-  - Worker: `src/temporal/worker.py`
+- `temporalio 1.24.0` — Temporal Python SDK; worker in `src/temporal/worker.py`
+
+**Validation / Settings:**
+- `pydantic 2.12.5` — data models
+- `pydantic-settings 2.13.1` — env-driven config, `src/config.py`
 
 **Testing:**
-- pytest (>=9.0.2) with `asyncio_mode = "auto"` in `pyproject.toml`
-- pytest-asyncio (>=1.3.0) - Async test support
-- pytest-cov (>=7.0.0) - Coverage reporting
-- httpx (>=0.28.1) - Async HTTP test client
-- aiosqlite (>=0.22.1) - SQLite backend for test isolation (no Postgres in CI)
+- `pytest 9.0.2` + `pytest-asyncio 1.3.0` — async test runner
+- `pytest-cov 7.0.0` — coverage
+- `httpx 0.28.1` + `ASGITransport` — async test client
 
 **Build/Dev:**
-- Ruff (>=0.15.5) - Linting and formatting (`target-version = "py312"`, rules: E, F, I)
-- Docker - Multi-stage build (`Dockerfile`)
-- Docker Compose - Local dev stack (`docker-compose.yml`)
+- `ruff 0.15.5` — linting (`E`, `F`, `I` rules) and formatting; configured in `pyproject.toml`
 
-**Infrastructure:**
-- Pulumi (>=3.229.0) with `pulumi-gcp` (>=9.18.0) and `pulumi-kubernetes` (>=4.28.0)
+---
 
 ## Key Dependencies
 
-**Critical (validated at startup via `src/config.py` `_validate_required_credentials`):**
-- `openai` (>=1.0.0) - GPT-5.3 for SMS classification/extraction (`src/extraction/service.py`), embeddings via `text-embedding-3-small` (`src/extraction/utils.py`)
-- `pinecone[asyncio]` (>=8.1.0) - Vector DB for job embeddings (`src/extraction/utils.py`)
-- `twilio` (>=9.10.2) - SMS sending/receiving, webhook signature validation (`src/sms/`)
-- `temporalio` (>=1.24.0) - Durable workflows: message processing, Pinecone sync cron (`src/temporal/`)
-- `asyncpg` (>=0.31.0) - PostgreSQL async driver
+| Package | Pinned in lockfile | `pyproject.toml` lower bound | Notes |
+|---|---|---|---|
+| `fastapi` | `0.135.1` | `>=0.135.1` | Current |
+| `sqlmodel` | `0.0.37` | `>=0.0.37` | Pre-1.0; API is not stable |
+| `sqlalchemy` | `2.0.48` | (transitive) | Current 2.x |
+| `alembic` | `1.18.4` | `>=1.18.4` | Current |
+| `temporalio` | `1.24.0` | `>=1.24.0` | Current |
+| `openai` | `2.26.0` | `>=1.0.0` | **Flag:** lower bound allows v1; actual installed is v2. Wide open range permits accidental downgrade. |
+| `pinecone` | `8.1.0` | `>=8.1.0` | Used with `[asyncio]` extra |
+| `twilio` | `9.10.2` | `>=9.10.2` | Current |
+| `braintrust` | `0.8.0` | `>=0.0.100` | **Flag:** lower bound `0.0.100` is extremely old (pre-0.1); actual installed is `0.8.0`. The semver gap is meaningless but signals the pin was never updated from an initial placeholder. |
+| `pydantic` | `2.12.5` | (transitive from pydantic-settings) | Current |
+| `pydantic-settings` | `2.13.1` | `>=2.13.1` | Current |
+| `structlog` | `25.5.0` | `>=25.5.0` | Current |
+| `tenacity` | `9.1.4` | `>=8.0.0` | **Flag:** lower bound allows v8; lockfile installs v9. Wide range. |
+| `uvicorn[standard]` | `0.41.0` | `>=0.41.0` | Current |
+| `asyncpg` | `0.31.0` | `>=0.31.0` | Async Postgres driver |
+| `psycopg2-binary` | `2.9.11` | `>=2.9.11` | Used by Alembic sync env only (`migrations/env.py`) |
+| `greenlet` | `3.3.2` | `>=3.3.2` | Required by SQLAlchemy async bridge |
+| `opentelemetry-api` | `1.40.0` | `>=1.40.0` | Full OTel suite (api, sdk, exporter-otlp, instrumentation-fastapi, instrumentation-sqlalchemy) |
+| `prometheus-fastapi-instrumentator` | `7.1.0` | `>=7.1.0` | Exposes `/metrics` |
+| `python-dotenv` | `1.2.2` | `>=1.2.2` | `.env` loading |
+| `python-multipart` | `0.0.22` | `>=0.0.22` | Required for FastAPI form parsing (Twilio webhooks) |
+| `aiosqlite` | (dev) | `>=0.22.1` | SQLite async driver for CI and tests |
+| `httpx` | (dev) | `>=0.28.1` | Test HTTP client |
+| `ruff` | (dev) | `>=0.15.5` | Linting/formatting |
 
-**Observability:**
-- `opentelemetry-api` / `opentelemetry-sdk` / `opentelemetry-exporter-otlp` (>=1.40.0) - Distributed tracing via OTLP/gRPC
-- `opentelemetry-instrumentation-fastapi` (>=0.61b0) - Auto-instrument HTTP spans
-- `opentelemetry-instrumentation-sqlalchemy` (>=0.61b0) - Auto-instrument DB spans
-- `prometheus-fastapi-instrumentator` (>=7.1.0) - Prometheus `/metrics` endpoint
-- `prometheus_client` - Custom metrics: GPT calls, tokens, queue depth (`src/metrics.py`)
-- `braintrust` (>=0.0.100) - LLM observability, wraps OpenAI client (`src/main.py` lifespan)
-- `structlog` (>=25.5.0) - Structured JSON logging with OTel trace context injection
+---
 
-**Resilience:**
-- `tenacity` (>=8.0.0) - Retry with exponential backoff for GPT calls (`src/extraction/service.py`)
+## Infrastructure Dependencies (infra/)
 
-**Other:**
-- `psycopg2-binary` (>=2.9.11) - Sync PostgreSQL driver (Alembic migrations)
-- `python-dotenv` (>=1.2.2) - Env file loading
-- `python-multipart` (>=0.0.22) - Form data parsing (Twilio webhooks)
-- `greenlet` (>=3.3.2) - Required by SQLAlchemy async
-- `alembic` (>=1.18.4) - Database schema migrations (`migrations/`)
+**Pulumi program** (`infra/pyproject.toml`) — exact-pinned:
+
+| Package | Pin |
+|---|---|
+| `pulumi` | `==3.229.0` |
+| `pulumi-gcp` | `==9.18.0` |
+| `pulumi-kubernetes` | `==4.28.0` |
+
+`infra/requirements.txt` contains overlapping range-pinned entries (`>=x.y.z,<next-major`) that are redundant with `infra/pyproject.toml`. The two files must be kept in sync manually — a drift risk.
+
+---
+
+## Helm Charts (deployed via Pulumi)
+
+| Chart | Version | Source file |
+|---|---|---|
+| `temporal` | `0.74.0` (= server `1.29.1`) | `infra/components/temporal.py:27` |
+| `kube-prometheus-stack` | `69.8.2` | `infra/components/prometheus.py:15` |
+| `opensearch` | `2.37.0` (pinned to 2.x — OpenSearch 3 breaks Temporal ES client) | `infra/components/opensearch.py:13` |
+| `external-secrets` | `1.3.2` | `infra/components/secrets.py:13` |
+
+---
+
+## Container Images (static pins)
+
+| Image | Pinned tag | Source file |
+|---|---|---|
+| `gcr.io/cloud-sql-connectors/cloud-sql-proxy` | `2.14.1` | `infra/components/app.py:17`, `infra/components/temporal.py:18` |
+| `temporalio/admin-tools` | `1.29.1-tctl-1.18` | `infra/components/temporal.py:22` |
+| `jaegertracing/jaeger` | `2.16.0` | `infra/components/jaeger.py:13`, `docker-compose.yml:27,41` |
+| `curlimages/curl` | `8.7.1` | `infra/components/opensearch.py:23` |
+| `temporalio/auto-setup` | `1.26.2` (docker-compose only) | `docker-compose.yml:73` |
+| `temporalio/ui` | `latest` (**Flag: unpinned**) | `docker-compose.yml:88` |
+| `opensearchproject/opensearch` | `2.19.4` (docker-compose only) | `docker-compose.yml:14` |
+| `prom/prometheus` | `v3.1.0` (docker-compose only) | `docker-compose.yml:97` |
+| `grafana/grafana` | `11.4.0` (docker-compose only) | `docker-compose.yml:110` |
+| `python:3.12-slim` | floating patch (no digest pin) | `Dockerfile:2,11` |
+| `ghcr.io/astral-sh/uv` | `latest` (**Flag: unpinned**) | `Dockerfile:4,14` |
+
+**Version skew flag:** `docker-compose.yml` runs `temporalio/auto-setup:1.26.2` (Temporal server 1.26) while production Helm deploys server 1.29.1. This 3-minor-version gap means local dev runs a different Temporal server than production.
+
+---
 
 ## Configuration
 
 **Environment:**
-- All config via environment variables through `pydantic_settings.BaseSettings` in `src/config.py`
-- Single `Settings` class with nested sub-models: `SmsSettings`, `ExtractionSettings`, `PineconeSettings`, `ObservabilitySettings`, `TemporalSettings`
-- Flat env vars remapped into nested models via `@model_validator(mode="after")`
-- Settings singleton via `@lru_cache(maxsize=1)` on `get_settings()`
-- Per-service env files for Docker Compose: `.env.app`, `.env.postgres`, `.env.temporal`, `.env.grafana`, `.env.jaeger-query`, `.env.opensearch` (contents are secrets; `.env.*.example` files present for docs)
-
-**Required env vars (fail-fast validation at startup):**
-- `DATABASE_URL` - PostgreSQL connection string (`postgresql+asyncpg://`)
-- `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`
-- `OPENAI_API_KEY`
-- `PINECONE_API_KEY`, `PINECONE_INDEX_HOST`
-- `TEMPORAL_ADDRESS`
-- `WEBHOOK_BASE_URL`
-- `ENV` - Environment name
+- Loaded from `.env` file (local) or GCP Secret Manager via External Secrets Operator (production)
+- `src/config.py` — `Settings(BaseSettings)` with fail-fast `model_validator` at startup
+- Required vars: `DATABASE_URL`, `TWILIO_AUTH_TOKEN`, `OPENAI_API_KEY`, `PINECONE_API_KEY`, `TEMPORAL_ADDRESS`, `WEBHOOK_BASE_URL`, `ENV`
+- Optional: `BRAINTRUST_API_KEY`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `GIT_SHA`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`
 
 **Build:**
-- `pyproject.toml` - Project metadata, deps, tool config (ruff, pytest)
-- `alembic.ini` - Migration config (file template: `YYYY-MM-DD_slug`)
-- `Dockerfile` - Multi-stage build (builder + runtime), non-root user, healthcheck on `/health`
+- `pyproject.toml` — Python deps, ruff config, pytest config
+- `Dockerfile` — two-stage build (builder + runtime)
+- `alembic.ini` — migration config; `file_template` uses date-slug format
 
-## Database
+**CI:**
+- `.github/workflows/ci.yml` — lint, format-check, pytest on every push/PR to `main`
+- **Flag:** `ci.yml` env block (lines 34–35) includes `INNGEST_DEV` and `INNGEST_BASE_URL`, which are stale references to a removed Inngest integration. No current code consumes these vars.
+- **Flag:** `ci.yml` does not set `TEMPORAL_ADDRESS` or `ENV`; both are provided via `tests/conftest.py:50–51` `os.environ.setdefault` fallbacks, making the CI env block an incomplete representation of test requirements.
 
-**Primary:**
-- PostgreSQL 16 (Docker Compose image)
-- Async driver: `asyncpg`
-- ORM: SQLModel (SQLAlchemy 2.x)
-- Naming conventions enforced in `src/database.py` (`POSTGRES_INDEXES_NAMING_CONVENTION`)
-- Schema in 3NF: `User`, `Message`, `Job`, `WorkGoal`, `Match`, `RateLimit`, `AuditLog`, `PineconeSyncQueue` (see `src/models.py`)
-- Migrations: Alembic with date-prefixed filenames in `migrations/versions/`
-
-**CI/Test:**
-- SQLite via `aiosqlite` (`DATABASE_URL: sqlite+aiosqlite:///./test.db` in `ci.yml`)
+---
 
 ## Platform Requirements
 
 **Development:**
-- Python 3.12+
-- uv package manager
-- Docker and Docker Compose for local services
-- Local Docker Compose services (9 total): postgres, opensearch, jaeger-collector, jaeger-query, app, temporal, temporal-ui, prometheus, grafana
-- Ports: 8000 (app), 5432 (Postgres), 7233 (Temporal), 8080 (Temporal UI), 4317/4318 (Jaeger OTLP), 16686 (Jaeger UI), 9090 (Prometheus), 3000 (Grafana), 9200 (OpenSearch)
+- Python 3.12 (no `.python-version` file; must be installed externally)
+- `uv` for dependency management
+- Docker + Docker Compose for local full-stack
 
 **Production:**
-- Google Cloud Platform (GKE)
-- GKE cluster via Pulumi (`infra/components/cluster.py`)
-- Google Artifact Registry for Docker images (`infra/components/registry.py`)
-- Cloud SQL for PostgreSQL - separate instances for app and Temporal (`infra/components/database.py`)
-- External Secrets Operator (ESO) for secret management (`infra/components/secrets.py`)
-- cert-manager for TLS certificates (`infra/components/certmanager.py`)
-- Workload Identity Federation for CI/CD auth (`infra/components/cd.py`)
-- kube-prometheus-stack for monitoring (`infra/components/prometheus.py`)
-- Jaeger collector + query on GKE with OpenSearch backend (`infra/components/jaeger.py`, `infra/components/opensearch.py`)
-- Environments: dev, staging, prod (`infra/Pulumi.dev.yaml`, `Pulumi.staging.yaml`, `Pulumi.prod.yaml`)
-- Hostnames: `dev.usevici.com`, `staging.usevici.com`, `usevici.com`
-
-**CI/CD:**
-- GitHub Actions
-  - `.github/workflows/ci.yml` - Lint (ruff) + test (pytest) on push/PR to main
-  - `.github/workflows/cd-base.yml` - Reusable workflow: build Docker image, push to Artifact Registry, Pulumi deploy
-  - `.github/workflows/cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml` - Environment-specific deploy triggers
-  - Auth: Workload Identity Federation (no static service account keys)
+- GKE Autopilot cluster (us-central1), `infra/components/cluster.py`
+- GCP Project per environment: `vici-app-dev`, `vici-app-staging`, `vici-app-prod`
+- Pulumi state stored in GCS: `gs://vici-app-pulumi-state-{env}`
+- GCP Secret Manager for all secrets, synced to K8s via External Secrets Operator
+- GCP Artifact Registry for container images (`us-central1-docker.pkg.dev`)
 
 ---
 
-*Stack analysis: 2026-04-06*
+*Stack analysis: 2026-04-22*

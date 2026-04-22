@@ -1,349 +1,270 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-22
 
 ## Test Framework
 
 **Runner:**
-- pytest >= 9.0.2
-- pytest-asyncio >= 1.3.0 (with `asyncio_mode = "auto"`)
-- pytest-cov >= 7.0.0
-- Config: `pyproject.toml` under `[tool.pytest.ini_options]`
+- `pytest` 9.0.2
+- Config: `pyproject.toml` (`[tool.pytest.ini_options]`)
+
+**Async support:**
+- `pytest-asyncio` 1.3.0 with `asyncio_mode = "auto"` — all async test functions run automatically without `@pytest.mark.asyncio` decoration (though many tests still carry it redundantly from before the `auto` mode was set)
 
 **Assertion Library:**
-- Built-in `assert` statements (pytest-native)
+- Standard `assert` statements throughout — no custom assertion helpers
+
+**HTTP client:**
+- `httpx.AsyncClient` with `ASGITransport` — full ASGI stack, not mocked routing
+
+**Coverage:**
+- `pytest-cov` 7.0.0 installed as a dev dependency
+- **Coverage is not run in CI.** No `--cov` flag in `.github/workflows/ci.yml`. No coverage threshold configured. No `.coveragerc`.
 
 **Run Commands:**
 ```bash
-uv run pytest                    # Run all tests
-uv run pytest tests/sms/         # Run domain-specific tests
-uv run pytest -x                 # Stop on first failure
-uv run pytest --cov=src          # Coverage report
-uv run pytest -k "test_health"   # Run specific test by name
+uv run pytest tests/ -x --tb=short -q        # CI command (fail-fast)
+uv run pytest tests/                          # full suite, verbose
+uv run pytest tests/sms/                     # single domain
+uv run pytest tests/ --cov=src --cov-report=term-missing  # with coverage (not in CI)
 ```
 
 ## Test File Organization
 
-**Location:** Separate `tests/` directory mirroring `src/` domain structure
+**Location:** Separate `tests/` tree mirroring `src/` domain structure — not co-located with source.
 
-**Naming:** `test_{feature_or_module}.py`
+**Naming:**
+- Test files: `test_<subject>.py`
+- Test functions: `test_<what_is_verified>()`
+- Test classes (rare): `TestPascalCase` — used in `tests/test_3nf_normalization.py`, `tests/infra/test_cd_static.py`
 
 **Structure:**
 ```
 tests/
-├── __init__.py
-├── conftest.py                          # Global fixtures: app, client, DB, factories
+├── conftest.py                        # session/function fixtures, factory fixtures
 ├── extraction/
-│   ├── __init__.py
-│   ├── conftest.py                      # Domain fixtures: mock OpenAI client factory
-│   ├── test_extraction_service_spans.py # OTel span tests
+│   ├── conftest.py                    # make_mock_openai_client, mock_pinecone_client helpers
+│   ├── test_extraction_service_spans.py
 │   ├── test_metrics.py
 │   ├── test_persistence.py
 │   ├── test_schemas.py
-│   └── test_service.py                  # Unit tests for ExtractionService
+│   └── test_service.py
 ├── infra/
-│   ├── __init__.py
-│   └── test_observability_static.py
+│   ├── test_cd_static.py              # AST-based static assertions on infra/
+│   ├── test_cd_workflows_static.py
+│   ├── test_observability_static.py
+│   └── test_phase6_static.py
 ├── integration/
-│   ├── __init__.py
-│   ├── test_job_posting.py              # Handler-level integration tests
+│   ├── test_job_posting.py
 │   ├── test_unknown.py
 │   └── test_worker_goal.py
 ├── matches/
-│   ├── __init__.py
-│   └── test_match_service.py            # DP algorithm + formatter + persistence
+│   └── test_match_service.py
 ├── sms/
-│   ├── __init__.py
-│   └── test_webhook.py                  # HTTP-level webhook tests
+│   └── test_webhook.py
 ├── temporal/
-│   ├── __init__.py
-│   ├── test_activities.py               # Temporal activity unit tests
+│   ├── test_activities.py
 │   ├── test_spans.py
 │   └── test_worker.py
-├── test_3nf_normalization.py            # Schema constraint tests
-├── test_config.py                       # Settings validation tests
-├── test_health.py                       # Health/metrics endpoint tests
-├── test_logging.py                      # structlog + OTel context tests
+├── test_3nf_normalization.py
+├── test_config.py
+├── test_health.py
+├── test_logging.py
 ├── test_otel_config.py
-├── test_pipeline_hardening.py           # Production hardening verification
-├── test_pipeline_orchestrator.py        # Orchestrator + span tests
-└── test_repositories.py                 # Repository CRUD + idempotency tests
+├── test_pipeline_hardening.py
+├── test_pipeline_orchestrator.py
+└── test_repositories.py
 ```
 
 ## Test Structure
 
-**Async mode:** `asyncio_mode = "auto"` -- no need for `@pytest.mark.asyncio` on tests that use async fixtures (but many tests still include it explicitly; both work).
-
 **Suite Organization:**
 ```python
-# Flat function tests (most common pattern)
-async def test_health_endpoint(client):
-    response = await client.get("/health")
-    assert response.status_code == 200
+# Standalone async functions (most common pattern)
+@pytest.mark.asyncio
+async def test_classify_job():
+    ...
 
-# Class-based grouping (used for related schema tests)
-class TestUserIdRemoved:
-    def test_job_construction_without_user_id(self):
-        job = Job(message_id=1, description="test", pay_rate=10.0)
-        assert "user_id" not in Job.model_fields
+# Class-based grouping for related assertions on same target
+class TestImageTagConfig:
+    @pytest.fixture(autouse=True)
+    def _load(self) -> None:
+        self.source = _read_source(INFRA_DIR / "config.py")
+
+    def test_config_exports_image_tag(self) -> None:
+        ...
 ```
 
-**Naming convention:** `test_{what_is_being_tested}` -- descriptive, reads as a behavior spec. Every test has a docstring explaining the assertion.
-
-## Database Testing
-
-**Strategy:** In-memory SQLite via aiosqlite (no real Postgres in tests)
-
-**Engine setup:**
-```python
-DATABASE_URL_TEST = "sqlite+aiosqlite:///:memory:"
-
-@pytest_asyncio.fixture(scope="session")
-async def test_engine():
-    engine = create_async_engine(DATABASE_URL_TEST, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-    await engine.dispose()
-```
-
-**Session fixture:** Per-test with automatic rollback
-```python
-@pytest_asyncio.fixture
-async def async_session(test_engine):
-    session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    async with session_factory() as session:
-        yield session
-        await session.rollback()
-```
-
-**App client:** Overrides `get_session` dependency to use test DB
-```python
-@pytest_asyncio.fixture
-async def client(async_session, app):
-    async def override_get_session():
-        yield async_session
-    app.dependency_overrides[get_session] = override_get_session
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
-    app.dependency_overrides.clear()
-```
-
-## Fixtures and Factories
-
-**Global fixtures** in `tests/conftest.py`:
-
-| Fixture | Scope | Purpose |
-|---------|-------|---------|
-| `_test_env` | session | Sets required env vars with `os.environ.setdefault` |
-| `_prometheus_registry_isolation` | session | Prevents duplicate metric registration |
-| `app` | session | `create_app()` singleton |
-| `test_engine` | session | In-memory SQLite engine |
-| `async_session` | function | Per-test DB session with rollback |
-| `client` | function | httpx `AsyncClient` with DI overrides |
-| `_auto_mock_temporal_client` | function (autouse) | Mocks `app.state.temporal_client` |
-| `mock_twilio_validator` | function | Patches Twilio signature validation to always pass |
-| `make_user` | function | Factory: creates `User` with auto-generated `phone_hash` |
-| `make_message` | function | Factory: creates `Message` linked to a user |
-| `make_job` | function | Factory: creates `Job` linked to user+message |
-| `make_work_goal` | function | Factory: creates `WorkGoal` linked to user+message |
-
-**Factory pattern:**
-```python
-@pytest_asyncio.fixture
-async def make_user(async_session):
-    _counter = {"n": 0}
-    async def _factory(phone_hash: str | None = None, phone_e164: str | None = None) -> User:
-        if phone_hash is None:
-            _counter["n"] += 1
-            phone_hash = hashlib.sha256(f"phone_{_counter['n']}".encode()).hexdigest()
-        user = User(phone_hash=phone_hash, phone_e164=phone_e164)
-        async_session.add(user)
-        await async_session.flush()
-        return user
-    return _factory
-```
-
-**Domain fixtures** in `tests/extraction/conftest.py`:
-```python
-def make_mock_openai_client(parsed_result: ExtractionResult):
-    """Returns a fully-mocked AsyncOpenAI client that returns the given parsed_result."""
-    mock_client = AsyncMock()
-    mock_client.beta.chat.completions.parse = AsyncMock(return_value=mock_completion)
-    mock_client.embeddings.create = AsyncMock(...)
-    return mock_client
-```
-
-## Mocking
-
-**Framework:** `unittest.mock` (AsyncMock, MagicMock, patch)
-
-**Common mock targets:**
-- OpenAI client: `mock_client.beta.chat.completions.parse`
-- Twilio validator: `twilio.request_validator.RequestValidator.validate`
-- Temporal client: `app.state.temporal_client` (autouse fixture)
-- structlog: `patch("structlog.get_logger", return_value=CapturingLogger())`
-- Database sessionmaker: `patch("src.temporal.activities.get_sessionmaker", ...)`
-- Module-level tracers: `svc_module.tracer = test_tracer` (direct assignment)
-
-**Patterns:**
-
-Mocking external services:
-```python
-mock_client = AsyncMock()
-mock_client.beta.chat.completions.parse = AsyncMock(return_value=mock_completion)
-service = ExtractionService(openai_client=mock_client, settings=MockSettings())
-```
-
-Capturing log output:
-```python
-class CapturingLogger:
-    def __init__(self):
-        self.logged_warnings = []
-    def warning(self, event, **kw):
-        self.logged_warnings.append((event, kw))
-    def info(self, *a, **kw): pass
-    def error(self, *a, **kw): pass
-
-with patch("structlog.get_logger", return_value=CapturingLogger()):
-    await function_under_test()
-```
-
-Also uses `structlog.testing.capture_logs()` context manager (see `tests/matches/test_match_service.py`):
-```python
-with structlog.testing.capture_logs() as cap:
-    candidates = await repo.find_candidates_for_goal(session)
-assert any(e.get("reason") == "null_pay_rate" for e in cap)
-```
-
-**What to mock:**
-- External API clients (OpenAI, Twilio, Pinecone)
-- Temporal client (`start_workflow`)
-- Database sessionmaker when testing activities outside HTTP context
-- Module-level tracers for span assertion tests
-
-**What NOT to mock:**
-- SQLModel/SQLAlchemy operations against in-memory SQLite (use real DB fixtures)
-- Pydantic validation (test real schema constraints)
-- Business logic (DP algorithm in `MatchService`)
-
-## OTel Span Testing
-
-**Pattern:** Use `InMemorySpanExporter` to capture spans without a real backend
-```python
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-exporter = InMemorySpanExporter()
-provider = TracerProvider()
-provider.add_span_processor(SimpleSpanProcessor(exporter))
-test_tracer = provider.get_tracer("test")
-
-# Monkey-patch module-level tracer
-import src.extraction.service as svc_module
-svc_module.tracer = test_tracer
-
-# After test execution:
-spans = exporter.get_finished_spans()
-span_names = [s.name for s in spans]
-assert "gpt.classify_and_extract" in span_names
-```
-
-**Span test files:**
-- `tests/extraction/test_extraction_service_spans.py`
-- `tests/temporal/test_spans.py`
-- `tests/test_pipeline_orchestrator.py` (span test section)
-
-## Coverage
-
-**Requirements:** No enforced minimum. pytest-cov is available.
-
-**View Coverage:**
-```bash
-uv run pytest --cov=src --cov-report=term-missing
-```
+**Representative test files:**
+- `tests/sms/test_webhook.py` — full HTTP layer integration tests against live ASGI app
+- `tests/temporal/test_activities.py` — unit tests of Temporal activity functions with heavy mocking
+- `tests/matches/test_match_service.py` — repository + service integration tests against in-memory SQLite
+- `tests/test_pipeline_orchestrator.py` — orchestrator unit tests + OTel span assertion tests
+- `tests/infra/test_cd_static.py` — AST-based static analysis of infrastructure Python code
+- `tests/extraction/test_service.py` — unit tests of `ExtractionService` with mock OpenAI client
 
 ## Test Types
 
-**Unit Tests:**
-- Test individual services, repositories, schemas in isolation
-- Mock all external dependencies
-- Files: `tests/extraction/test_service.py`, `tests/test_config.py`, `tests/extraction/test_schemas.py`
+**Unit Tests (majority):**
+- Scope: single class or function; all external I/O mocked
+- Examples: `tests/extraction/test_service.py`, `tests/temporal/test_activities.py`, `tests/test_pipeline_orchestrator.py`
+- Pattern: construct subject under test with `AsyncMock` / `MagicMock` injected dependencies
 
-**Integration Tests (handler-level):**
-- Test pipeline handlers with mocked repos but real handler logic
-- Verify transaction discipline (commit counts, repo call assertions)
-- Files: `tests/integration/test_job_posting.py`, `tests/test_pipeline_orchestrator.py`
+**Integration Tests (DB-backed):**
+- Scope: service + repository + SQLite in-memory DB via `async_session` fixture
+- Examples: `tests/matches/test_match_service.py`, `tests/test_repositories.py`, `tests/sms/test_webhook.py`
+- Use `AsyncClient` + `ASGITransport` for HTTP-layer tests — real app lifecycle with session override
 
-**HTTP Integration Tests:**
-- Test full request/response cycle via httpx AsyncClient
-- Real SQLite DB, mocked external services
-- Files: `tests/sms/test_webhook.py`, `tests/test_health.py`
+**Static / Structural Tests:**
+- Scope: parse and assert on Python source files in `infra/` using `ast` and text search
+- Examples: `tests/infra/test_cd_static.py`, `tests/infra/test_cd_workflows_static.py`
+- Purpose: enforce infra coding contracts without running Pulumi
 
-**Schema/Constraint Tests:**
-- Verify model field presence/absence, Pydantic validation
-- Files: `tests/test_3nf_normalization.py`, `tests/extraction/test_schemas.py`
+**Span / Observability Tests:**
+- Scope: OTel span emission; use `InMemorySpanExporter` + `TracerProvider` injection
+- Examples: `tests/test_pipeline_orchestrator.py:240-383`, `tests/temporal/test_spans.py`, `tests/extraction/test_extraction_service_spans.py`
+- Pattern: swap module-level `tracer` with a test tracer, run subject, assert span names and attributes
 
-**Observability Tests:**
-- Verify OTel spans are emitted with correct attributes
-- Verify structlog trace context injection
-- Verify Prometheus metric registration and increments
-- Files: `tests/test_logging.py`, `tests/test_otel_config.py`, `tests/infra/test_observability_static.py`
+**E2E Tests:** Not implemented. No browser automation, no live service calls.
 
-**Static source analysis tests:**
-- Read source files and assert patterns (e.g., no bare `except: pass`)
-- Files: `tests/test_pipeline_orchestrator.py` (`test_gauge_updater_no_silent_pass`)
-- Files: `tests/integration/test_job_posting.py` (`test_rate_limit_rolling_window`)
+## Mocking
 
-**E2E Tests:**
-- Not present. No end-to-end tests with real Temporal, Postgres, or external APIs.
+**Framework:** `unittest.mock` — `AsyncMock`, `MagicMock`, `patch`
 
-## Common Patterns
+**Patterns:**
 
-**Async Testing:**
 ```python
-@pytest.mark.asyncio
-async def test_classify_job():
-    service = _make_service(mock_client)
-    result = await service.process("Need a mover", "hash123")
-    assert result.message_type == "job_posting"
+# Standard service mock via AsyncMock constructor injection
+mock_extraction_service = AsyncMock()
+mock_extraction_service.process = AsyncMock(return_value=extraction_result)
+service = ExtractionService(openai_client=mock_client, settings=MockSettings())
+
+# Context manager mock (async session)
+mock_session = AsyncMock()
+mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+mock_session.__aexit__ = AsyncMock(return_value=None)
+
+# patch() for module-level state mutation (Temporal activity singletons)
+original = acts._orchestrator
+acts._orchestrator = mock_orchestrator
+try:
+    result = await process_message_activity(inp)
+finally:
+    acts._orchestrator = original  # always restored
+
+# patch() as context manager for patching module-level dependencies
+with patch("src.temporal.activities.get_sessionmaker", return_value=mock_sessionmaker):
+    result = await process_message_activity(inp)
 ```
 
-**Error Testing:**
+**Temporal singleton pattern:** `src/temporal/activities.py` uses module-level `_orchestrator` and `_openai_client` singletons. Tests mutate these directly with try/finally restore rather than using `patch()` — fragile but consistent. See `tests/temporal/test_activities.py:60-75`.
+
+**What is mocked:**
+- OpenAI client (`beta.chat.completions.parse`)
+- Pinecone write function (`write_job_embedding`)
+- DB session/sessionmaker for activity-level tests
+- Temporal client (`app.state.temporal_client` — auto-mocked via `_auto_mock_temporal_client` fixture in `tests/conftest.py:97`)
+- Twilio `RequestValidator.validate` (via `mock_twilio_validator` fixture)
+- `asyncio.to_thread` for Twilio send calls in pipeline handlers
+
+**What is NOT mocked:**
+- SQLAlchemy / SQLModel operations in DB-backed tests — real SQLite via `async_session`
+- FastAPI routing and middleware — real ASGI stack via `AsyncClient`
+- OTel span creation — real `InMemorySpanExporter` used
+
+## Fixtures and Factories
+
+**Root `tests/conftest.py` provides:**
+
+| Fixture | Scope | Purpose |
+|---------|-------|---------|
+| `_test_env` | session, autouse | Sets all required env vars; clears `get_settings` / `get_engine` caches |
+| `_prometheus_registry_isolation` | session, autouse | Sentinel — prevents duplicate metric registration across session |
+| `app` | session | `create_app()` singleton |
+| `test_engine` | session | In-memory SQLite async engine; creates/drops all tables |
+| `async_session` | function | Transaction-scoped async session; rolls back after each test |
+| `client` | function | `httpx.AsyncClient` with `get_session` dependency override |
+| `_auto_mock_temporal_client` | function, autouse | Injects `AsyncMock` Temporal client into `app.state.temporal_client` |
+| `mock_twilio_validator` | function | Patches `RequestValidator.validate` to return `True` |
+| `make_user` | function | Factory: creates `User` with auto-generated `phone_hash` |
+| `make_message` | function | Factory: creates `Message` linked to a user |
+| `make_job` | function | Factory: creates `Job` with sensible defaults; accepts overrides |
+| `make_work_goal` | function | Factory: creates `WorkGoal` linked to a user/message |
+
+**Factory fixture pattern:**
 ```python
-@pytest.mark.asyncio
-async def test_gpt_none_parsed_raises():
-    from temporalio.exceptions import ApplicationError
-    with pytest.raises(ApplicationError):
-        await service.process("Hello", "hash123")
+@pytest_asyncio.fixture
+async def make_job(async_session, make_user, make_message):
+    async def _factory(**kwargs) -> Job:
+        user = kwargs.pop("user", None) or await make_user()
+        message = kwargs.pop("message", None) or await make_message(user=user)
+        job = Job(
+            message_id=kwargs.get("message_id", message.id),
+            description=kwargs.get("description", "Test job description"),
+            pay_rate=dollars_to_cents(kwargs.get("pay_rate", 25.0)) if kwargs.get("pay_rate", 25.0) is not None else None,
+            ...
+        )
+        async_session.add(job)
+        await async_session.flush()
+        return job
+    return _factory
 ```
 
-**Config Testing (with cache management):**
-```python
-def test_config(monkeypatch):
-    from src.config import get_settings
-    get_settings.cache_clear()
-    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-    settings = get_settings()
-    assert settings.database_url == "sqlite+aiosqlite:///:memory:"
-    get_settings.cache_clear()  # Always clear after
+**Domain conftest:** `tests/extraction/conftest.py` provides `make_mock_openai_client()` and `mock_pinecone_client()` as plain functions (not fixtures), imported directly into test modules.
+
+## Mocking Quality Notes
+
+**Strengths:**
+- `_auto_mock_temporal_client` (autouse, function scope) prevents Temporal startup from leaking into all tests
+- `mock_twilio_validator` fixture is explicit — tests that need it opt in; avoids invisible patches
+- Factory fixtures use `async_session.flush()` (not `commit()`) to stay within the test transaction that rolls back after each test
+
+**Weaknesses / Smells:**
+- `tests/temporal/test_activities.py` uses direct attribute mutation (`acts._orchestrator = mock`) + try/finally instead of `patch()`. This pattern is not thread-safe and can corrupt state if a test errors before the finally. Should use `patch.object(acts, "_orchestrator", mock_orchestrator)`.
+- `tests/extraction/test_service.py` defines `MockSettings`, `MockExtractionSettings`, `MockObservabilitySettings` as hand-rolled stub classes instead of using `MagicMock(spec=Settings)`. These drift when `Settings` evolves.
+- `tests/integration/test_worker_goal.py:17-22` contains a `@pytest.mark.skip` test with reason "needs rewrite for Temporal worker" — stale placeholder, not failing CI but not testing anything.
+
+## Coverage
+
+**Requirements:** None enforced. No coverage thresholds configured. `pytest-cov` is present as a dev dep but is not invoked in CI.
+
+**Known gaps:**
+- `src/temporal/worker.py` — `start_cron_if_needed()` RPCError branch minimally tested
+- `src/database.py` — engine creation path not independently tested
+- `src/matches/formatter.py` — `_format_job_line()` (private) tested only indirectly through `format_match_sms()`
+- No test exercises the `readyz` endpoint DB-error path (503 branch in `src/main.py:211-217`)
+- No test covers `_update_gauges()` failure escalation beyond the `test_gauge_updater_no_silent_pass` source-inspection test
+
+**View Coverage (manual):**
+```bash
+uv run pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-**Idempotency Testing:**
-```python
-async def test_idempotency(client, mock_twilio_validator, async_session):
-    await client.post("/webhook/sms", data=form, headers=HEADERS)
-    response = await client.post("/webhook/sms", data=form, headers=HEADERS)  # same SID
-    assert response.status_code == 200
-    result = await async_session.execute(select(Message).where(...))
-    assert len(result.all()) == 1  # only one row
+## CI Test Pipeline
+
+Defined in `.github/workflows/ci.yml`. Triggers on push/PR to `main`.
+
 ```
+Steps:
+1. actions/checkout@v4
+2. astral-sh/setup-uv@v5  (with cache)
+3. uv sync --frozen
+4. uv run ruff check src/ tests/ infra/
+5. uv run ruff format --check src/ tests/ infra/
+6. uv run pytest tests/ -x --tb=short -q
+```
+
+**Test environment in CI:**
+- `DATABASE_URL: sqlite+aiosqlite:///./test.db` (overridden to in-memory by `conftest.py` `_test_env` fixture)
+- All external API keys are stub strings (`test_key`, `test_sid`, etc.)
+- No Postgres, no Temporal server, no Pinecone, no Twilio in CI — all mocked
+
+**CI gaps:**
+- No coverage gate — `pytest-cov` not invoked
+- No type-check step — mypy/pyright absent
+- `INNGEST_DEV` and `INNGEST_BASE_URL` env vars set in CI (`ci.yml:34-35`) are dead config from a removed dependency (Inngest replaced by Temporal in Phase 02.9)
+- No separate integration or e2e job
 
 ---
 
-*Testing analysis: 2026-04-06*
+*Testing analysis: 2026-04-22*

@@ -1,238 +1,324 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-22
 
 ## Directory Layout
 
 ```
 vici/
 ├── src/                        # Application source code
-│   ├── main.py                 # FastAPI app factory, lifespan DI, OTel/structlog config
-│   ├── config.py               # Pydantic Settings with nested sub-models
-│   ├── database.py             # Async SQLAlchemy engine + sessionmaker
-│   ├── models.py               # Central model re-export (all SQLModels)
+│   ├── main.py                 # FastAPI app factory, lifespan, DI graph, OTel setup
+│   ├── config.py               # Pydantic BaseSettings, sub-model remapping
+│   ├── database.py             # Async engine, sessionmaker, get_session generator
 │   ├── repository.py           # BaseRepository ABC (flush-only _persist)
-│   ├── exceptions.py           # Global exception handlers
+│   ├── models.py               # Global SQLModel import registry (for Alembic)
 │   ├── metrics.py              # Prometheus metric singletons
-│   ├── money.py                # dollars_to_cents / cents_to_dollars utilities
-│   ├── __init__.py             # Package marker
-│   ├── sms/                    # SMS/Twilio webhook domain
-│   ├── extraction/             # GPT classification + Pinecone embedding
-│   ├── pipeline/               # Message processing pipeline + handlers
-│   ├── temporal/               # Temporal workflows, activities, worker
+│   ├── exceptions.py           # Global FastAPI exception handlers
+│   ├── money.py                # dollars_to_cents / cents_to_dollars converters
+│   ├── sms/                    # Twilio webhook ingress domain
+│   │   ├── router.py           # POST /webhook/sms endpoint
+│   │   ├── dependencies.py     # 4-gate dependency chain (validate, idempotency, user, rate)
+│   │   ├── service.py          # hash_phone, emit_message_received_event
+│   │   ├── repository.py       # MessageRepository (idempotency, rate limit, create)
+│   │   ├── audit_repository.py # AuditLogRepository (write audit_log rows)
+│   │   ├── models.py           # Message, RateLimit, AuditLog SQLModel tables
+│   │   ├── schemas.py          # (currently empty — no Pydantic I/O schemas needed)
+│   │   ├── constants.py        # RATE_LIMIT_WINDOW_SECONDS, MAX_MESSAGES_PER_WINDOW
+│   │   └── exceptions.py       # EarlyReturn, DuplicateMessageSid, RateLimitExceeded, TwilioSignatureInvalid
+│   ├── extraction/             # GPT classification and Pinecone embedding domain
+│   │   ├── service.py          # ExtractionService (GPT classify with tenacity retry)
+│   │   ├── utils.py            # write_job_embedding (OpenAI embed + Pinecone upsert)
+│   │   ├── schemas.py          # ExtractionResult, JobExtraction, WorkerExtraction, UnknownMessage
+│   │   ├── prompts.py          # SYSTEM_PROMPT (few-shot GPT prompt)
+│   │   ├── models.py           # PineconeSyncQueue SQLModel table
+│   │   └── constants.py        # GPT_MODEL, EMBEDDING_MODEL, retry/timeout constants
+│   ├── pipeline/               # Chain of Responsibility message dispatch
+│   │   ├── orchestrator.py     # PipelineOrchestrator (classify + dispatch)
+│   │   ├── context.py          # PipelineContext dataclass (session bag)
+│   │   ├── constants.py        # OTel attribute key constants
+│   │   └── handlers/
+│   │       ├── base.py         # MessageHandler ABC (can_handle, handle)
+│   │       ├── job_posting.py  # JobPostingHandler
+│   │       ├── worker_goal.py  # WorkerGoalHandler
+│   │       └── unknown.py      # UnknownMessageHandler (catch-all, sends Twilio reply)
+│   ├── temporal/               # Temporal workflow/activity/worker definitions
+│   │   ├── workflows.py        # ProcessMessageWorkflow, SyncPineconeQueueWorkflow
+│   │   ├── activities.py       # process_message_activity, sync_pinecone_queue_activity, failure activity
+│   │   ├── worker.py           # get_temporal_client, run_worker, start_cron_if_needed
+│   │   └── constants.py        # Task queue names, retry policy values, timeouts
 │   ├── jobs/                   # Job posting domain
+│   │   ├── models.py           # Job SQLModel table
+│   │   ├── repository.py       # JobRepository (create, find_candidates_for_goal)
+│   │   └── schemas.py          # JobCreate Pydantic model
 │   ├── work_goals/             # Worker earnings goal domain
-│   ├── users/                  # User identity domain
-│   └── matches/                # Job-to-goal matching domain
-├── migrations/                 # Alembic database migrations
-│   └── versions/               # Migration scripts (6 files)
-├── infra/                      # Pulumi IaC for GKE deployment
+│   │   ├── models.py           # WorkGoal SQLModel table
+│   │   ├── repository.py       # WorkGoalRepository (create)
+│   │   └── schemas.py          # WorkGoalCreate Pydantic model
+│   ├── matches/                # Job-to-work-goal matching domain (not yet wired to pipeline)
+│   │   ├── models.py           # Match SQLModel table
+│   │   ├── repository.py       # MatchRepository (persist_matches)
+│   │   ├── service.py          # MatchService (DP knapsack selection)
+│   │   ├── schemas.py          # JobCandidate, MatchResult dataclasses
+│   │   └── formatter.py        # format_match_sms (SMS reply formatting)
+│   └── users/                  # User identity domain
+│       ├── models.py           # User SQLModel table
+│       └── repository.py       # UserRepository (get_or_create by phone_hash)
+├── tests/                      # Test suite (mirrors src/ domain layout)
+│   ├── conftest.py             # Session-scoped fixtures: SQLite engine, async_session, client, factories
+│   ├── extraction/             # Extraction domain tests
+│   ├── integration/            # End-to-end route tests (per message type)
+│   ├── matches/                # MatchService and formatter tests
+│   ├── sms/                    # Webhook route tests
+│   ├── temporal/               # Activity and worker tests
+│   ├── infra/                  # Static analysis tests for infra YAML/Pulumi
+│   ├── test_pipeline_orchestrator.py
+│   ├── test_pipeline_hardening.py
+│   ├── test_repositories.py
+│   ├── test_config.py
+│   ├── test_health.py
+│   ├── test_logging.py
+│   ├── test_otel_config.py
+│   └── test_3nf_normalization.py
+├── migrations/                 # Alembic migrations
+│   ├── env.py                  # Alembic environment (async engine setup)
+│   ├── script.py.mako          # Migration template
+│   └── versions/               # Timestamped migration files (YYYY-MM-DD_slug.py)
+├── infra/                      # Pulumi IaC (Python, GKE/GCP)
 │   ├── __main__.py             # Pulumi entrypoint
-│   ├── config.py               # Pulumi config loader
-│   ├── components/             # Modular infra components
-│   ├── Pulumi.yaml             # Pulumi project config
-│   ├── Pulumi.dev.yaml         # Dev stack config
-│   ├── Pulumi.staging.yaml     # Staging stack config
-│   └── Pulumi.prod.yaml        # Prod stack config
-├── tests/                      # Test suite
-│   ├── extraction/             # Extraction service tests
-│   ├── sms/                    # SMS domain tests
-│   ├── matches/                # Match service tests
-│   ├── temporal/               # Temporal workflow/activity tests
-│   ├── integration/            # Integration tests
-│   └── infra/                  # Infrastructure tests
-├── grafana/                    # Grafana provisioning
-│   └── provisioning/           # Dashboard and datasource configs
-├── prometheus/                 # Prometheus config
-│   └── prometheus.yml          # Scrape configuration
-├── jaeger/                     # Jaeger collector/query configs
-├── docs/                       # Project documentation
-├── .planning/                  # GSD planning artifacts
-├── .github/                    # GitHub Actions workflows
-├── Dockerfile                  # Multi-stage Python 3.12 build
-├── docker-compose.yml          # Local dev stack (9 services)
-├── pyproject.toml              # Python project config (uv/ruff)
-├── alembic.ini                 # Alembic migration config
-├── AGENTS.md                   # AI agent coding conventions
-├── CLAUDE.md                   # Claude entrypoint (@AGENTS.md)
-└── README.md                   # Project documentation
+│   ├── config.py               # Pulumi stack config helpers
+│   └── components/             # One file per infrastructure component
+│       ├── app.py              # K8s Deployment/Service for app
+│       ├── cluster.py          # GKE cluster
+│       ├── database.py         # Cloud SQL
+│       ├── temporal.py         # Temporal Helm chart
+│       ├── jaeger.py           # Jaeger deployment
+│       ├── prometheus.py       # Prometheus deployment
+│       ├── secrets.py          # External Secrets Operator
+│       ├── network_policy.py   # NetworkPolicy resources
+│       └── ...                 # certmanager, ingress, iam, identity, migration, namespaces, pdb, registry, opensearch, cd, state_bucket
+├── docs/                       # Human-readable documentation
+│   ├── ARCHITECTURE.md
+│   ├── API.md
+│   ├── CONFIGURATION.md
+│   ├── DEPLOYMENT.md
+│   ├── DEVELOPMENT.md
+│   ├── GETTING-STARTED.md
+│   └── TESTING.md
+├── grafana/                    # Grafana dashboard provisioning configs
+├── jaeger/                     # Jaeger collector/query YAML configs
+├── prometheus/                 # Prometheus scrape config
+├── .github/workflows/          # GitHub Actions CI/CD
+│   ├── ci.yml                  # Test + lint on push
+│   ├── cd-base.yml             # Reusable deploy workflow
+│   ├── cd-dev.yml
+│   ├── cd-staging.yml
+│   └── cd-prod.yml
+├── .claude/skills/             # Claude agent skill definitions
+│   ├── temporal/               # Temporal SDK patterns and rules
+│   └── pinecone/               # Pinecone SDK reference
+├── .planning/                  # GSD planning artifacts (not shipped)
+├── Dockerfile                  # App container image
+├── docker-compose.yml          # Local dev: postgres, temporal, jaeger, opensearch, grafana, app
+├── alembic.ini                 # Alembic configuration
+├── pyproject.toml              # Project metadata, dependencies, ruff, pytest config
+├── AGENTS.md                   # AI agent conventions (FastAPI, SOLID, DRY, DB naming)
+└── CONTRIBUTING.md             # Contributor guide
 ```
+
+---
 
 ## Directory Purposes
 
+**`src/`:**
+- All application Python code. Organized by domain (one subdirectory per bounded context).
+- Top-level files (`main.py`, `config.py`, `database.py`, `repository.py`, `models.py`, `metrics.py`, `exceptions.py`, `money.py`) are cross-cutting infrastructure shared by all domains.
+
 **`src/sms/`:**
-- Purpose: Twilio webhook ingestion, message persistence, rate limiting, audit logging
-- Contains: Router, dependencies (4-gate chain), repository, audit repository, service, models, schemas, exceptions, constants
-- Key files: `src/sms/router.py` (POST /webhook/sms), `src/sms/dependencies.py` (gate chain), `src/sms/models.py` (Message, RateLimit, AuditLog)
+- Everything related to Twilio SMS ingress: webhook validation, idempotency, user creation, rate limiting, message persistence.
+- The only domain with a FastAPI `router.py` — it is the sole HTTP surface area of the app.
 
 **`src/extraction/`:**
-- Purpose: GPT-powered SMS classification and structured data extraction, Pinecone embedding generation
-- Contains: ExtractionService, Pydantic extraction schemas, system prompt, embedding utility, constants
-- Key files: `src/extraction/service.py` (ExtractionService), `src/extraction/schemas.py` (ExtractionResult), `src/extraction/prompts.py` (SYSTEM_PROMPT), `src/extraction/utils.py` (write_job_embedding)
+- GPT classification and embedding generation. Pure I/O: no DB writes. `service.py` only takes text in, returns structured Pydantic objects out.
+- `models.py` here contains `PineconeSyncQueue` — a queue table owned by the extraction failure recovery path. This placement is a minor smell; the table is managed by `JobPostingHandler`, not `ExtractionService`.
 
 **`src/pipeline/`:**
-- Purpose: Message processing orchestration using Chain of Responsibility pattern
-- Contains: Orchestrator, context dataclass, handler ABC and concrete implementations
-- Key files: `src/pipeline/orchestrator.py` (PipelineOrchestrator), `src/pipeline/handlers/base.py` (MessageHandler ABC), `src/pipeline/handlers/job_posting.py`, `src/pipeline/handlers/worker_goal.py`, `src/pipeline/handlers/unknown.py`
+- Orchestration layer. Owns the Chain of Responsibility dispatch. Handlers in `handlers/` are the only code that owns a transaction commit in the async processing path.
+- `context.py` is a pure value object (dataclass) — no logic.
+- `constants.py` contains only OTel attribute key strings.
 
 **`src/temporal/`:**
-- Purpose: Temporal workflow definitions, activity implementations, worker lifecycle
-- Contains: Workflow classes, activity functions, worker setup, constants for timeouts/retries
-- Key files: `src/temporal/workflows.py` (ProcessMessageWorkflow, SyncPineconeQueueWorkflow), `src/temporal/activities.py` (process_message_activity, sync_pinecone_queue_activity), `src/temporal/worker.py` (run_worker, get_temporal_client)
+- Temporal SDK integration. Workflows must be deterministic; all side effects live in activities. Worker startup and cron scheduling in `worker.py`.
+- Module-level singletons `_orchestrator` and `_openai_client` in `activities.py` are set by `worker.py` before worker start.
 
-**`src/jobs/`:**
-- Purpose: Job posting domain -- model, repository, create schema
-- Contains: Job SQLModel, JobRepository (create + find_candidates_for_goal), JobCreate Pydantic schema
-- Key files: `src/jobs/models.py`, `src/jobs/repository.py`, `src/jobs/schemas.py`
-
-**`src/work_goals/`:**
-- Purpose: Worker earnings goal domain -- model, repository, create schema
-- Contains: WorkGoal SQLModel, WorkGoalRepository (create), WorkGoalCreate Pydantic schema
-- Key files: `src/work_goals/models.py`, `src/work_goals/repository.py`, `src/work_goals/schemas.py`
-
-**`src/users/`:**
-- Purpose: User identity domain -- phone-hash-based upsert
-- Contains: User SQLModel, UserRepository (get_or_create static method)
-- Key files: `src/users/models.py`, `src/users/repository.py`
+**`src/jobs/`, `src/work_goals/`, `src/users/`:**
+- Pure domain modules: model + repository (+ schema where needed). No service layer — business logic lives in pipeline handlers or `MatchService`.
 
 **`src/matches/`:**
-- Purpose: Job-to-goal matching via 0/1 knapsack DP, SMS reply formatting
-- Contains: MatchService, MatchRepository, JobCandidate/MatchResult dataclasses, format_match_sms formatter
-- Key files: `src/matches/service.py` (MatchService with _dp_select), `src/matches/repository.py`, `src/matches/schemas.py`, `src/matches/formatter.py`
+- Fully implemented matching domain (0/1 knapsack DP, SMS formatter) but **not connected to the live pipeline**. `MatchService.match()` is never called from a workflow or handler. This domain is ready for wiring but currently dead code.
 
-**`infra/`:**
-- Purpose: Pulumi infrastructure-as-code for GKE-based production deployment
-- Contains: Main Pulumi program, per-stack configs, modular component files
-- Key files: `infra/__main__.py`, `infra/config.py`, `infra/components/cluster.py`, `infra/components/database.py`, `infra/components/temporal.py`, `infra/components/secrets.py`, `infra/components/app.py`
+**`tests/`:**
+- Mirrors `src/` domain layout with subdirectory-per-domain test packages.
+- Root-level test files are for cross-cutting concerns (config, health, logging, OTel, pipeline orchestrator, 3NF normalization assertions).
+- `tests/infra/` contains static analysis tests against Pulumi/GitHub Actions YAML — not application tests.
+- All tests use SQLite in-memory for DB (via `aiosqlite`); no real PostgreSQL or Temporal required.
 
 **`migrations/`:**
-- Purpose: Alembic database migration scripts
-- Contains: 6 versioned migration files covering initial schema through 3NF normalization
-- Key files: `migrations/versions/2026-03-05_initial_schema.py`, `migrations/versions/2026-04-03_normalize_3nf.py`
+- Alembic async migrations. File naming convention: `YYYY-MM-DD_slug.py`. Six migrations to date:
+  - `2026-03-05_initial_schema.py`
+  - `2026-03-06_extraction_additions.py`
+  - `2026-04-03_normalize_3nf.py`
+  - `2026-04-04_add_job_status.py`
+  - `2026-04-04_add_phone_e164.py`
+  - `2026-04-04_money_columns_to_cents.py`
+
+**`infra/`:**
+- Separate Python package with its own `pyproject.toml` and `.venv`. Pulumi IaC targeting GKE/GCP.
+- `components/` has one file per infrastructure resource type (cluster, database, temporal, jaeger, prometheus, secrets, ingress, etc.).
+
+---
 
 ## Key File Locations
 
 **Entry Points:**
-- `src/main.py`: FastAPI app factory, lifespan DI graph, OTel/structlog configuration
-- `src/temporal/worker.py`: Temporal worker lifecycle (run_worker, start_cron_if_needed)
-- `infra/__main__.py`: Pulumi infrastructure entrypoint
+- `src/main.py` — FastAPI `app` object; `create_app()` factory; `lifespan()` context manager
+- `src/temporal/worker.py` — `run_worker()`, `start_cron_if_needed()`
 
 **Configuration:**
-- `src/config.py`: Application settings (Pydantic BaseSettings with nested sub-models)
-- `docker-compose.yml`: Local development stack (9 services)
-- `Dockerfile`: Multi-stage production build (Python 3.12-slim, uv)
-- `alembic.ini`: Alembic migration configuration
-- `pyproject.toml`: Python project metadata, dependencies, ruff/pytest config
-- `.env.app.example`: Application env var template (never read .env files directly)
+- `src/config.py` — `Settings` (Pydantic BaseSettings), `get_settings()` (lru_cache singleton)
+- `src/database.py` — `get_engine()`, `get_sessionmaker()`, `get_session()`
+- `alembic.ini` — Alembic config (file_template, script_location)
+- `pyproject.toml` — Dependencies, pytest config, ruff config
 
-**Core Logic:**
-- `src/pipeline/orchestrator.py`: Central message processing orchestrator
-- `src/extraction/service.py`: GPT classification and extraction
-- `src/matches/service.py`: Job matching algorithm (0/1 knapsack DP)
-- `src/sms/dependencies.py`: Webhook validation gate chain
+**Domain Models (SQLModel tables):**
+- `src/users/models.py` — `User`
+- `src/sms/models.py` — `Message`, `RateLimit`, `AuditLog`
+- `src/jobs/models.py` — `Job`
+- `src/work_goals/models.py` — `WorkGoal`
+- `src/matches/models.py` — `Match`
+- `src/extraction/models.py` — `PineconeSyncQueue`
+- `src/models.py` — Import registry (Alembic/test `create_all`)
 
-**Shared Utilities:**
-- `src/repository.py`: BaseRepository with _persist Template Method
-- `src/money.py`: Cent/dollar conversion functions
-- `src/metrics.py`: Prometheus metric singletons
-- `src/exceptions.py`: Global exception handlers
-- `src/database.py`: Async SQLAlchemy engine and session factories
-- `src/models.py`: Central re-export of all SQLModel classes
+**Core Business Logic:**
+- `src/pipeline/orchestrator.py` — Classification dispatch
+- `src/pipeline/handlers/job_posting.py` — Job persistence + Pinecone upsert
+- `src/pipeline/handlers/worker_goal.py` — WorkGoal persistence
+- `src/extraction/service.py` — GPT classification
+- `src/matches/service.py` — Knapsack matching (currently unwired)
 
 **Testing:**
-- `tests/extraction/`: Extraction service tests
-- `tests/sms/`: SMS domain tests
-- `tests/matches/`: Match service/formatter tests
-- `tests/temporal/`: Temporal workflow/activity tests
-- `tests/integration/`: End-to-end integration tests
-- `tests/infra/`: Infrastructure tests
+- `tests/conftest.py` — All shared fixtures
+- `tests/integration/` — Full route tests per message type
+
+---
 
 ## Naming Conventions
 
 **Files:**
-- `snake_case.py` for all Python modules
-- Domain modules follow the canonical set: `models.py`, `repository.py`, `schemas.py`, `service.py`, `router.py`, `dependencies.py`, `constants.py`, `exceptions.py`
-- Not every domain has every file -- only create what is needed
+- Domain modules use `snake_case.py` matching AGENTS.md prescribed layout
+- Test files: `test_<subject>.py` — either flat in `tests/` or in `tests/<domain>/`
+- Migration files: `YYYY-MM-DD_slug.py` (enforced by `alembic.ini` `file_template`)
 
 **Directories:**
-- `snake_case/` for all domain packages (e.g., `work_goals/`, `sms/`)
-- Singular names for domain concepts following DB naming convention (e.g., `jobs/` contains `Job` model for `job` table)
-- `handlers/` sub-package under `pipeline/` for Chain of Responsibility implementations
+- Domain directories: `snake_case` singular noun (`sms`, `jobs`, `work_goals`, `matches`, `extraction`, `users`, `pipeline`, `temporal`)
+- No plural directory names except `handlers/` inside `pipeline/`
+
+**Python Identifiers:**
+- Classes: `PascalCase` (`JobRepository`, `ExtractionService`, `WorkGoalHandler`)
+- Functions/methods: `snake_case` (`get_or_create`, `find_candidates_for_goal`)
+- Constants: `UPPER_SNAKE_CASE` in `constants.py` files
+- Module-level private singletons: `_leading_underscore` (`_orchestrator`, `_openai_client`)
+- OTel attribute keys: `OTEL_ATTR_*` prefix in `src/pipeline/constants.py`
 
 **Database Tables:**
-- `lower_case_snake`, singular: `user`, `job`, `message`, `work_goal`, `match`, `audit_log`, `rate_limit`, `pinecone_sync_queue`
-- DateTime columns use `_at` suffix: `created_at`
-- Foreign keys: `{referenced_table}_id` (e.g., `user_id`, `message_id`, `job_id`)
+- `lower_case_snake` singular nouns: `user`, `message`, `job`, `work_goal`, `match`, `audit_log`, `rate_limit`, `pinecone_sync_queue`
+- DateTime columns: `_at` suffix (`created_at`)
+- FK columns: `{referenced_table}_id` (e.g., `user_id`, `message_id`, `job_id`)
+
+---
 
 ## Where to Add New Code
 
-**New Domain (e.g., notifications, payments):**
-- Create `src/{domain}/` package with `__init__.py`
-- Add `models.py` (SQLModel), `repository.py` (extends BaseRepository), `schemas.py` (Pydantic)
-- Add `service.py` if business logic beyond CRUD is needed
-- Add `router.py` if the domain exposes HTTP endpoints; register in `src/main.py` `create_app()`
-- Re-export model in `src/models.py` for Alembic auto-detection
-- Create migration: `alembic revision --autogenerate -m "{description}"`
-- Add tests in `tests/{domain}/`
+**New domain (e.g., `notifications`):**
+```
+src/notifications/
+├── __init__.py
+├── models.py       # SQLModel table(s)
+├── repository.py   # Extends BaseRepository
+├── schemas.py      # Pydantic create/response models
+├── service.py      # Business logic
+├── constants.py    # Domain constants
+└── exceptions.py   # Domain exceptions (if needed)
+```
+Register new SQLModel tables in `src/models.py` for Alembic discovery.
+Add tests under `tests/notifications/`.
 
-**New Pipeline Handler (new message type):**
-- Create `src/pipeline/handlers/{type_name}.py` extending `MessageHandler` from `src/pipeline/handlers/base.py`
-- Implement `can_handle(result)` and `handle(ctx)` methods
-- Add to handlers list in `src/main.py` lifespan -- order matters (before `UnknownMessageHandler`)
-- Add `message_type` literal value to `ExtractionResult.message_type` in `src/extraction/schemas.py`
-- Update GPT system prompt in `src/extraction/prompts.py` with new type definition and few-shot examples
+**New pipeline handler:**
+- Create `src/pipeline/handlers/<name>.py` implementing `MessageHandler` ABC (`can_handle`, `handle`)
+- Add new classification type to `ExtractionResult.message_type` Literal in `src/extraction/schemas.py`
+- Register handler in `src/main.py` lifespan DI graph (`handlers` list, order matters — `UnknownMessageHandler` must remain last)
 
-**New Temporal Workflow:**
-- Define workflow class in `src/temporal/workflows.py`
-- Define activity functions in `src/temporal/activities.py`
-- Register workflow and activities in `src/temporal/worker.py` `run_worker()`
-- Add timeout/retry constants to `src/temporal/constants.py`
+**New Temporal workflow:**
+- Define `@workflow.defn` class in `src/temporal/workflows.py`
+- Define `@activity.defn` functions in `src/temporal/activities.py`
+- Register both in `Worker(...)` in `src/temporal/worker.py`
 
-**New API Endpoint:**
-- Create or extend `router.py` in the relevant domain package
-- Register router in `src/main.py` `create_app()` via `app.include_router()`
-- Add dependencies in the domain's `dependencies.py` if validation/auth gates are needed
+**New API endpoint:**
+- Add route to `src/sms/router.py` (existing router) or create `src/<domain>/router.py` and register with `app.include_router()` in `src/main.py`
 
-**New Prometheus Metric:**
-- Define metric singleton in `src/metrics.py` (module-level, never inside classes)
-- Import and use in the relevant module
+**New configuration value:**
+- Add to the relevant `BaseModel` sub-config in `src/config.py` (`SmsSettings`, `ExtractionSettings`, etc.)
+- Add flat env var to `Settings` and map it in `_build_sub_models` validator
+- Add to `.env.app.example`
 
-**New Migration:**
-- Run `alembic revision --autogenerate -m "{description}"` (generates file in `migrations/versions/`)
-- File naming follows `%%(year)d-%%(month).2d-%%(day).2d_%%(slug)s` pattern per `alembic.ini`
+**New database migration:**
+- Run `uv run alembic revision --autogenerate -m "slug"` (naming enforced by `alembic.ini`)
+- Verify migration is reversible (add `downgrade()` body)
 
-**New Infrastructure Component:**
-- Create `infra/components/{component}.py`
-- Import and wire in `infra/__main__.py`
+**Shared utilities:**
+- Money conversions: `src/money.py`
+- OTel attribute keys: `src/pipeline/constants.py`
+- Prometheus metrics: `src/metrics.py` (module-level singletons only — never instantiate inside functions)
+
+---
 
 ## Special Directories
 
 **`.planning/`:**
-- Purpose: GSD planning artifacts -- phases, research, todos, workstreams, codebase analysis
-- Generated: By GSD commands (automated planning)
+- Purpose: GSD planning artifacts, codebase maps, phase plans, todos
+- Generated: No (hand-edited + agent-written)
 - Committed: Yes
 
-**`migrations/versions/`:**
-- Purpose: Alembic database migration scripts
-- Generated: By `alembic revision --autogenerate`
-- Committed: Yes
-
-**`grafana/provisioning/`:**
-- Purpose: Grafana dashboard and datasource provisioning configs
-- Generated: No (manually authored)
-- Committed: Yes
-
-**`infra/`:**
-- Purpose: Pulumi IaC -- not part of the application runtime
-- Generated: No (manually authored)
-- Committed: Yes
-- Note: Has its own `requirements.txt` and `.venv/` separate from the app
-
-**`.github/workflows/`:**
-- Purpose: GitHub Actions CI/CD pipeline definitions
+**`.claude/skills/`:**
+- Purpose: Claude agent skill definitions for Temporal and Pinecone SDK patterns
 - Generated: No
 - Committed: Yes
 
+**`infra/.venv/`:**
+- Purpose: Separate virtualenv for Pulumi IaC (different dependency set from app)
+- Generated: Yes
+- Committed: No
+
+**`.venv/` (root):**
+- Purpose: App virtualenv managed by `uv`
+- Generated: Yes
+- Committed: No
+
 ---
 
-*Structure analysis: 2026-04-06*
+## Folders That Violate or Diverge from the Stated Structure
+
+**`src/extraction/models.py` contains `PineconeSyncQueue`:**
+The `PineconeSyncQueue` table is a persistence concern for the Pinecone upsert failure path, which is owned by `JobPostingHandler` in the `pipeline` domain. Placing it in `extraction/` leaks the queue abstraction into the wrong domain. It would be more cohesive in `src/jobs/models.py` or a dedicated `src/pinecone/` domain. Currently `src/models.py` imports it from `src/extraction/models.py`, which is correct for registration but wrong for ownership.
+
+**`src/sms/` has two repository files (`repository.py` and `audit_repository.py`):**
+AGENTS.md prescribes a single `repository.py` per domain. `AuditLogRepository` is split into its own file because it is used cross-domain (by `pipeline/orchestrator.py` and all pipeline handlers). It could be renamed `src/sms/audit_repository.py` as a deliberate exception or moved to `src/` root if it is truly cross-cutting. Current placement is not wrong but deviates from convention.
+
+**`tests/` root-level flat test files mixed with subdirectory packages:**
+`tests/test_pipeline_orchestrator.py`, `tests/test_pipeline_hardening.py`, `tests/test_repositories.py`, etc. exist at root level alongside `tests/extraction/`, `tests/sms/`, etc. The pipeline and repository tests would be more consistent under `tests/pipeline/` and `tests/repositories/`. The mixed flat + package layout makes it harder to run domain-scoped test subsets.
+
+**`tests/infra/` tests infrastructure YAML, not application code:**
+Static assertions against Pulumi component files and GitHub Actions workflows live here. They are not application tests and are not parallelized with unit/integration tests. A separate `make test-infra` target or a distinct CI step would better delineate these from the pytest application suite.
+
+---
+
+*Structure analysis: 2026-04-22*
