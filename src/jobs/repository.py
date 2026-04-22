@@ -10,6 +10,8 @@ from src.repository import BaseRepository
 
 log = structlog.get_logger()
 
+MAX_CANDIDATES: int = 500
+
 
 class JobRepository(BaseRepository):
     async def find_candidates_for_goal(self, session: AsyncSession) -> list[Job]:
@@ -27,6 +29,7 @@ class JobRepository(BaseRepository):
             select(Job)
             .where(Job.status == "available")
             .where(Job.pay_type != "unknown")
+            .limit(MAX_CANDIDATES)
         )
         result = await session.execute(stmt)
         raw_jobs = list(result.scalars().all())
