@@ -44,6 +44,7 @@ _GAUGE_POLL_INTERVAL_SECONDS: int = 15
 _GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
 _GAUGE_SHUTDOWN_TIMEOUT_SECONDS: float = 5.0
 _READYZ_DB_TIMEOUT_SECONDS: float = 2.0
+_OTEL_FORCE_FLUSH_TIMEOUT_MILLIS: int = 5000
 
 SHOW_DOCS_ENVIRONMENT: tuple[str, ...] = ("local", "development", "staging")
 
@@ -204,7 +205,7 @@ async def lifespan(app: FastAPI):
         await asyncio.wait_for(_gauge_task, timeout=_GAUGE_SHUTDOWN_TIMEOUT_SECONDS)
     except (asyncio.CancelledError, asyncio.TimeoutError):
         pass
-    provider.force_flush()
+    provider.force_flush(timeout_millis=_OTEL_FORCE_FLUSH_TIMEOUT_MILLIS)
 
 
 def create_app() -> FastAPI:
