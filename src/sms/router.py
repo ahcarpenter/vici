@@ -16,7 +16,7 @@ from src.sms.audit_repository import AuditLogRepository
 from src.sms.dependencies import enforce_rate_limit
 from src.sms.exceptions import EMPTY_TWIML
 from src.sms.repository import MessageRepository
-from src.sms.service import hash_phone
+from src.sms.service import hash_phone, scrub_phone_fields
 
 router = APIRouter(prefix="/webhook", tags=["sms"])
 
@@ -49,7 +49,7 @@ async def receive_sms(
             session,
             message_sid,
             "received",
-            detail=json.dumps(dict(form_data)),
+            detail=json.dumps(scrub_phone_fields(form_data)),
             message_id=message.id,
         )
 

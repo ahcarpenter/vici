@@ -141,6 +141,34 @@ async def test_phone_created_at(
     assert row.created_at is not None
 
 
+async def test_audit_detail_scrubs_phone_pii(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
+    """F-04: audit_log.detail must not contain raw E.164 numbers (GDPR/CCPA)."""
+    from src.sms.service import hash_phone
+
+    phone = "+15005550042"
+    form = {**VALID_FORM, "MessageSid": "SM_pii_001", "From": phone}
+    await client.post("/webhook/sms", data=form, headers=HEADERS)
+
+    result = await async_session.execute(
+        select(AuditLog).where(AuditLog.message_sid == "SM_pii_001")
+    )
+    row = result.scalar_one_or_none()
+    assert row is not None
+    detail = json.loads(row.detail)
+
+    # Raw E.164 must not appear anywhere in the stored detail
+    assert phone not in detail.values(), "Raw phone number found in audit_log.detail"
+
+    # The hashed value must be stored in its place
+    assert detail["From"] == hash_phone(phone), (
+        "Hashed phone not found in audit_log.detail"
+    )
+
+
 async def test_temporal_workflow_started(
     client: AsyncClient,
     mock_twilio_validator,
