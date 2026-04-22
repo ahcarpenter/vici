@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import date
 from typing import Any
@@ -32,9 +33,18 @@ from src.metrics import (
 
 tracer = otel_trace.get_tracer(__name__)
 
-_bt_logger = init_logger(project="vici")  # module-level singleton
-
 log = structlog.get_logger()
+
+_BRAINTRUST_API_KEY_ENV: str = "BRAINTRUST_API_KEY"
+
+if os.getenv(_BRAINTRUST_API_KEY_ENV):
+    _bt_logger = init_logger(project="vici")
+else:
+    _bt_logger = None
+    log.warning(
+        "braintrust_logger_disabled",
+        reason=f"{_BRAINTRUST_API_KEY_ENV} not set — LLM call observability disabled",
+    )
 
 
 class ExtractionService:
