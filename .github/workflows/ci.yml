@@ -26,6 +26,12 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src/ tests/ infra/
 
+      - name: CVE scan (pip-audit)
+        continue-on-error: true
+        run: |
+          uv export --no-hashes --format requirements-txt --frozen > /tmp/requirements.txt
+          uvx pip-audit -r /tmp/requirements.txt
+
       - name: Test
         run: uv run pytest tests/ -x --tb=short -q
         env:
