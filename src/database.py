@@ -14,13 +14,31 @@ POSTGRES_INDEXES_NAMING_CONVENTION = {
     "pk": "%(table_name)s_pkey",
 }
 
+# SQLAlchemy defaults (pool_size=5, max_overflow=10, no pre_ping) are too small
+# for concurrent Temporal activity execution + gauge updater + webhook handlers,
+# and stale connections fail silently without pre_ping.
+_POOL_SIZE: int = 10
+_POOL_MAX_OVERFLOW: int = 20
+_POOL_TIMEOUT_SECONDS: int = 30
+
 metadata = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
 
 
 @lru_cache(maxsize=1)
 def get_engine():
     settings = get_settings()
-    return create_async_engine(settings.database_url, echo=False)
+    url = settings.database_url
+    kwargs: dict = {"echo": False}
+    # Pool sizing applies only to server-based dialects; sqlite uses StaticPool
+    # and ignores/rejects these arguments.
+    if url.startswith("postgres") or url.startswith("mysql"):
+        kwargs.update(
+            pool_size=_POOL_SIZE,
+            max_overflow=_POOL_MAX_OVERFLOW,
+            pool_timeout=_POOL_TIMEOUT_SECONDS,
+            pool_pre_ping=True,
+        )
+    return create_async_engine(url, **kwargs)
 
 
 def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
