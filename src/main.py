@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -41,6 +42,8 @@ from src.work_goals.repository import WorkGoalRepository
 
 _GAUGE_POLL_INTERVAL_SECONDS: int = 15
 _GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
+
+SHOW_DOCS_ENVIRONMENT: tuple[str, ...] = ("local", "development", "staging")
 
 
 # ── structlog OTel processor ────────────────────────────────────────────────────
@@ -119,6 +122,18 @@ async def _update_gauges() -> None:
         await asyncio.sleep(_GAUGE_POLL_INTERVAL_SECONDS)
 
 
+def _docs_app_configs(env: str) -> dict[str, Any]:
+    """Return FastAPI(**kwargs) needed to hide API docs outside permitted envs.
+
+    Must be applied at FastAPI(...) construction time — setting app.openapi_url
+    after __init__ leaves the routes already registered (and /docs 500s because
+    its handler concatenates openapi_url into a string).
+    """
+    if env in SHOW_DOCS_ENVIRONMENT:
+        return {}
+    return {"openapi_url": None, "docs_url": None, "redoc_url": None}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _configure_structlog()
@@ -187,7 +202,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(lifespan=lifespan)
+    # Read ENV directly rather than via get_settings() — this runs at module
+    # import time (app = create_app()) before conftest fixtures populate the
+    # full credentials required by Settings validation.
+    env = os.getenv("ENV", "")
+    app = FastAPI(lifespan=lifespan, **_docs_app_configs(env))
 
     # Prometheus — expose /metrics endpoint
     Instrumentator().instrument(app).expose(app)
