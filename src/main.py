@@ -43,6 +43,7 @@ from src.work_goals.repository import WorkGoalRepository
 _GAUGE_POLL_INTERVAL_SECONDS: int = 15
 _GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
 _GAUGE_SHUTDOWN_TIMEOUT_SECONDS: float = 5.0
+_READYZ_DB_TIMEOUT_SECONDS: float = 2.0
 
 SHOW_DOCS_ENVIRONMENT: tuple[str, ...] = ("local", "development", "staging")
 
@@ -236,7 +237,10 @@ def create_app() -> FastAPI:
         # Readiness: DB connectivity (used by orchestrators).
         try:
             async with get_sessionmaker()() as session:
-                await session.execute(text("SELECT 1"))
+                await asyncio.wait_for(
+                    session.execute(text("SELECT 1")),
+                    timeout=_READYZ_DB_TIMEOUT_SECONDS,
+                )
             return {"status": "ok", "db": "connected"}
         except Exception:
             return JSONResponse(
