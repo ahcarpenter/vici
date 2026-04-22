@@ -14,8 +14,6 @@ SC-5: OPERATIONS.md runbook with required sections
 import pathlib
 import re
 
-import pytest
-
 INFRA_DIR = pathlib.Path(__file__).resolve().parents[2] / "infra" / "components"
 
 
@@ -94,7 +92,8 @@ class TestProtect:
 
 class TestNetworkPolicy:
     """Verify network_policy.py defines default-deny-all + DNS egress allow
-    for all 5 namespaces (vici, temporal, observability, cert-manager, external-secrets).
+    for all 5 namespaces (vici, temporal, observability, cert-manager,
+    external-secrets).
     """
 
     def test_network_policy_module_exists(self) -> None:
@@ -103,12 +102,17 @@ class TestNetworkPolicy:
         assert path.exists(), f"Expected {path} to exist"
 
     def test_default_deny_all_five_namespaces(self) -> None:
-        """All 5 namespaces must appear in network_policy.py, each with a default-deny-all policy."""
+        """Each of the 5 namespaces must have a default-deny-all policy."""
         source = _read_source("network_policy.py")
-        for ns in ("vici", "temporal", "observability", "cert-manager", "external-secrets"):
-            assert ns in source, (
-                f"Namespace '{ns}' must appear in network_policy.py"
-            )
+        namespaces_list = (
+            "vici",
+            "temporal",
+            "observability",
+            "cert-manager",
+            "external-secrets",
+        )
+        for ns in namespaces_list:
+            assert ns in source, f"Namespace '{ns}' must appear in network_policy.py"
         deny_count = source.count("default-deny-all")
         assert deny_count >= 5, (
             f"Expected at least 5 default-deny-all policies (one per namespace), "
@@ -123,7 +127,9 @@ class TestNetworkPolicy:
             f"Expected at least 5 allow-dns-egress policies, found {allow_dns_count}"
         )
         assert "53" in source, "Port 53 must be specified in DNS egress allow rule"
-        assert "UDP" in source, "Protocol UDP must be specified in DNS egress allow rule"
+        assert "UDP" in source, (
+            "Protocol UDP must be specified in DNS egress allow rule"
+        )
 
     def test_policy_types_include_ingress_and_egress(self) -> None:
         """Default-deny policies must block both Ingress and Egress directions."""
@@ -164,7 +170,7 @@ class TestTemporalESO:
         """temporal.py Helm values must reference existingSecret for DB credentials."""
         source = _read_source("temporal.py")
         assert "existingSecret" in source, (
-            "temporal.py must use existingSecret in Helm values for Temporal DB credentials"
+            "temporal.py must use existingSecret in Helm values for Temporal DB creds"
         )
 
     def test_secrets_py_has_temporal_db_password(self) -> None:
@@ -196,11 +202,9 @@ class TestPDB:
         assert "prod" in source, "pdb.py must reference 'prod' in env conditional"
 
     def test_pdb_three_workloads(self) -> None:
-        """pdb.py must define PDBs for vici-app, temporal-frontend, and temporal-history."""
+        """pdb.py must define PDBs for vici-app, temporal-frontend, history."""
         source = _read_source("pdb.py")
-        assert "vici-app" in source, (
-            "pdb.py must include a PDB for vici-app"
-        )
+        assert "vici-app" in source, "pdb.py must include a PDB for vici-app"
         assert "temporal-frontend" in source, (
             "pdb.py must include a PDB for temporal-frontend"
         )
@@ -222,7 +226,7 @@ class TestPDB:
 
 
 class TestOperationsDoc:
-    """Verify infra/OPERATIONS.md exists and contains required operational runbook sections."""
+    """Verify infra/OPERATIONS.md exists and has required runbook sections."""
 
     _OPS_DOC = pathlib.Path(__file__).resolve().parents[2] / "infra" / "OPERATIONS.md"
 

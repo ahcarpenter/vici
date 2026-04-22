@@ -46,19 +46,29 @@ _SCHEMA_BASE = "/etc/temporal/schema/postgresql/v12"
 
 # Credentials are injected at runtime via TEMPORAL_DB_PASSWORD env var sourced
 # from the ESO-synced K8s Secret temporal-db-credentials (D-06, D-07).
+_SQL_AUTH = f"-u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD"
+
+
+def _schema_cmd(db: str, action: str, extra: str = "") -> str:
+    suffix = f" {extra}" if extra else ""
+    return f"{_SQL_TOOL_PREFIX} {_SQL_AUTH} --db {db} {action}{suffix}"
+
+
 _SCHEMA_COMMANDS = " && ".join(
     [
-        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal create-database || true",
-        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal setup-schema -v 0.0 || true",
-        (
-            f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal update-schema"
-            f" -d {_SCHEMA_BASE}/temporal/versioned"
+        f"{_schema_cmd('temporal', 'create-database')} || true",
+        f"{_schema_cmd('temporal', 'setup-schema -v 0.0')} || true",
+        _schema_cmd(
+            "temporal",
+            "update-schema",
+            f"-d {_SCHEMA_BASE}/temporal/versioned",
         ),
-        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility create-database || true",
-        f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility setup-schema -v 0.0 || true",
-        (
-            f"{_SQL_TOOL_PREFIX} -u {_TEMPORAL_DB_USER} --pw $TEMPORAL_DB_PASSWORD --db temporal_visibility update-schema"
-            f" -d {_SCHEMA_BASE}/visibility/versioned"
+        f"{_schema_cmd('temporal_visibility', 'create-database')} || true",
+        f"{_schema_cmd('temporal_visibility', 'setup-schema -v 0.0')} || true",
+        _schema_cmd(
+            "temporal_visibility",
+            "update-schema",
+            f"-d {_SCHEMA_BASE}/visibility/versioned",
         ),
     ]
 )

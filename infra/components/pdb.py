@@ -7,8 +7,8 @@ workloads where minAvailable=1 would block node upgrades entirely.
 import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
-from config import ENV
 from components.namespaces import k8s_provider, namespaces
+from config import ENV
 
 # PDB definitions: (pulumi_name, k8s_name, namespace, match_labels, min_available)
 _PDB_DEFINITIONS: list[tuple[str, str, str, dict[str, str], int]] = [

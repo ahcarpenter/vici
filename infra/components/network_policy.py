@@ -126,9 +126,7 @@ def _metadata_allow(ns: str) -> k8s.networking.v1.NetworkPolicy:
     """Return an allow-metadata-egress NetworkPolicy for the given namespace."""
     return k8s.networking.v1.NetworkPolicy(
         f"netpol-allow-metadata-{ns}",
-        metadata=k8s.meta.v1.ObjectMetaArgs(
-            name="allow-metadata-egress", namespace=ns
-        ),
+        metadata=k8s.meta.v1.ObjectMetaArgs(name="allow-metadata-egress", namespace=ns),
         spec=k8s.networking.v1.NetworkPolicySpecArgs(
             pod_selector=k8s.meta.v1.LabelSelectorArgs(),
             policy_types=["Egress"],

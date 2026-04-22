@@ -3,7 +3,8 @@
 The bucket is the Pulumi backend itself. It was NOT originally created by Pulumi.
 To manage it, run the import command once per stack:
 
-    pulumi import gcp:storage/bucket:Bucket pulumi-state-bucket vici-app-pulumi-state-{env}
+    pulumi import gcp:storage/bucket:Bucket \
+        pulumi-state-bucket vici-app-pulumi-state-{env}
 
 After import, this module ensures protect=True and retain_on_delete=True so:
   - `pulumi destroy` will refuse to delete the bucket
@@ -22,9 +23,9 @@ from config import ENV, PROJECT_ID, REGION
 # multi-region/regional location. After import, Pulumi sees the actual
 # location (e.g. "US-CENTRAL1"), so we must match to avoid a replace diff.
 _BUCKET_LOCATION_BY_ENV: dict[str, str] = {
-    "dev": REGION.upper(),       # matches actual bucket location
+    "dev": REGION.upper(),  # matches actual bucket location
     "staging": REGION.upper(),
-    "prod": "US",                # prod uses multi-region for durability
+    "prod": "US",  # prod uses multi-region for durability
 }
 
 state_bucket = gcp.storage.Bucket(
