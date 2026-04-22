@@ -58,5 +58,5 @@ class UnknownMessageHandler(MessageHandler):
         log.info(
             "unknown_reply_sent",
             message_sid=ctx.message_sid,
-            to=ctx.from_number,
+            to_hash=hash_phone(ctx.from_number),
         )
