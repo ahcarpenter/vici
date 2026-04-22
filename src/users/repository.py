@@ -14,21 +14,32 @@ class UserRepository:
         session: AsyncSession, phone_hash: str, phone_e164: Optional[str] = None
     ) -> User:
         """Upsert a user row by phone_hash. Returns the User ORM object."""
-        await session.execute(
+        params = {
+            "phone_hash": phone_hash,
+            "phone_e164": phone_e164,
+            "created_at": datetime.now(UTC),
+        }
+        result = await session.execute(
             text(
                 """
                 INSERT INTO "user" (phone_hash, phone_e164, created_at)
                 VALUES (:phone_hash, :phone_e164, :created_at)
                 ON CONFLICT (phone_hash) DO NOTHING
+                RETURNING id, phone_hash, phone_e164, created_at
                 """
             ),
-            {
-                "phone_hash": phone_hash,
-                "phone_e164": phone_e164,
-                "created_at": datetime.now(UTC),
-            },
+            params,
         )
-        result = await session.execute(
+        row = result.mappings().first()
+        if row is not None:
+            return User(
+                id=row["id"],
+                phone_hash=row["phone_hash"],
+                phone_e164=row["phone_e164"],
+                created_at=row["created_at"],
+            )
+
+        fetch = await session.execute(
             select(User).where(User.phone_hash == phone_hash)
         )
-        return result.scalar_one()
+        return fetch.scalar_one()
