@@ -17,11 +17,11 @@ def upgrade() -> None:
     op.drop_constraint("job_user_id_fkey", "job", type_="foreignkey")
     op.drop_column("job", "user_id")
 
-    # 2. Remove transitive user_id from work_request (3NF Violation 2)
+    # 2. Remove transitive user_id from work_goal (3NF Violation 2)
     op.drop_constraint(
-        "work_request_user_id_fkey", "work_request", type_="foreignkey"
+        "work_goal_user_id_fkey", "work_goal", type_="foreignkey"
     )
-    op.drop_column("work_request", "user_id")
+    op.drop_column("work_goal", "user_id")
 
     # 3. Drop stale unique constraint on rate_limit (schema correctness)
     op.drop_constraint(
@@ -52,15 +52,15 @@ def downgrade() -> None:
     op.create_unique_constraint(
         "uq_rate_limit_user_window", "rate_limit", ["user_id", "created_at"]
     )
-    # Restore work_request.user_id as nullable (original NOT NULL cannot be
+    # Restore work_goal.user_id as nullable (original NOT NULL cannot be
     # restored without data — documented limitation, treat as one-way)
     op.add_column(
-        "work_request",
+        "work_goal",
         sa.Column("user_id", sa.Integer(), nullable=True),
     )
     op.create_foreign_key(
-        "work_request_user_id_fkey",
-        "work_request",
+        "work_goal_user_id_fkey",
+        "work_goal",
         "user",
         ["user_id"],
         ["id"],
