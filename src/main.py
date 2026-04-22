@@ -42,6 +42,7 @@ from src.work_goals.repository import WorkGoalRepository
 
 _GAUGE_POLL_INTERVAL_SECONDS: int = 15
 _GAUGE_MAX_CONSECUTIVE_FAILURES: int = 5
+_GAUGE_SHUTDOWN_TIMEOUT_SECONDS: float = 5.0
 
 SHOW_DOCS_ENVIRONMENT: tuple[str, ...] = ("local", "development", "staging")
 
@@ -198,6 +199,10 @@ async def lifespan(app: FastAPI):
     except (asyncio.CancelledError, asyncio.TimeoutError):
         pass
     _gauge_task.cancel()
+    try:
+        await asyncio.wait_for(_gauge_task, timeout=_GAUGE_SHUTDOWN_TIMEOUT_SECONDS)
+    except (asyncio.CancelledError, asyncio.TimeoutError):
+        pass
     provider.force_flush()
 
 
