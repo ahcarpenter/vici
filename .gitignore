@@ -22,3 +22,6 @@ __pycache__/
 .cursor/
 .claude/
 !.claude/skills/
+
+# Accidental path-expansion directory (e.g. `cp -r foo ~/bar` with unquoted ~)
+~/
