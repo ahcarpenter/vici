@@ -114,7 +114,13 @@ class MatchService:
         if not candidates:
             return []
 
-        capacity = sum(c.earnings for c in candidates)
+        # Bound DP memory at target + max single-job earnings. No optimal subset
+        # sum ever exceeds target by more than the largest single job (any larger
+        # overshoot is dominated by dropping jobs). Raw sum(earnings) unbounded
+        # caused O(GB) allocations at realistic job volumes.
+        total_earnings = sum(c.earnings for c in candidates)
+        max_earning = max(c.earnings for c in candidates)
+        capacity = min(total_earnings, target + max_earning)
 
         if capacity == 0:
             return []
