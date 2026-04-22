@@ -109,7 +109,8 @@ async def sync_pinecone_queue_activity() -> str:
                     "FROM pinecone_sync_queue q "
                     "JOIN job j ON j.id = q.job_id "
                     'JOIN "user" u ON u.id = j.user_id '
-                    "WHERE q.status = 'pending' LIMIT 50"
+                    "WHERE q.status = 'pending' LIMIT 50 "
+                    "FOR UPDATE OF q SKIP LOCKED"
                 )
             )
             rows = result.mappings().all()
