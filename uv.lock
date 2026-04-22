@@ -2100,7 +2100,6 @@ dependencies = [
     { name = "opentelemetry-sdk" },
     { name = "pinecone", extra = ["asyncio"] },
     { name = "prometheus-fastapi-instrumentator" },
-    { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
@@ -2116,6 +2115,7 @@ dependencies = [
 dev = [
     { name = "aiosqlite" },
     { name = "httpx" },
+    { name = "psycopg2-binary" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -2137,7 +2137,6 @@ requires-dist = [
     { name = "opentelemetry-sdk", specifier = ">=1.40.0" },
     { name = "pinecone", extras = ["asyncio"], specifier = ">=8.1.0" },
     { name = "prometheus-fastapi-instrumentator", specifier = ">=7.1.0" },
-    { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.22" },
@@ -2153,6 +2152,7 @@ requires-dist = [
 dev = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
