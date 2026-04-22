@@ -252,7 +252,7 @@ async def test_sync_pinecone_queue_success_path():
     assert kw["description"] == "Mover needed"
 
     query_str = str(update_session.execute.call_args.args[0])
-    assert "success" in query_str
+    assert "synced" in query_str
 
 
 @pytest.mark.asyncio
@@ -422,7 +422,7 @@ async def test_sync_pinecone_queue_mixed_rows():
     assert mock_write.await_count == 2
 
     q1 = str(update_sessions[0].execute.call_args.args[0])
-    assert "success" in q1
+    assert "synced" in q1
 
     q2 = str(update_sessions[1].execute.call_args.args[0])
     assert "failed" in q2

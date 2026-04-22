@@ -131,7 +131,7 @@ async def sync_pinecone_queue_activity() -> str:
                     await session.execute(
                         text(
                             "UPDATE pinecone_sync_queue"
-                            " SET status='success' WHERE id=:id"
+                            " SET status='synced' WHERE id=:id"
                         ),
                         {"id": row["id"]},
                     )
