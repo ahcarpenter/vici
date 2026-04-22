@@ -54,7 +54,7 @@ async def validate_twilio_request(request: Request) -> dict:
             status_code=400,
             detail="Missing required fields: MessageSid, From",
         )
-    if settings.env == "development":
+    if settings.sms.disable_twilio_signature_validation:
         return form_data
     validator = RequestValidator(settings.sms.auth_token)
     url = _public_request_url(request)

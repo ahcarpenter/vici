@@ -30,6 +30,7 @@ async def test_invalid_signature(client: AsyncClient):
         mock_settings.return_value.env = "production"
         mock_settings.return_value.twilio_auth_token = "test_twilio_auth_token"
         mock_settings.return_value.webhook_base_url = "http://localhost:8000"
+        mock_settings.return_value.sms.disable_twilio_signature_validation = False
         response = await client.post(
             "/webhook/sms",
             data=VALID_FORM,

@@ -12,6 +12,7 @@ class SmsSettings(BaseModel):
     from_number: str = ""
     rate_limit_max: int = 5
     rate_limit_window_seconds: int = 60
+    disable_twilio_signature_validation: bool = False
 
 
 class ExtractionSettings(BaseModel):
@@ -71,6 +72,9 @@ class Settings(BaseSettings):
     # Flat SMS rate limiting env vars
     sms_rate_limit_window_seconds: int = 60
 
+    # Explicit opt-in escape hatch — never key on env name
+    disable_twilio_signature_validation: bool = False
+
     # Flat Grafana env vars (used in docker-compose)
     grafana_admin_user: str = "admin"
     grafana_admin_password: str = "admin"
@@ -116,6 +120,7 @@ class Settings(BaseSettings):
             account_sid=self.twilio_account_sid,
             from_number=self.twilio_from_number,
             rate_limit_window_seconds=self.sms_rate_limit_window_seconds,
+            disable_twilio_signature_validation=self.disable_twilio_signature_validation,
         )
         self.extraction = ExtractionSettings(
             openai_api_key=self.openai_api_key,

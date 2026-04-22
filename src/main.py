@@ -125,6 +125,9 @@ async def lifespan(app: FastAPI):
     provider = _configure_otel(app)
     settings = get_settings()
 
+    if settings.sms.disable_twilio_signature_validation:
+        structlog.get_logger().warning("twilio_signature_validation_disabled")
+
     # Build DI graph
     openai_client = wrap_openai(
         AsyncOpenAI(
