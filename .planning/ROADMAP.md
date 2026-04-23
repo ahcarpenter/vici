@@ -299,3 +299,30 @@ Plans:
 | 02.14. Normalize schema to 3NF | 1/1 | Complete | 2026-04-03 |
 | 3. Earnings Math Matching | 1/1 | Complete   | 2026-04-05 |
 | 4. End-to-End Integration & Deployment | 0/2 | Not started | -- |
+
+## Backlog
+
+### Phase 999.1: Concerns Remediation — close outstanding items from 2026-04-22 codebase audit (BACKLOG)
+
+**Goal:** Resolve the 14 unhandled concerns from `.planning/codebase/CONCERNS.md` (2026-04-22) that were classified manual-only or partial during the audit-fix pass. The auto-fixable subset (F-01…F-08, F-10…F-14, F-16…F-25, 17 items) is already merged on `main`; this backlog captures the residual architectural and cross-cutting work.
+**Requirements:** TBD — discuss before planning. Spans security (HMAC phone hash, /metrics auth), correctness (transaction ownership, rate-limit TOCTOU, `phone_e164` backfill, pinecone sync same-txn update, Pinecone client reuse), reliability (Temporal emission orphan rows, rate_limit TTL), feature wiring (MatchService → SMS), tech debt (raw_sms persistence decision, temporal_queue_depth stub, sms/repository.py TODO), and dep hygiene (upgrade CVE-flagged transitives + tighten pip-audit to hard-fail).
+**Plans:** 0 plans
+
+Scope (condensed — see `.planning/codebase/CONCERNS.md` and audit-fix follow-ups):
+- F-09 — `process_message_activity` transaction ownership refactor (remove per-handler `session.commit()`, wrap in `session.begin()`)
+- F-11 follow-up — same-txn UPDATE for pinecone sync (`in_progress` status migration OR single-row batch)
+- F-15 — hoist `PineconeAsyncio` context out of per-row loop + update 6 tests
+- F-25 follow-up — upgrade aiohttp/requests/pyjwt/python-multipart/pygments/pytest; tighten `pip-audit` to hard-fail
+- Unsalted SHA-256 phone hash → HMAC-SHA256 with `PHONE_HASH_SECRET` + backfill migration
+- `/metrics` public exposure → internal port or K8s NetworkPolicy
+- `phone_e164` not populated from SMS inbound (`UserRepository.get_or_create` + `ON CONFLICT` backfill)
+- Rate-limit TOCTOU restructure (COUNT first, INSERT only if within limit)
+- Temporal emission orphan messages (retry table + cron-drained activity)
+- `rate_limit` table TTL pruning (scheduled Temporal activity)
+- `JobCreate.raw_sms` decision (add columns vs. remove field)
+- `MatchService` end-to-end wiring in `WorkerGoalHandler` + match metrics
+- `temporal_queue_depth` stub — implement via Temporal SDK or remove
+- `src/sms/repository.py:29-31` TODO removal (paired with rate-limit restructure)
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
