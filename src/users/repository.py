@@ -39,7 +39,5 @@ class UserRepository:
                 created_at=row["created_at"],
             )
 
-        fetch = await session.execute(
-            select(User).where(User.phone_hash == phone_hash)
-        )
+        fetch = await session.execute(select(User).where(User.phone_hash == phone_hash))
         return fetch.scalar_one()
