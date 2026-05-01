@@ -1,0 +1,109 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "WebSearch",
+      "Bash(docker compose:*)",
+      "Bash(curl:*)",
+      "Bash(git:*)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:www.braintrust.dev)",
+      "WebFetch(domain:sdk.pinecone.io)",
+      "WebFetch(domain:cookbook.openai.com)",
+      "WebFetch(domain:openai.com)",
+      "WebFetch(domain:python.useinstructor.com)",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(uv add:*)",
+      "Bash(uv lock:*)",
+      "Bash(pip index:*)",
+      "Bash(uv run:*)",
+      "mcp__render__list_workspaces",
+      "mcp__render__list_services",
+      "mcp__render__create_postgres",
+      "mcp__render__get_postgres",
+      "mcp__render__create_web_service",
+      "mcp__render__update_environment_variables",
+      "mcp__render__query_render_postgres",
+      "mcp__render__list_logs",
+      "Skill(gsd:execute-phase)",
+      "Bash(npm run:*)",
+      "Bash(uvx ruff:*)",
+      "Bash(PULUMI_CONFIG_PASSPHRASE=\"363c2fc6-c94e-464a-af50-0c8acf547059\" pulumi preview --stack dev)",
+      "Bash(.venv/bin/pip show:*)",
+      "Bash(.venv/bin/pip index:*)",
+      "Bash(pulumi stack:*)",
+      "Skill(gsd-progress)",
+      "Bash(PULUMI_CONFIG_PASSPHRASE=\"\" pulumi stack:*)",
+      "Bash(pulumi up:*)",
+      "Bash(pulumi cancel:*)",
+      "Bash(pulumi refresh:*)",
+      "Bash(npm search:*)",
+      "Bash(xargs -I{} echo \"Temporal rules: {} files\")",
+      "Bash(gh run:*)",
+      "Bash(rm -f __TRACKED_VAR__/.claude/cache/gsd-update-check.json)",
+      "Bash(rm -f ./__TRACKED_VAR__/cache/gsd-update-check.json)",
+      "Bash(rm -f __TRACKED_VAR__/__TRACKED_VAR__/cache/gsd-update-check.json)"
+    ],
+    "deny": [
+      "Read(.env.*)",
+      "Read(**/secrets/*)",
+      "Read(**/*credential*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)"
+    ],
+    "autoMemoryEnabled": false
+  },
+  "mcpServers": {
+    "kubernetes": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "kubernetes-mcp-server"
+      ]
+    },
+    "docker": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-docker"
+      ]
+    },
+    "opentelemetry": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-server-docker"
+      ]
+    },
+    "pinecone": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@pinecone-database/mcp"
+      ]
+    },
+    "gcloud": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@google-cloud/gcloud-mcp"
+      ]
+    },
+    "storage": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@google-cloud/storage-mcp"
+      ]
+    },
+    "github": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
