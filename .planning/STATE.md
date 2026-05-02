@@ -1,18 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: paused
-stopped_at: Phase 04 (e2e + outbound SMS) deferred — see v1.0-MILESTONE-AUDIT.md
-last_updated: "2026-04-11T19:30:00.000Z"
-last_activity: 2026-04-11 — gks-refactor workstream advanced to Phase 06 ready
-active_workstream: gks-refactor
+milestone: v1.1
+milestone_name: De-platform — Docker-Only Base
+status: planning
+last_updated: "2026-05-02T00:32:07.006Z"
+last_activity: 2026-05-02
 progress:
-  total_phases: 20
-  completed_phases: 19
-  total_plans: 32
-  completed_plans: 32
-  percent: 95
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -26,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 
 ## Current Position
 
-Phase: 03 (temporal-in-cluster) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-04-06 - Completed quick task 260406-m06: Ensure GitHub Actions CI build fails if tests don't pass
-
-Progress: [█████████░] 95% (19 of 20 phases complete, all 32 plans complete)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-02 — Milestone v1.1 started
 
 ## What's Built
 

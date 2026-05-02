@@ -8,13 +8,20 @@ A Python/FastAPI API that receives SMS messages via a single Twilio webhook and 
 
 A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
 
+## Current Milestone: v1.1 De-platform — Docker-Only Base
+
+**Goal:** Re-baseline the repo as a hosting-agnostic, Docker-only application. No GCP, no Kubernetes, no provider-specific deploy config.
+
+**Target features:**
+- Provider-neutral `docker-compose.prod.yml` as the canonical production deploy spec (healthchecks, restart policies, volume conventions)
+- Temporal Cloud integration (replace in-cluster Temporal Helm chart)
+- Postgres visibility for Temporal (drop OpenSearch entirely from the stack)
+- Self-contained observability in compose for production (Jaeger + Prometheus + Grafana)
+- Full GKE/GCP removal: delete `pulumi/`, `helm/`, `k8s/`, ESO config, `render.yaml`, and the `gks-refactor` workstream artifacts
+
 ## Requirements
 
 ### Validated
-
-(None yet — ship to validate)
-
-### Active
 
 - [x] Single Twilio SMS webhook receives all inbound messages
 - [x] gpt-5.3-chat-latest classifies each message as a job posting, a worker earnings goal, or unknown using a single structured-output call
@@ -22,8 +29,15 @@ A worker who texts their earnings goal must receive a ranked list of jobs that l
 - [x] Worker goal extracts: target earnings amount, target timeframe
 - [x] Structured job postings stored in PostgreSQL; job embeddings written to Pinecone at creation time
 - [x] Structured worker goals stored in PostgreSQL
-- [ ] Job matching uses earnings math: rate × estimated duration ≥ worker goal, sorted by soonest available / shortest duration
-- [x] Job poster receives SMS confirmation summarizing extracted job details (unknown-branch graceful reply implemented; poster confirmation pending Phase 4)
+- [x] Job matching uses earnings math: rate × estimated duration ≥ worker goal, sorted by soonest available / shortest duration (MatchService — Phase 03-01)
+
+### Active
+
+(v1.1 milestone requirements defined in `.planning/REQUIREMENTS.md`)
+
+### Deferred (v1.0 Phase 04 — out of scope for v1.1)
+
+- [ ] Job poster receives SMS confirmation summarizing extracted job details (unknown-branch graceful reply implemented; poster confirmation pending)
 - [ ] Worker receives SMS reply with ranked list of matching jobs
 
 ### Out of Scope
@@ -123,5 +137,22 @@ audit_log (id PK, message_id FK, raw_body, raw_gpt_response, created_at)
 | Inngest Cloud for production (Dev Server locally) | INNGEST_DEV=1 disables signing key requirement in dev | Implemented |
 | ALWAYS_ON OTel sampler | Unambiguous trace coverage; no parent-based override confusion | Implemented — Phase 02.3 |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-04-03 after Phase 02.14 completion — 3NF normalization: user_id removed from job and work_goal tables, rate_limit UNIQUE constraint dropped, audit_log CHECK constraint added, all 101 tests pass*
+*Last updated: 2026-05-01 — milestone v1.1 (De-platform — Docker-Only Base) started; v1.0 application requirements (webhook, classification, extraction, persistence, earnings-math matching) moved to Validated.*
