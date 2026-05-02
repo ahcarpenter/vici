@@ -294,7 +294,13 @@ Plans:
   2. The published image is pullable by an unauthenticated CI job and reports both architectures in `docker manifest inspect`
   3. Every push runs `docker compose -f docker-compose.yml config --quiet` AND `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`; either failing returns a non-zero exit and blocks the merge
   4. The legacy GKE-targeted CD workflows (`cd-base.yml`, `cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml`) no longer run on push (deleted as part of CI-04, completed by Phase 9 INFRA-01 — but the workflow files are removed in this phase as the CI surface is reauthored)
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Create `docker-compose.prod.yml` image-only stub (D-02) and verify locally that both compose-config invocations behave per D-03/D-04
+- [ ] 05-02-PLAN.md — Delete the four legacy GKE-targeted CD workflow files (`cd-base.yml`, `cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml`); D-17 satisfied transitively
+- [ ] 05-03-PLAN.md — Extend `.github/workflows/ci.yml` with 5 new jobs: `compose-validate`, `build` (matrix amd64/arm64 native runners), `merge`, `verify` (anonymous, with corrected attestation predicate)
+- [ ] 05-04-PLAN.md — Document D-08 (GHCR public-toggle) and D-18 (branch-protection update) operator runbook in README.md and pause for operator confirmation (autonomous: false)
 
 ### Phase 6: 3-File Compose Overlay & Production Hardening
 **Goal**: The compose stack is split into a 3-file overlay (`docker-compose.yml` base + `docker-compose.override.yml` dev + `docker-compose.prod.yml` prod via explicit `-f`); the production overlay is operationally hardened (healthchecks, restart policies, named volumes, resource limits, log rotation, localhost-only port bindings) and the two latent dev-compose bugs (missing `postgres_data` named volume, `0.0.0.0` port bindings on internal services) are fixed in the same pass
@@ -368,7 +374,7 @@ Plans:
 | 02.14. Normalize schema to 3NF | 1/1 | Complete | 2026-04-03 |
 | 3. Earnings Math Matching | 1/1 | Complete   | 2026-04-05 |
 | 4. End-to-End Integration & Deployment | 0/2 | Deferred (v1.0) | -- |
-| 5. GHCR Image Distribution & CI Validation | 0/0 | Not started | -- |
+| 5. GHCR Image Distribution & CI Validation | 0/4 | Not started | -- |
 | 6. 3-File Compose Overlay & Production Hardening | 0/0 | Not started | -- |
 | 7. Compose-Native Secrets via SOPS + age | 0/0 | Not started | -- |
 | 8. Temporal Postgres Visibility + Observability Removal | 0/0 | Not started | -- |

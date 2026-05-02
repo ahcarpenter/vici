@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-02T09:45:28.298Z",
+  "timestamp": "2026-05-02T09:48:33.548Z",
   "phase": "5",
   "phase_name": "GHCR Image Distribution & CI Validation",
   "phase_dir": ".planning/phases/05-ghcr-image-distribution-ci-validation",
@@ -37,11 +37,13 @@
     {"decision": "Schema-push gate skipped — no ORM files in phase scope", "rationale": "Phase 5 touches .github/workflows/*.yml + docker-compose.prod.yml; no Payload/Prisma/Drizzle/Supabase/TypeORM schema deltas."},
     {"decision": "Security threat model gate active (ASVS L1, block on high)", "rationale": "workflow.security_enforcement is unset, defaulting to enabled. Each PLAN.md includes a <threat_model> block. All 4 plans pass — high-severity threats (T-05-18 attestation predicate correctness, T-05-19/T-05-22/T-05-23 branch-protection drift) all have explicit mitigations."}
   ],
-  "uncommitted_files": [
-    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-01-PLAN.md",
-    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-02-PLAN.md",
-    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-03-PLAN.md",
-    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-04-PLAN.md"
+  "uncommitted_files": [],
+  "previously_uncommitted_now_committed": [
+    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-01-PLAN.md (eeac982)",
+    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-02-PLAN.md (eeac982)",
+    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-03-PLAN.md (eeac982)",
+    ".planning/phases/05-ghcr-image-distribution-ci-validation/05-04-PLAN.md (eeac982)",
+    ".planning/ROADMAP.md (planner-emitted Phase 5 plan list + 0/4 progress; committed in this re-pause turn)"
   ],
   "checker_findings_to_fix": [
     {
