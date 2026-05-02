@@ -2,6 +2,7 @@
 created: 2026-04-04T15:47:57.595Z
 title: Ensure environment parity across local dev, staging, and production
 area: tooling
+resolves_phase: 6
 files:
   - docker-compose.yml
   - .env.example
