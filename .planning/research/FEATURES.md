@@ -1,251 +1,244 @@
-# Feature Research
+# Feature Landscape — v1.1 De-platform (Docker-Only Base)
 
-**Domain:** SMS-based job matching API (gig economy / labor marketplace via Twilio)
-**Researched:** 2026-03-08
-**Confidence:** HIGH — derived from the actual built system (Phases 01–02.5 complete). Source: REQUIREMENTS.md traceability table, STATE.md, PROJECT.md.
+**Milestone:** v1.1 — De-platform from GKE/GCP to a hosting-agnostic Docker-only baseline
+**Researched:** 2026-05-01
+**Confidence:** HIGH — official Docker, Temporal, Jaeger, Grafana, and Prometheus documentation cross-verified
 
----
+## Scope Disclaimer
 
-## Feature Landscape
+This document supersedes the prior product-feature research for v1.1 only. It catalogs **infrastructure/deploy features**, not application features. The v1.0 product surface (Twilio webhook, classify+extract, MatchService, Pinecone embeddings, Temporal workflows, OTel/Prometheus/structlog) is **already built and out of scope** — see `.planning/PROJECT.md` Validated Requirements.
 
-### Table Stakes (Users Expect These)
-
-Features the system must have or the core loop breaks entirely.
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Twilio X-Twilio-Signature validation | Every inbound Twilio webhook can be spoofed without this; Twilio docs require it as the baseline security layer | MEDIUM | ✅ Implemented (SEC-01). Must validate HMAC-SHA1 of URL + sorted POST params against Auth Token. FastAPI complicates this because you need the raw body before it is parsed — use `Request.body()` with a custom dependency, not Pydantic directly. HIGH confidence (Twilio security model well-documented). |
-| Single-endpoint message classification (job post vs. worker goal) | The entire routing model depends on correctly labeling each inbound message before any downstream action | HIGH | ✅ Implemented (EXT-01). gpt-5.3-chat-latest does classification + extraction in one call per PROJECT.md. Prompt engineering for reliable JSON output is the hard part. Must handle ambiguous messages gracefully (ask for clarification). |
-| Structured data extraction from free-text SMS | Workers and job posters use natural language; the system must derive structured fields (rate, duration, location, timeframe) to do any matching | HIGH | ✅ Implemented (EXT-02, EXT-03). LLM extraction — define strict output schema with Pydantic, instruct model to return null fields rather than hallucinate. Test with adversarial SMS samples. |
-| Phone number as identity (auto-registration) | No app install, no signup form — the first text from a number creates the record. Users expect frictionless entry | LOW | ✅ Implemented (IDN-01, IDN-02). Extract `From` field from Twilio payload. Store phone numbers normalized to E.164 format (+1XXXXXXXXXX). First-seen creates user row; subsequent messages update last-seen timestamp. HIGH confidence (standard Twilio pattern). |
-| SMS confirmation reply to job poster | Job poster needs to know what the system recorded — errors in extraction should surface here so they can correct | LOW | ⏳ Pending Phase 4 (STR-03). Unknown-branch graceful reply is ✅ Implemented (EXT-04). Full confirmation SMS pending. TwiML `<Response><Message>` with extracted fields summarized in plain English. Must fit in 160 chars or clearly chain into multi-part SMS. |
-| Ranked job list reply to worker | This is the core value delivery — worker gets an ordered list of jobs that hits their earnings goal | MEDIUM | ⏳ Pending Phase 3 (MATCH-01, MATCH-02). Sort by: (1) earnings math satisfied, (2) soonest available, (3) shortest duration. Must be legible in SMS format. Consider condensed job format (e.g., "1. $25/hr, 4hr shift, Tue 9am, 2mi away"). |
-| Idempotency on webhook retries | Twilio retries failed webhooks (up to 11 attempts with exponential backoff). Processing the same message twice creates duplicate job posts or double-sends | MEDIUM | ✅ Implemented (SEC-02). Deduplicate on `MessageSid` (Twilio's unique per-message ID). Store `MessageSid` in a processed-messages table with a unique constraint. On duplicate, return HTTP 200 immediately without reprocessing. HIGH confidence (Twilio retry behavior is documented and consistent). |
-| Synchronous HTTP 200 within 10 seconds | Twilio marks a webhook delivery as failed if it does not receive HTTP 200 (or 204) within 15 seconds (often faster in practice). A timeout triggers a retry | HIGH | ✅ Resolved via Inngest (ASYNC-01). Webhook returns HTTP 200 immediately after event emit; all processing in Inngest function outside Twilio's response window. The GPT call is the primary latency risk. Options: (a) respond 200 immediately and process async, then send SMS proactively via Twilio REST API; (b) optimize prompt to reduce latency. Async approach decouples webhook response from processing but requires a background worker or task queue. This is the most architecturally significant constraint. |
-| Graceful handling of malformed / unclassifiable SMS | Users will text garbage, test messages, replies to system SMS, opt-out keywords, etc. | MEDIUM | ✅ Implemented (EXT-04). Define a fallback response for unclassifiable messages ("Sorry, I didn't understand that. Text your earnings goal like: 'I want to make $200 today'"). Distinguish from Twilio system keywords (STOP, HELP, START) which must never be intercepted. |
-| Rate limiting per phone number | Bad actors (or bugs) can hammer the endpoint. Unconstrained calls = runaway GPT + Twilio costs | MEDIUM | ✅ Implemented (SEC-03). PostgreSQL-backed TTL counters (no Redis). Limit inbound processing per phone number (e.g., max 10 messages/hour). Return a polite SMS if limit hit. Implement at the application layer before GPT is called. |
-| HTTPS-only endpoint | Twilio refuses to send webhooks to non-HTTPS URLs in production | LOW | ✅ Infrastructure — Render.com provides TLS. Infrastructure concern, not app code. Twilio validates the certificate. |
-| Webhook returns valid TwiML | Twilio expects a TwiML XML response (or empty 200/204). Malformed responses cause delivery failures | LOW | ✅ Resolved differently — webhook returns HTTP 200 (not TwiML); Twilio is satisfied by HTTP 200. The Twilio Python library is used only for outbound SMS and signature validation, not for generating TwiML responses. |
-
-### Differentiators (Competitive Advantage)
-
-Features that go beyond baseline and deliver the core value proposition better.
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Earnings math matching (rate x duration >= goal) | Deterministic, user-testable answer to "can I hit my goal?" — most job platforms show hourly rate only, leaving math to the worker | MEDIUM | Core to Vici's value. Must handle: hourly rate (rate x est_duration), flat-pay jobs (pay >= goal), and jobs where duration is unknown (flag as unverifiable). The matching predicate must be transparent enough for workers to understand why they got the results they did. |
-| Ranked by shortest time to goal | Workers want to earn $X as fast as possible — sorting by soonest/shortest is the key UX insight | LOW | Secondary sort after earnings math gate. Tiebreak: soonest start > shortest shift. |
-| Confirmation flow with correction path | Job poster gets a summary and can reply "wrong" or "fix pay $30/hr" to trigger a correction without resubmitting everything | HIGH | Requires session/conversation state keyed on phone number + recency window. Parser must handle correction commands. Defer to v1.x — correction by resubmitting is acceptable for MVP. |
-| Semantic job matching | Workers who text vague goals ("something easy nearby") get semantically matched jobs, not just earnings-math matches | HIGH | Pinecone embedding write implemented (VEC-01). Semantic matching is a v2 feature. Avoids costly schema migrations later. |
-| Structured extraction with field-level confidence | LLM returns a confidence score per extracted field; low-confidence fields prompt a clarification SMS rather than silently guessing | HIGH | Requires prompt engineering and handling partial extractions. Significantly improves data quality but adds a conversational turn. High value, medium effort — target v1.x. |
-| Time-of-send context inference | "Tomorrow morning" is resolved against the message send timestamp to produce an absolute datetime | MEDIUM | Pass `DateSent` from Twilio payload to the extraction prompt. Instruct GPT to resolve relative time expressions. Store both raw text and resolved datetime. |
-
-### Anti-Features (Commonly Requested, Often Problematic)
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Async webhook response (respond 200, process later) | Avoids Twilio timeout; enables longer GPT calls | Inngest IS the implemented async pattern. FastAPI BackgroundTasks (the original anti-feature concern) is correctly avoided — Inngest provides better retry, observability, and failure handling than BackgroundTasks. | Inngest event-driven processing — ✅ Implemented (ASYNC-01, ASYNC-03). Return HTTP 200 after event emit; all heavy work in Inngest process-message function. |
-| Opt-in / opt-out user management (beyond STOP/START) | Users want to pause notifications or limit job types | STOP/START are mandatory Twilio compliance keywords — handle correctly (pass through, never intercept). Additional opt-out schemes add state management and edge cases before core value is proven. | Honor STOP/START natively (Twilio handles STOP at carrier level). Build custom opt-out only if user research shows demand. |
-| Multi-turn conversation / dialog management | "Natural" back-and-forth feels more human | Without a session store and state machine, each message is independently classified. Dialog management is a substantial feature — it couples classification to history and makes the system stateful in ways that are hard to test and debug. | For MVP: stateless per-message classification with clear instructions in the SMS prompt. Add conversation state in v2 only if correction flows prove necessary. |
-| Web dashboard for job posters | Posters want to see all their listings | The whole value proposition is no-app. A web UI adds auth, frontend, and a second interaction surface before SMS is validated. | API-only for MVP. Surface job listing data via SMS query commands (e.g., text "MY JOBS" to list active postings). Add dashboard only after SMS channel is validated. |
-| Payment processing integration | End-to-end gig platform | Payment adds compliance (PCI), legal (1099/W-2 classification), and significant product complexity. | Rate/pay is informational in v1. Workers and posters handle payment out-of-band. Revisit after product-market fit. |
-| Multiple inbound phone numbers | Support different numbers for different job categories | Complicates Twilio configuration and requires routing logic before classification. No user benefit in v1. | Single inbound number; classification handles category assignment. |
-| Phone number verification (OTP) | Prevent spoofing | Twilio already validates that the `From` number is a real, reachable number for SMS. Additional OTP adds a two-message onboarding flow that defeats the zero-friction pitch. | Trust Twilio's carrier-level From validation. Add verification only if abuse patterns emerge in production. |
+The roadmap consumer should treat each feature below as a candidate phase or sub-phase scoped to the de-platform.
 
 ---
 
-## Feature Dependencies
+## Section 1 — `docker-compose.prod.yml` as Canonical Production Manifest
+
+### Table-Stakes
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Compose override file pattern** (`docker-compose.yml` base + `docker-compose.prod.yml` overlay) | Small | `docker-compose.yml` | Run with `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`. Dev mounts `./src` and runs `--reload`; prod must NOT. The current dev compose mounts `./src:/app/src` and runs uvicorn `--reload` on line 70 — **prod overlay must remove the volume mount and the `--reload` flag** |
+| **`restart: unless-stopped` on every long-running service** | Small | All services | Current dev compose has no restart policies. `unless-stopped` is the canonical prod choice — survives daemon restart but respects manual `docker compose stop` |
+| **Healthchecks on every service** + **`depends_on: condition: service_healthy`** | Small | Already partial in dev | Dev compose already has healthchecks on postgres/opensearch/jaeger-collector/temporal/prometheus/grafana. Prod needs healthchecks on `app` (already in Dockerfile line 35) and on the worker process. Use `condition: service_healthy` to gate startup ordering deterministically |
+| **Named volumes for all stateful services** (postgres, prometheus, jaeger-badger, grafana_data) | Small | All stateful services | Dev compose only declares `grafana_data` (line 126). Prod needs `postgres_data`, `prometheus_data`, `jaeger_data` (or whichever Jaeger backend is chosen). **No bind mounts for state** — they break portability across hosts |
+| **`env_file:` per service** (already established pattern) | None | Existing | Dev compose already uses `.env.postgres`, `.env.app`, `.env.temporal`, etc. Continue this pattern — no changes needed beyond a `.env.app.production` variant |
+| **Logging driver with rotation** (`json-file` with `max-size`/`max-file` or `local` driver) | Small | All services | Default `json-file` driver grows unbounded — fills disk on long-running prod hosts. Per-service `logging:` block with `driver: json-file` + `options: {max-size: "10m", max-file: "3"}` is the standard fix |
+| **Pinned image tags** (no `:latest`) | Small | All services | Dev compose already pins most (`postgres:16`, `temporalio/auto-setup:1.26.2`, etc.) but uses `temporalio/ui:latest` (line 88) — this becomes irrelevant since temporal-ui is removed in v1.1 (Temporal Cloud hosts the UI) |
+| **Non-root user in all custom images** (already done in app) | None | Existing Dockerfile | Dockerfile line 23 already adds `appuser` and switches with `USER appuser` |
+
+### Differentiator
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Compose `secrets:` for sensitive credentials** (Twilio token, OpenAI key, Pinecone key, Temporal Cloud cert/key, DATABASE_URL password) | Medium | `src/config.py` Settings class | Docker Compose secrets are mounted as files at `/run/secrets/<name>` and never appear in `docker inspect` or process env. Pattern: support `*_FILE` env vars in `Settings` that read the file content if present, else fall back to the env var. Affects every credential field in `src/config.py:9-89` (sms.auth_token, extraction.openai_api_key, pinecone.api_key, etc.) |
+| **Separate worker service** (split FastAPI process from Temporal Worker process) | Medium | `src/main.py` lifespan, `src/temporal/worker.py` | Currently the FastAPI lifespan starts the Temporal worker as a background task in the same process. Splitting them into two compose services with the **same image, different commands** (one runs uvicorn, one runs `python -m src.temporal.worker`) is the canonical "scale workers independently" pattern. Required if `deploy.replicas` is later used |
+| **`deploy.resources.limits` and `reservations`** (CPU + memory) | Small | All services | **CRITICAL**: per the Docker docs, `deploy.resources` limits **are honored by `docker compose up`** in modern Docker Engine (24+). Earlier guidance that "they're swarm-only" is outdated. Apply per service: `app` ~512M / 0.5 CPU, `postgres` ~1G, `prometheus` ~512M, `grafana` ~256M |
+| **Read-only root filesystem** (`read_only: true`) for stateless services | Medium | App, prometheus, grafana | Containers like `app` write nothing to root FS — they can run `read_only: true` with `tmpfs:` for `/tmp`. Hardening that buys little day-1 value but pays off in supply-chain incident scenarios |
+| **`init: true`** for processes that don't reap zombies | Small | App, worker | Python doesn't reap zombie subprocesses cleanly under PID 1. `init: true` injects tini |
+
+### Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|---------------------|
+| **DO NOT use `docker compose up --scale app=N` to load-balance** | Compose's built-in scaling has no load balancer — you'd need Traefik/Caddy/nginx in front, which contradicts the "single-host, hosting-agnostic" baseline. If horizontal scaling is needed, that's a different milestone (Swarm/k8s/Nomad) | Single replica per service in v1.1. Document that horizontal scaling is a future milestone |
+| **DO NOT bind-mount source code in prod** (`./src:/app/src`) | Mounts dev code into the prod image, defeats image immutability, and breaks if the deploy host doesn't have the repo checked out | Build the image with `COPY src/ ./src/` (Dockerfile line 28 already does this) and ship the immutable image |
+| **DO NOT use `restart: always`** | Restarts even after manual `docker compose stop`, which masks operator intent during incident response | Use `restart: unless-stopped` |
+| **DO NOT expose Postgres / Prometheus / Jaeger collector / Temporal-UI ports to the public internet** | Postgres has no IP-allowlist, Prometheus has no auth, Jaeger collector has no auth on 4317/4318, Temporal-UI has no auth. The existing dev compose exposes 5432, 9090, 4317, 4318, 16686 on `0.0.0.0` — **prod must bind these to `127.0.0.1` or omit `ports:` entirely** and access via `docker compose exec` / a bastion / SSH tunnel |
+| **DO NOT use `:latest` tags** | Non-reproducible deploys; the same `docker compose pull` produces different images on different days. Dev compose currently has `temporalio/ui:latest` on line 88 — irrelevant for v1.1 because Temporal-UI is removed |
+| **DO NOT commit `.env*` files with real secrets** | Even committing once leaks them via git history. `.env.example` patterns only |
+
+---
+
+## Section 2 — Temporal Cloud Connection
+
+**Big picture:** Temporal Cloud removes the in-cluster `temporalio/auto-setup:1.26.2` service from the compose file (currently line 73-85) and the `temporal-ui` service (line 87-93). The app's Temporal client connects out to `<namespace>.<account>.tmprl.cloud:7233`. The Temporal-Cloud-hosted UI replaces the local `temporal-ui` service.
+
+### Table-Stakes
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **mTLS authentication via TLSConfig** (cert + key files) | Medium | `src/temporal/worker.py:get_temporal_client` | Temporal Python SDK supports two auth modes for Cloud: **mTLS** (cert/key pair pinned to namespace) and **API key**. mTLS is the production-standard mode; API keys are easier but newer and have rate-limit caveats. With mTLS: `Client.connect(address, namespace=..., tls=TLSConfig(client_cert=cert_bytes, client_private_key=key_bytes))`. Can also use envconfig: `TEMPORAL_TLS_CLIENT_CERT_PATH` / `TEMPORAL_TLS_CLIENT_KEY_PATH`. Current `get_temporal_client(address)` signature must accept namespace and TLS material — see `src/temporal/worker.py:17-25` |
+| **Namespace argument to `Client.connect`** | Small | `src/temporal/worker.py:get_temporal_client` | Self-hosted Temporal lets `namespace` default to `"default"`. Cloud requires the **fully-qualified** `<namespace_id>.<account_id>` form passed both as the namespace arg AND as part of the address. Settings must add `temporal.namespace` field |
+| **Address format change** | Small | `src/config.py:TemporalSettings.address`, `.env.app` | Self-hosted: `temporal:7233` (current dev) or in-cluster DNS. Cloud: `<namespace>.<account>.tmprl.cloud:7233` (mTLS) or `<region>.<provider>.api.temporal.io:7233` (API key with HTTP routing). Just an env var change, no code change |
+| **`tls=True` flag at minimum** | Trivial | `src/temporal/worker.py` | Even with API-key auth (no certs), `tls=True` is required for Cloud — it's a TLS-only endpoint |
+| **Worker identity unchanged** | None | Existing | The Worker class (`src/temporal/worker.py:34-44`) is identical — it just inherits the new TLS-equipped Client. `TracingInterceptor` continues to work end-to-end with Cloud. **Critical: `Worker.run()` does not need any changes** |
+| **Cron registration unchanged** | None | Existing | `start_cron_if_needed` (`src/temporal/worker.py:47-63`) works identically against Cloud. The `RPCStatusCode.ALREADY_EXISTS` idempotency guard already accommodates Cloud's behavior on restart |
+| **Remove in-cluster Temporal services from compose** | Small | `docker-compose.yml` lines 72-93 | Delete `temporal:` and `temporal-ui:` service blocks. Delete `.env.temporal` and `.env.temporal-ui` files. Delete the schema-migration job artifacts referenced in STATE.md blockers ("Temporal schema migration job fails on re-run"). Delete the `gks-refactor` workstream's Temporal Helm chart |
+
+### Differentiator
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Use `temporalio.envconfig.ClientConfig.load_client_connect_config()`** to drive client construction from env vars instead of explicit `TLSConfig(...)` | Small | `src/temporal/worker.py` | The SDK ships an envconfig loader that consumes `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TLS_CLIENT_CERT_PATH`, `TEMPORAL_TLS_CLIENT_KEY_PATH`, `TEMPORAL_API_KEY` etc. directly. Lets you swap mTLS↔API-key↔self-hosted without touching the worker code |
+| **Cert rotation via Compose secrets** | Small | Compose secrets feature above | Mount `temporal_client_cert` and `temporal_client_key` as Docker secrets at `/run/secrets/temporal_client_cert` etc. so cert rotation is a `docker compose up -d` after dropping new files in place |
+| **Per-environment namespace** (`vici-prod.<account>`, `vici-staging.<account>`) | Small | Settings | Cloud namespaces are cheap; one per env is the standard pattern. No code change beyond env vars |
+
+### Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|---------------------|
+| **DO NOT bake cert/key files into the Docker image** | Image leakage = cred leakage, and cert rotation requires a rebuild | Mount via Compose secrets or bind-mount from `/etc/vici/temporal-certs/` on the host (read-only, root-owned) |
+| **DO NOT keep the in-cluster `temporal:` service "just in case"** for local dev | Two code paths for client construction (cloud-mTLS vs in-cluster-plaintext) means two test surfaces. Local dev should also use a Temporal Cloud "dev" namespace OR keep it for local-only via the dev compose, NOT the prod compose | Keep `temporal:` in `docker-compose.yml` (dev), drop it from `docker-compose.prod.yml`. Or run `temporal server start-dev` (the official local dev binary) instead of `auto-setup` if a leaner local dev is desired |
+| **DO NOT pass cert/key as base64-encoded env vars** | Env vars leak via `docker inspect`, child processes, error logs. The SDK accepts `*_PATH` exactly to avoid this | Use `_PATH` variants always. `_DATA` only acceptable when reading from a Compose secret file path |
+
+---
+
+## Section 3 — Temporal Postgres Visibility (drop OpenSearch)
+
+**Big picture:** Temporal Cloud already runs its own visibility store; the app doesn't manage visibility itself in v1.1. The only OpenSearch usage in the current stack is **Jaeger's** trace backend (line 13-22 of compose), NOT Temporal's. Temporal v1.20+ supports Postgres for advanced visibility *if self-hosting*, but since v1.1 moves to Cloud, this section is mostly **NOT APPLICABLE** for the Temporal half — the question conflates two OpenSearch users.
+
+### Clarifying the OpenSearch Footprint
+
+The current `docker-compose.yml` runs **one** OpenSearch instance (line 13). It is consumed by **`jaeger-collector`** and **`jaeger-query`** as the Jaeger storage backend (lines 32-34, 49-51). It is **NOT** wired to Temporal — the in-cluster `temporal:` service uses Postgres for both persistence and visibility (the default for `temporalio/auto-setup`). This means:
+
+- "Drop OpenSearch entirely" is really "**replace Jaeger's OpenSearch backend with something compose-native**." See Section 4.
+- Temporal Cloud handles its own visibility store invisibly — no app-side change.
+
+### Table-Stakes
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **No app-level change** for Temporal visibility | None | Temporal Cloud | Cloud's visibility is opaque to the client. Workflow IDs, statuses, search attributes all queryable through the same `client.list_workflows(query=...)` API |
+| **Confirm no custom search attributes are in use** | Trivial | `src/temporal/workflows.py`, `src/temporal/activities.py` | Grep for `upsert_search_attributes` and `set_search_attributes`. If none, the Cloud move is invisible. (Quick check: the current code in worker.py and activities.py shows none — confirm during phase) |
+
+### Differentiator
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Temporal Cloud Web UI** (replaces local `temporal-ui` on port 8080) | None | Temporal Cloud account | Cloud ships a hosted UI at `cloud.temporal.io` with the same workflow visibility, history viewer, query editor. Includes the `Count` API and `GROUP BY ExecutionStatus` aggregations |
+
+### Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|---------------------|
+| **DO NOT add custom Temporal search attributes during the de-platform** | Postgres-backed (and Cloud-backed) custom attributes are scoped per-namespace and require coordinated migration; introducing them now adds cross-cutting risk to a deploy-only milestone | Defer to a future "search/observability" milestone if business needs them |
+| **DO NOT self-host Temporal "to save the Cloud cost" mid-de-platform** | Re-introduces the operational burden the milestone is removing (schema migration job, persistence sizing, visibility store choice, certs, upgrades) | If cost is a real constraint, that's a separate decision later. The milestone goal is hosting-agnostic Docker, not cheapest |
+| **DO NOT use `GROUP BY` outside `ExecutionStatus`** in app code | Per Temporal docs, only `ExecutionStatus` grouping is supported in the Count API today; assuming richer grouping will silently fail | If aggregations are needed, do them downstream in Postgres or push them through OTel metrics |
+
+### Postgres-Visibility Limitations (informational, in case self-hosted is reconsidered)
+
+Documented from Temporal docs cross-checked 2026-05-01:
+
+- Custom search attributes are **per-namespace** in Postgres mode (vs global in Elasticsearch/OpenSearch mode)
+- Single attribute value max **2 KB**, total payload max **40 KB**, max **255 chars per value**
+- Search attribute values stored **unencrypted** in the visibility store — payload codec does not apply
+- Recommended only for "low to moderate" workflow throughput; ES/OS recommended for high volume
+- `GROUP BY` only supported by `ExecutionStatus` in the Count API regardless of backend
+
+---
+
+## Section 4 — Self-Contained Observability Stack in Compose for Production
+
+**Big picture:** Replace OpenSearch with a Jaeger-native single-binary backend so the prod stack is Jaeger + Prometheus + Grafana + (optional) Loki for logs — all in compose, all persisted via named volumes, all bound to localhost.
+
+### Table-Stakes
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Jaeger v2 with Badger storage backend** (replaces OpenSearch) | Medium | `docker-compose.yml` lines 13-53, `jaeger/collector-config.yaml`, `jaeger/query-config.yaml` | Jaeger v2 (the current `jaegertracing/jaeger:2.16.0` image already in the compose file) supports Badger as a storage backend — single-binary embedded LMDB-style key-value store, no external dependencies. Configure via the YAML config (NOT CLI flags — Jaeger 2.x removed CLI flags). Set `SPAN_STORAGE_TYPE=badger`, `BADGER_DIRECTORY=/badger`, `BADGER_EPHEMERAL=false`, mount a named volume to `/badger`. Result: drop the OpenSearch service entirely. **Caveat:** Badger is single-instance only (cannot be shared across collector replicas), which matches the "single host, single replica" baseline |
+| **Single Jaeger all-in-one container** OR **collector+query split** | Small | Above | The current dev compose uses the **split** pattern (collector + query as separate services). For a single-host prod, the all-in-one image is simpler and supported. Either is fine — preserve the split if it's already working with the existing config files |
+| **Persist Prometheus TSDB** | Small | `docker-compose.yml` line 95-107 | Current dev compose has NO volume on Prometheus (line 95-107 shows only the config bind mount). Add `prometheus_data:/prometheus` named volume. Lose all metrics history on every container restart otherwise |
+| **Configure Prometheus retention** | Trivial | `prometheus.yml` or command flags | Default is 15d. Set explicitly via `--storage.tsdb.retention.time=15d` (or 30d) and `--storage.tsdb.wal-compression`. Pass via `command:` in compose, not config file |
+| **Bind monitoring ports to `127.0.0.1`** | Trivial | Compose ports stanzas | Change `"9090:9090"` → `"127.0.0.1:9090:9090"`, same for Jaeger 4317/4318/16686. Access via SSH tunnel. **The prod overlay is the right place for this — dev keeps `0.0.0.0`** |
+| **Grafana provisioning via mounted YAML files** (already done in dev) | None | `grafana/provisioning/` directory | Dev compose line 113 already mounts `./grafana/provisioning:/etc/grafana/provisioning` — preserves the dashboards and datasources across restarts since `grafana_data` (line 126) is a named volume. Just continue this pattern |
+| **Grafana admin password from a real secret** (not "admin/admin") | Small | `src/config.py:79-80`, `.env.grafana` | Current `Settings` defaults `grafana_admin_password = "admin"` (config.py line 80). Prod must source this from a Compose secret or a non-default env var. Use `${GRAFANA_ADMIN_PASSWORD__FILE:-/run/secrets/grafana_admin_password}` pattern in `.env.grafana` |
+| **Persist Grafana data** (already done) | None | `grafana_data` volume | Already declared on line 126 of compose. Confirmed working |
+
+### Differentiator
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Loki + Promtail for centralized logs** (replaces "structlog→stdout, scrape via `docker logs`") | Medium | New compose services | Currently logs are JSON to stdout, retrieved via `docker logs` or `docker compose logs`. Loki gives structured search, retention, and Grafana integration without bringing back the OpenSearch footprint. Optional — Docker `json-file` log driver with rotation is also acceptable for v1.1 baseline |
+| **Reverse proxy (Caddy or Traefik)** in front of Grafana with HTTPS | Medium | New service | Lets ops view dashboards over the public internet via `grafana.example.com` with TLS termination. Without this, dashboards require SSH tunnel. **Anti-feature unless explicitly desired** — adds attack surface |
+| **Grafana datasource for Postgres** (so SQL-based dashboards work against the app DB directly) | Small | Existing | Existing pattern, already supported by Grafana provisioning |
+| **OTel Collector intermediary** (app → otel-collector → jaeger + prometheus) | Medium | Refactor span/metric exporters | Decouples the app from the trace/metric backends. Allows dual-shipping to Jaeger AND a SaaS like Honeycomb/Datadog later. **Probably overkill for v1.1** unless multi-backend export is on the roadmap |
+
+### Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|---------------------|
+| **DO NOT expose Prometheus to the public internet** | Prometheus has no built-in auth and exposes all scraped metrics, including app internals (token counts, error rates, infra labels), and supports remote query/admin endpoints (`--web.enable-admin-api`) that allow data deletion | Bind to `127.0.0.1`, access via SSH tunnel or behind authenticated reverse proxy |
+| **DO NOT expose Jaeger collector OTLP ports (4317/4318) to the public internet** | They accept anonymous trace ingestion — anyone can flood your traces or push poisoned spans | Bind to `127.0.0.1`. App and worker are on the same compose network and use the in-network DNS name (`jaeger-collector:4317`) |
+| **DO NOT expose Jaeger query UI (16686) without auth** | Trace data contains PII (phone numbers, message bodies in span attributes if not filtered). Anonymous read = data leak | Same as above — bind to `127.0.0.1` or put behind authenticated reverse proxy |
+| **DO NOT bring back OpenSearch "for log aggregation"** | OpenSearch is exactly what v1.1 is removing. Brings back JVM tuning, replicas=0 single-node yellow health hack, 1+ GB memory floor, license complexity | Use Loki (lightweight, single-binary) or `json-file` driver with rotation if log search is needed |
+| **DO NOT default-keep `admin/admin` for Grafana in prod** | Default creds are the #1 vector for misconfigured prod observability stacks. The current `Settings.grafana_admin_password = "admin"` (config.py:80) is **only safe in dev** | Settings must require a non-default password when `env=production`; add a model_validator that fails fast |
+| **DO NOT persist Jaeger Badger to a bind mount on macOS hosts in dev** | Badger uses memory-mapped files; macOS Docker Desktop's bind mounts have known mmap performance/correctness issues | Named volume only. Bind mount is fine on Linux hosts |
+
+---
+
+## Section 5 — Image Distribution
+
+**Big picture:** Define a canonical image source so deploy hosts pull, not build. The "any host can run this" goal is well-served by a registry + tag immutability.
+
+### Table-Stakes
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **GHCR image build + push via GitHub Actions on `main` and on tag** | Medium | `.github/workflows/ci.yml` (existing per STATE.md), `Dockerfile` | The repo already has GitHub Actions CI per Phase 02.5 ("GitHub Actions CI"). Add a publish job that runs `docker/build-push-action@v5` with `tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}, ghcr.io/${{ github.repository }}:latest` (or version tag). Auth via `GITHUB_TOKEN`. No external secrets needed |
+| **`docker-compose.prod.yml` references `image: ghcr.io/...`, NOT `build: .`** | Trivial | Compose file | Dev compose line 56 has `build: .`. Prod must use `image: ghcr.io/<org>/vici:<tag>` so deploy hosts only need `docker compose pull && docker compose up -d` — they never need the source repo |
+| **Tag images by commit SHA** (immutable) AND optionally `latest` | Small | Above | `sha-<short>` is the canonical immutable tag. `latest` is a moving alias. Use SHA tags in `docker-compose.prod.yml` to make rollbacks deterministic. Set `GIT_SHA` env var for the `service_version` field that already wires to OTel (config.py:32, line 66 `git_sha`) |
+| **Multi-arch build (amd64 + arm64)** | Small | `docker/build-push-action` matrix | One-line addition (`platforms: linux/amd64,linux/arm64`). Free with buildx. Lets the same image run on Apple Silicon dev hosts and standard Linux servers |
+| **Image scan in CI** (e.g. `trivy`, `docker scout`) | Small | New CI job | `docker/scout-action@v1` or `aquasecurity/trivy-action@master`. Fails the build on HIGH/CRITICAL CVEs. Becomes a hard gate before push |
+
+### Differentiator
+
+| Feature | Complexity | Depends On | Notes |
+|---------|------------|------------|-------|
+| **Image signing with cosign** (Sigstore) | Medium | New CI job, key management | `cosign sign --keyless` using GitHub OIDC. Lets deploy hosts verify provenance with `cosign verify`. Production-grade supply-chain hardening. Probably overkill for v1.1 unless compliance requires it |
+| **SBOM generation** (`syft` or build-push-action's built-in `provenance: true, sbom: true`) | Small | CI | Built-in flag on the official Docker action. No extra service. Worth doing |
+| **Build provenance attestations** | Small | CI | Same one-liner as SBOM. Lets you trace any image back to the exact GitHub Actions run that built it |
+
+### Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|---------------------|
+| **DO NOT do `docker compose build` on the deploy host** | Requires the source repo on every prod host (loses "any host" portability), requires build toolchain (compilers, network access for `apt update`, `uv sync` from PyPI), creates a different image hash per host (no rollback, no verification), and the build-time secrets surface multiplies | Build once in CI, push to GHCR, pull on hosts. **This is the entire point of having a registry** |
+| **DO NOT build locally and `docker save | scp | docker load`** | Same problems as above plus the social problem ("which dev's laptop built the prod image?") | GHCR + CI |
+| **DO NOT use Docker Hub for a hosting-agnostic baseline** | Requires a separate account, has rate limits on anonymous pulls (100/6h), and its trust story is messier than GHCR for repos that already live on GitHub | GHCR is free, scoped to the GitHub org/user, auth-coupled to the repo |
+| **DO NOT keep `:latest` as the only prod tag** | Non-reproducible. "What's running in prod?" becomes unanswerable | SHA tags in `docker-compose.prod.yml`; promote via `docker compose pull && docker compose up -d` referencing a new SHA |
+| **DO NOT install build tools (uv, gcc, etc.) in the runtime stage** | Already correctly avoided — the existing multi-stage Dockerfile (Dockerfile lines 2-9 builder, 12-38 runtime) only copies `.venv` from the builder stage | Confirmed clean — no action needed |
+
+---
+
+## Feature Dependencies (Phase Ordering Hints)
 
 ```
-[Twilio Signature Validation]
-    └──required by──> [Webhook Endpoint] (security gate before any processing)
-
-[Phone Number as Identity]
-    └──required by──> [Message Classification]
-                          └──required by──> [Job Extraction]
-                          └──required by──> [Worker Goal Extraction]
-
-[Job Extraction]
-    └──required by──> [Earnings Math Matching]
-                          └──required by──> [Ranked Job Reply]
-
-[Worker Goal Extraction]
-    └──required by──> [Earnings Math Matching]
-
-[Idempotency (MessageSid dedup)]
-    └──required by──> [Webhook Endpoint] (must check before classification)
-
-[Rate Limiting]
-    └──required by──> [Webhook Endpoint] (must check before GPT call)
-
-[HTTP 200 within timeout]
-    └──constrains──> [Message Classification] (GPT call must complete within budget)
-
-[Pinecone embedding write]
-    └──enhances (v2)──> [Earnings Math Matching] (semantic search, if added later)
-
-[Confirmation SMS to poster]
-    └──enhances (v1.x)──> [Correction Flow] (requires conversation state)
-
-[Inngest process-message]
-    └──required by──> [Earnings Math Matching]
-    └──required by──> [SMS reply flows]
+[Image Distribution: GHCR + CI publish]
+    ↓ (so prod compose can `image:` instead of `build:`)
+[docker-compose.prod.yml skeleton]
+    ↓ (so we have a deploy target to test against)
+[Temporal Cloud connection rewrite] ── parallel ──> [Jaeger Badger backend swap]
+    ↓                                                ↓
+[Remove in-cluster temporal + temporal-ui]          [Remove OpenSearch service]
+                                ↓
+                        [End-to-end smoke test on a fresh Docker host]
+                                ↓
+                        [Delete pulumi/, helm/, k8s/, ESO, render.yaml, gks-refactor artifacts]
 ```
 
-### Dependency Notes
-
-- **Twilio Signature Validation required before any processing:** An unvalidated webhook can be spoofed to inject arbitrary job listings or spam workers. This must be the first middleware layer — before rate limiting, before classification.
-- **Idempotency check required before GPT call:** Twilio retries create duplicate processing. The MessageSid check must happen before the expensive GPT call, not after.
-- **Rate limiting required before GPT call:** Same reason — reject rate-limited requests before incurring AI costs.
-- **HTTP 200 timeout constrains classification:** The GPT call budget is approximately 8-10 seconds. If this proves insufficient, the async response pattern (anti-feature above) must be revisited, which cascades into needing a task queue.
-- **Pinecone embedding enhances matching (future):** Pinecone writes are implemented (VEC-01). Semantic search is a v2 feature.
-
----
-
-## MVP Definition
-
-### Launch With (v1)
-
-- ✅ **Twilio X-Twilio-Signature validation** (SEC-01)
-- ✅ **MessageSid idempotency** (SEC-02)
-- ✅ **Rate limiting per phone number** (SEC-03, PostgreSQL-backed)
-- ✅ **Phone number as identity (auto-registration)** (IDN-01, IDN-02)
-- ✅ **Single-endpoint GPT classification** (EXT-01)
-- ✅ **Structured extraction: job fields** (EXT-02 — description, ideal_datetime, flexibility, estimated_duration, location, pay_rate)
-- ✅ **Structured extraction: worker goal** (EXT-03 — target_earnings, target_timeframe)
-- ✅ **Graceful fallback for unclassifiable messages** (EXT-04 — SMS reply via asyncio.to_thread)
-- ⏳ **Earnings math matching** (MATCH-01 — Phase 3)
-- ⏳ **SMS confirmation reply to job poster** (STR-03 — Phase 4; graceful unknown reply ✅ done)
-- ⏳ **SMS ranked job list reply to worker** (MATCH-02, MATCH-03 — Phase 3)
-- ⏳ **STOP/START keyword pass-through** (SEC-05 — Phase 4)
-- ✅ **HTTP response within timeout budget** (ASYNC-01 — Inngest event-driven; returns HTTP 200 immediately)
-
-### Add After Validation (v1.x)
-
-- [ ] **Field-level confidence + clarification prompts** — Add when extraction quality data shows which fields are frequently wrong
-- [ ] **Time-of-send context inference** — Add when users report confusion from relative time expressions
-- [ ] **Correction flow via reply** — Add when posters report correcting bad extractions by resubmitting full messages (friction signal)
-- [ ] **SMS query commands** ("MY JOBS", "CANCEL JOB 2") — Add when posters need to manage listings without reposting
-
-### Future Consideration (v2+)
-
-- [ ] **Semantic matching** — Defer until earnings-math matching is validated and vague query patterns emerge (Pinecone embedding write already implemented, VEC-01)
-- [ ] **Web dashboard** — Defer until SMS channel is validated and operator tooling needs emerge
-- [ ] **Multi-turn conversation state** — Defer unless correction flow proves insufficient
-
----
-
-## Phase 3: Earnings Math Matching (Next Phase)
-
-**Requirements:** MATCH-01, MATCH-02, MATCH-03
-
-### What Will Be Implemented
-
-| Requirement | Description | Implementation |
-|-------------|-------------|----------------|
-| MATCH-01 | Earnings math SQL query | `JobRepository.find_matching()` — `WHERE pay_rate IS NOT NULL AND estimated_duration IS NOT NULL AND pay_rate * estimated_duration >= :target_earnings ORDER BY ideal_datetime ASC NULLS LAST, estimated_duration ASC NULLS LAST LIMIT 5` |
-| MATCH-02 | Ranked SMS formatter | `MatchService.format_sms()` — condensed format: `1. $25/hr 3hr Tue 9am downtown`, 3–5 results, 160-char segment awareness |
-| MATCH-03 | Empty match fallback | `"No jobs match your $X goal yet. We'll text you when one is posted."` |
-
-**New module:** `src/matches/service.py` — MatchService. Placeholder `src/matches/` directory already exists with Match SQLModel stub.
-
-**Integration point:** PipelineOrchestrator WorkGoal branch — after `WorkGoalRepository.create()` flush and `session.commit()`, call `MatchService.find_and_format()`, send result via `asyncio.to_thread(twilio_client.messages.create)`.
-
-**NULL handling policy:** jobs with NULL `pay_rate` or NULL `estimated_duration` are excluded from match results (can't verify earnings goal).
-
----
-
-## Phase 4: Outbound SMS + Production Deploy
-
-**Requirements:** STR-03, SEC-05, DEP-03
-
-### What Will Be Implemented
-
-| Requirement | Description | Implementation |
-|-------------|-------------|----------------|
-| STR-03 | Job poster confirmation SMS | Outbound SMS in PipelineOrchestrator job branch (after Pinecone write). Format: "Got it: $25/hr, 3hr, downtown. Reply again to update." via asyncio.to_thread. |
-| SEC-05 | STOP/START pass-through | Classify STOP/START keywords in Inngest process-message function before GPT call — never attempt processing or outbound SMS to STOP-registered number |
-| DEP-03 | Render.com production deploy | render.yaml Blueprint exists (PROD-04 complete). First deploy validates: /health returns 200, Inngest Cloud connectivity, Pinecone write, Twilio sig validation with production URL. |
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Twilio signature validation | HIGH | MEDIUM | P1 (✅ done) |
-| MessageSid idempotency | HIGH | LOW | P1 (✅ done) |
-| Rate limiting per phone | HIGH | MEDIUM | P1 (✅ done) |
-| Phone number as identity | HIGH | LOW | P1 (✅ done) |
-| Message classification (GPT) | HIGH | HIGH | P1 (✅ done) |
-| Job field extraction | HIGH | HIGH | P1 (✅ done) |
-| Worker goal extraction | HIGH | MEDIUM | P1 (✅ done) |
-| Earnings math matching | HIGH | MEDIUM | P1 (⏳ Phase 3) |
-| Confirmation SMS to poster | HIGH | LOW | P1 (⏳ Phase 4) |
-| Ranked job list SMS to worker | HIGH | LOW | P1 (⏳ Phase 3) |
-| STOP/START pass-through | HIGH | LOW | P1 (⏳ Phase 4) |
-| Graceful malformed-message handling | MEDIUM | MEDIUM | P1 (✅ done) |
-| Time-of-send inference | MEDIUM | MEDIUM | P2 |
-| Field-level confidence + clarification | HIGH | HIGH | P2 |
-| Correction flow via reply | MEDIUM | HIGH | P2 |
-| SMS query commands | MEDIUM | MEDIUM | P2 |
-| Semantic matching (Pinecone) | HIGH | HIGH | P3 |
-| Web dashboard | LOW | HIGH | P3 |
-
----
-
-## Competitor Feature Analysis
-
-Note: True SMS-only job marketplace competitors are rare. Comparison draws from adjacent patterns.
-
-| Feature | Snagajob / Indeed (app-based) | Wonolo / Instawork (app-based gig) | Vici (our approach) |
-|---------|-------------------------------|-------------------------------------|----------------------|
-| Onboarding | Multi-step signup + profile | App install + identity verification | Zero-friction: first text auto-registers |
-| Job discovery | Search + filter UI | Browse feed + apply button | Text earnings goal, get ranked list |
-| Earnings transparency | Hourly rate shown | Rate + estimated hours shown | Earnings math explicitly verifies goal achievability |
-| Matching | Keyword + location filter | Algorithm + preferences | Earnings math gate + recency sort |
-| Identity | Email + password | Phone + government ID | Phone number only |
-| Notification | Push + email | Push notifications | SMS reply only |
-| Job management | Employer dashboard | Employer app | SMS reply (v1), commands (v1.x) |
-
----
-
-## Implementation Notes: SMS-Specific Constraints
-
-These are operational realities that affect feature design, not features themselves.
-
-**Message length:** Standard SMS is 160 characters (GSM-7 encoding). Replies containing job lists must be designed for multi-part SMS (concatenated), but conciseness is still critical — long SMS chains are worse UX than a tight 3-job summary.
-
-**Delivery receipt vs. read receipt:** Twilio provides delivery status webhooks (MessageStatus callback) but not read receipts. Do not design features that assume a user has seen a message.
-
-**Carrier filtering:** Carriers filter SMS that look like spam. Job listing replies that contain URLs, dollar signs, or high-frequency sends from a single number can be filtered. Keep reply formatting plain and minimal.
-
-**STOP compliance:** When a user texts STOP, Twilio (and the carrier) suppress all outbound messages to that number. The application must never attempt to send to a STOP-registered number — Twilio will reject it with an error code, but the app should handle this gracefully and not treat it as a processing failure.
-
-**Phone number normalization:** Twilio provides `From` in E.164 format. Store in E.164. Never normalize to local format — international numbers are valid users.
-
----
-
-## Confidence Assessment by Area
-
-| Area | Confidence | Reason |
-|------|------------|--------|
-| Twilio webhook security (signature validation, retry behavior) | HIGH | Well-established, stable Twilio feature; consistent across docs versions |
-| Idempotency on MessageSid | HIGH | Twilio's MessageSid uniqueness guarantee is a documented contract |
-| Rate limiting patterns | HIGH | PostgreSQL-backed TTL counter implemented (SEC-03) |
-| Phone-as-identity patterns | HIGH | Standard Twilio SMS pattern, widely implemented |
-| LLM extraction reliability/confidence | MEDIUM | gpt-5.3-chat-latest specifics beyond training cutoff; general extraction patterns well-known |
-| SMS marketplace feature landscape | MEDIUM | Inferential from adjacent markets (Wonolo, Snagajob); no pure SMS-only competitors to benchmark |
-| Earnings math matching correctness | HIGH | Deterministic logic, no external dependencies |
-| Carrier filtering behavior | MEDIUM | Carrier policies vary and change; general patterns well-known |
+The GKE/GCP cleanup happens **last** — only after the new baseline is verified end-to-end on a clean host, so there's no regression-rescue path back to the old infra.
 
 ---
 
 ## Sources
 
-Sources: REQUIREMENTS.md traceability table, STATE.md, PROJECT.md (HIGH confidence — derived from built system). Updated 2026-03-08.
-
----
-
-*Feature research for: SMS-based job matching API (Vici)*
-*Researched: 2026-03-08*
+- [Compose Deploy Specification | Docker Docs](https://docs.docker.com/reference/compose/compose-file/deploy/)
+- [Manage secrets securely in Docker Compose | Docker Docs](https://docs.docker.com/compose/how-tos/use-secrets/)
+- [Control startup and shutdown order in Compose | Docker Docs](https://docs.docker.com/compose/how-tos/startup-order/)
+- [Docker Compose Production Setup Guide (2026) | ZTABS](https://ztabs.co/blog/docker-compose-production-setup)
+- [Temporal Client - Python SDK | Temporal Platform Documentation](https://docs.temporal.io/develop/python/temporal-client)
+- [Authenticate with mTLS certificates - Temporal Cloud](https://docs.temporal.io/cloud/certificates)
+- [Environment configuration | Temporal Platform Documentation](https://docs.temporal.io/develop/environment-configuration)
+- [Self-hosted Visibility feature setup | Temporal Platform Documentation](https://docs.temporal.io/self-hosted-guide/visibility)
+- [Temporal Visibility | Temporal Platform Documentation](https://docs.temporal.io/visibility)
+- [Search Attributes | Temporal Platform Documentation](https://docs.temporal.io/search-attribute)
+- [Persisting Data in Jaeger with Badger Storage · jaegertracing · Discussion #7487](https://github.com/orgs/jaegertracing/discussions/7487)
+- [jaegertracing/jaeger Docker image](https://hub.docker.com/r/jaegertracing/jaeger)
+- [Deployment | Jaeger](https://www.jaegertracing.io/docs/1.76/deployment/)
+- [Provision Grafana | Grafana documentation](https://grafana.com/docs/grafana/latest/administration/provisioning/)
+- [Configure a Grafana Docker image | Grafana documentation](https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/)
+- [Docker - How to Persist Prometheus Data for Reliable Monitoring | SigNoz](https://signoz.io/guides/how-to-persist-data-in-prometheus-running-in-a-docker-container/)
+- [Working with the Container registry - GitHub Docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [Publishing Docker images - GitHub Docs](https://docs.github.com/actions/guides/publishing-docker-images)
+- Context7: `/temporalio/sdk-python` — `Client.connect`, `TLSConfig`, namespace argument forms (verified 2026-05-01)

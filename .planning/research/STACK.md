@@ -1,221 +1,537 @@
-# Stack Research
+# Stack Research — v1.1 De-platform (Docker-Only Base)
 
-**Domain:** SMS-based job matching API (Python/FastAPI + Twilio + OpenAI + PostgreSQL + Pinecone + Inngest)
-**Researched:** 2026-03-08
-**Confidence:** HIGH — derived from the actual built system (Phases 01–02.5 complete). Source: STATE.md, PROJECT.md, REQUIREMENTS.md.
+**Domain:** Hosting-agnostic Docker-only baseline for SMS-based job matching API
+**Researched:** 2026-05-01
+**Confidence:** HIGH — Temporal SDK + Server, Compose Spec, and auto-setup env vars verified against Context7 (`/temporalio/documentation`, `/websites/python_temporal_io`, `/docker/docs`, `/docker/compose`) and current GitHub releases (Compose v5.1.3, sdk-python 1.27.0, Temporal Server v1.31.0).
 
----
-
-## Recommended Stack
-
-### Core Technologies
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Python | 3.12 | Runtime | 3.12 offers the best balance of performance improvements (faster CPython) and ecosystem support; 3.13 is too new for stable library support across the board as of mid-2025. Confidence: HIGH |
-| FastAPI | ^0.111 | HTTP framework + webhook handler | Native async, automatic OpenAPI docs, Pydantic v2 integration, and the de-facto standard for Python ML/AI APIs. The single Twilio webhook endpoint is trivially modeled as a `POST /sms` route. Confidence: MEDIUM (verify latest pin) |
-| Pydantic | v2 (ships with FastAPI) | Request/response validation and structured extraction models | v2 is 5-50x faster than v1 for validation; `model_json_schema()` feeds directly into OpenAI structured outputs. Do not pin separately — FastAPI manages the compatible range. Confidence: HIGH |
-| SQLAlchemy | ^2.0 | ORM + async query layer | SQLAlchemy 2.0 unified the sync/async API under a single `AsyncSession`; the `mapped_column` + `DeclarativeBase` pattern gives typed models without the boilerplate of 1.x. Required for Alembic integration. Confidence: HIGH |
-| asyncpg | ^0.29 | Async PostgreSQL driver | Fastest async Postgres driver for Python; used as the backend for SQLAlchemy `AsyncEngine` via `create_async_engine("postgresql+asyncpg://...")`. Do not use psycopg2 in an async app. Confidence: HIGH |
-| PostgreSQL | 16 | Primary datastore | postgres:16 plain image — no vector column — Pinecone is the external vector store. Confidence: HIGH |
-| Alembic | ^1.13 | Database schema migrations | First-class SQLAlchemy integration; supports async engines via `run_sync` pattern; the only production-viable migration tool for SQLAlchemy projects. Confidence: HIGH |
-| openai | ^1.30 | OpenAI GPT API client | The v1.x SDK (released Nov 2023) is the modern interface: `client.beta.chat.completions.parse()` with Pydantic model `response_format` enables structured outputs. gpt-5.3-chat-latest is specified by the product owner; use the model string `"gpt-5.3-chat-latest"` in requests. Confidence: MEDIUM (verify latest 1.x pin; gpt-5.3-chat-latest model string needs validation against OpenAI's naming) |
-| twilio | ^9.0 | Twilio SMS SDK | Handles signature validation (`RequestValidator`) and outbound `client.messages.create()`. Outbound SMS via `asyncio.to_thread()` wrapper (SDK is sync); webhook returns HTTP 200 after Inngest event emit — no TwiML response. Confidence: HIGH |
-| Inngest | Cloud-hosted (local: Dev Server) | Async event queue | `process-message` function (3 retries, on_failure handler) + `sync-pinecone-queue` cron sweep (*/5 * * * *) | Confidence: HIGH |
-| Braintrust | current | LLM observability | Wraps `AsyncOpenAI` client via `braintrust.wrap_openai()` before injection into ExtractionService | Confidence: HIGH |
-| Pinecone | current | Vector store | `text-embedding-3-small` (1536 dims); job embeddings written at creation time; failed writes queued in `pinecone_sync_queue` and retried by Inngest cron | Confidence: HIGH |
-| uvicorn | ^0.30 | ASGI server | Production ASGI server for FastAPI; pair with `uvicorn[standard]` for `uvloop` (faster event loop) and `httptools` (faster HTTP parsing). Confidence: HIGH |
-
-### Supporting Libraries
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| python-dotenv | ^1.0 | Environment variable loading | Local dev only; in production use the platform's native secrets injection. |
-| pydantic-settings | ^2.0 | Settings management with env var binding | Ship a `Settings` class on app startup; avoids scattered `os.getenv()` calls and validates config types at startup. Always use this. |
-| httpx | ^0.27 | Async HTTP client | Needed if adding outbound webhook calls or health checks; also the test client backend for FastAPI `TestClient`. Confidence: HIGH |
-| pytest | ^8.0 | Test runner | Standard Python test framework. Confidence: HIGH |
-| pytest-asyncio | ^0.23 | Async test support | Required for testing async FastAPI routes and SQLAlchemy async sessions. Pin `asyncio_mode = "auto"` in `pytest.ini`. Confidence: HIGH |
-| factory-boy | ^3.3 | Test data factories | Cleaner than hand-crafting fixture dicts; pairs well with SQLAlchemy models. |
-| tenacity | ^8.2 | Retry logic | Not used for Inngest retry (Inngest handles 3 retries natively). Kept as library but not active retry mechanism. |
-| structlog | ^24.0 | Structured JSON logging | per-request context (phone hash, message_id, trace_id). ✅ Implemented (OBS-04) |
-| opentelemetry-sdk + opentelemetry-exporter-otlp | current | OTel distributed tracing | ALWAYS_ON sampler, OTLP gRPC export to Jaeger v2 collector. ✅ Implemented (OBS-03) |
-| prometheus-client | current | Prometheus metrics | Custom GPT counters, latency histograms, queue depth gauge. ✅ Implemented (OBS-02) |
-| inngest | current | Inngest Python SDK | See Core Technologies above. ✅ Implemented (ASYNC-01, ASYNC-03) |
-| braintrust | current | Braintrust Python SDK | See Core Technologies above. ✅ Implemented (OBS-01) |
-| pinecone-client | current | Pinecone Python SDK | See Core Technologies above. ✅ Implemented (VEC-01) |
-| pytest-cov | current | Test coverage reporting | Integrated with GitHub Actions CI. ✅ Implemented (PROD-05, PROD-08) |
-| sentry-sdk | ^2.0 | Error tracking | NOT ADOPTED — not in use; remove from `uv add` commands |
-| gunicorn | ^22.0 | Process manager | NOT ADOPTED — Render.com uses Docker runtime directly; not in use |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| uv | Dependency management and virtual environments | Dramatically faster than pip+venv; `uv sync` installs from `pyproject.toml` lockfile. Use `pyproject.toml` as the single source of truth for deps. Replaces pip, pip-tools, and virtualenv. |
-| ruff | Linting + formatting | Replaces flake8 + black + isort in a single fast tool; configure in `pyproject.toml` under `[tool.ruff]`. |
-| mypy | Static type checking | With SQLAlchemy 2.0's `MappedColumn` types and Pydantic v2 models, type coverage is high; configure `strict = false` initially and tighten over time. |
-| Docker + docker-compose | Local dev environment | `docker-compose.yml` with `postgres:16` service (plain image — no vector extension); 8-service Docker Compose: postgres, opensearch, jaeger-collector, jaeger-query, app, inngest, prometheus, grafana |
-| pre-commit | Git hook runner | Enforce ruff + mypy on commit; prevents type and lint regressions from landing. |
+> **Scope:** v1.1 *milestone-scoped* additions and removals. The validated v1.0 stack
+> (FastAPI/Python 3.12/Postgres 16/Pinecone/OpenAI/Twilio/asyncpg/SQLModel/Alembic/structlog/OTel/Prometheus/Grafana/Jaeger v2/Temporal Python SDK)
+> is **NOT re-researched here** — see git history of this file for the v1.0 record. This document
+> covers ONLY what changes for the de-platform.
 
 ---
 
-## Installation
+## Executive Summary
+
+The v1.1 de-platform requires:
+
+1. **No new Python production dependencies** — `temporalio>=1.27.0` (currently `>=1.24.0`) already supports
+   Temporal Cloud mTLS via `Client.connect(..., tls=TLSConfig(...))`. The change is configuration
+   and bytes-loading at the `get_temporal_client` call site, not a new library.
+2. **One new Compose Spec service for self-host visibility schema migration** —
+   `temporalio/admin-tools` running `temporal-sql-tool ... setup-schema/update-schema` against a
+   `temporal_visibility` Postgres database (replaces the implicit `auto-setup` Elasticsearch path).
+3. **Switch the Temporal image to `temporalio/auto-setup:1.31.0`** (currently `1.26.2`) and set
+   `ENABLE_ES=false` + `DB=postgres12` so the bundled auto-setup writes the SQL visibility schema
+   instead of expecting Elasticsearch/OpenSearch.
+4. **Adopt Compose Spec v5.x top-level `secrets:` blocks** sourced from files for
+   production-credential injection (replaces ESO entirely). Local dev keeps `.env.*` files.
+5. **Adopt SOPS + age** for git-encrypted production secrets so `docker-compose.prod.yml` stays
+   committed and operators decrypt at deploy time.
+6. **Delete an entire infrastructure tree** — `infra/` (Pulumi), `helm/`, `k8s/`, `render.yaml`,
+   ESO manifests, OpenSearch from the compose stack, Cloud SQL Auth Proxy, and any GCP-flavoured
+   Python deps (none currently exist — confirmed via `pyproject.toml` audit).
+
+**Net diff at the dependency level:** zero new Python runtime deps, one bumped pin
+(`temporalio>=1.27.0`), one removed compose service (`opensearch`), three new compose services for
+the prod profile (`temporal-admin-tools` for schema, `app-migrate` for Alembic, optional
+`temporal-worker` if split from `app`), and a `secrets:` block replacing inline credential env vars.
+
+---
+
+## 1. Temporal Cloud Client Integration
+
+### Recommendation
+
+Bump the pin and load mTLS material from files mounted via Compose secrets.
+
+| Item | Value | Source |
+|------|-------|--------|
+| `temporalio` SDK pin | `>=1.27.0,<2.0.0` (latest 2026-04-30) | [PyPI temporalio 1.27.0](https://pypi.org/project/temporalio/), [GH release](https://github.com/temporalio/sdk-python/releases/tag/1.27.0) |
+| Connection API | `Client.connect(target_host, namespace=..., tls=TLSConfig(...))` | Context7 `/websites/python_temporal_io` (HIGH) |
+| Address format | `<namespace>.<account-id>.tmprl.cloud:7233` | [Temporal Cloud docs](https://docs.temporal.io/cloud/connect-to-cloud) (HIGH) |
+| Namespace format | `<namespace>.<account-id>` | Same (HIGH) |
+
+### Why bump from 1.24.0 → 1.27.0
+
+- The `tls=TLSConfig(...)` API surface is stable across 1.24–1.27 (no breaking changes for client
+  connect) — pin floor is conservative future-proofing, not a forced migration.
+- 1.27.0 ships **OTel tracing for standalone activities** which we benefit from given the existing
+  `TracingInterceptor` integration ([1.27.0 release notes](https://github.com/temporalio/sdk-python/releases/tag/1.27.0)).
+- 1.21.0 introduced an implicit-TLS-when-api_key behaviour change — irrelevant for us since we use
+  mTLS, but worth noting if we ever swap to Temporal Cloud API keys instead of certs.
+
+### Environment variable contract
+
+Standardize on the Temporal-recommended env var names so the same variables work in CLI, SDK
+samples, and our code:
 
 ```bash
-# Requires uv (https://docs.astral.sh/uv/)
-
-# Core runtime
-uv add fastapi "uvicorn[standard]" sqlalchemy asyncpg alembic \
-       openai twilio inngest braintrust \
-       opentelemetry-sdk opentelemetry-exporter-otlp prometheus-client \
-       pydantic-settings tenacity structlog
-
-# Dev / test
-uv add --dev pytest pytest-asyncio pytest-cov httpx factory-boy \
-            ruff mypy pre-commit
-
-# Local secrets loading (dev only)
-uv add python-dotenv
+TEMPORAL_ADDRESS=<ns>.<acct>.tmprl.cloud:7233
+TEMPORAL_NAMESPACE=<ns>.<acct>
+TEMPORAL_TLS_CLIENT_CERT_PATH=/run/secrets/temporal_client_cert
+TEMPORAL_TLS_CLIENT_KEY_PATH=/run/secrets/temporal_client_key
 ```
+
+(Source: [Temporal docs — Configure Temporal Cloud via env vars](https://docs.temporal.io/develop/python/temporal-clients), HIGH confidence.)
+
+### Integration points (file-by-file)
+
+| File | Change | Notes |
+|------|--------|-------|
+| `src/temporal/worker.py` :: `get_temporal_client` | Read cert/key bytes from paths in Settings; build `TLSConfig`; pass `tls=...` and `namespace=...` to `Client.connect`. Keep `TracingInterceptor` wiring untouched. | Single-function change — ~15 lines. Today the function takes `address: str` only; widen to take a `TemporalSettings` reference (already exists in `src/config.py`). |
+| `src/config.py` :: `TemporalSettings` | Add `namespace: str = ""`, `tls_client_cert_path: str = ""`, `tls_client_key_path: str = ""`. Add three flat env vars (`temporal_namespace`, `temporal_tls_client_cert_path`, `temporal_tls_client_key_path`) and remap in `_build_sub_models`. Add a `tls_enabled: bool` derived field (true when both paths are set). | Mirrors existing pattern for `temporal_address`. |
+| `src/main.py` (lifespan) | No change — already calls `get_temporal_client(settings.temporal.address)`. Just pass the full `settings.temporal`. | |
+| `src/temporal/constants.py` | No change. | |
+| `pyproject.toml` | Bump `temporalio>=1.24.0` → `temporalio>=1.27.0,<2.0.0`. | |
+
+### What we are NOT adding
+
+- No `cryptography` dep — `TLSConfig` accepts `bytes` directly via `Path.read_bytes()`.
+- No Temporal SDK plugins (Workflow Streams, etc.) — out of scope for v1.1.
+- No `nexus` features — out of scope.
+- No Temporal Cloud API key auth path — mTLS chosen because it's the GA, lower-rotation-burden
+  default for production self-managed certs.
+
+### Local dev fallback
+
+`get_temporal_client` must remain compatible with the **self-hosted local Temporal** (no TLS). The
+toggle: if `tls_client_cert_path` is empty, pass `tls=False` (or omit `tls=`) and skip namespace
+override. This keeps `docker-compose.yml` working unchanged for the dev loop.
+
+---
+
+## 2. Temporal with Postgres Visibility (Local Dev)
+
+### Recommendation
+
+Use **`temporalio/auto-setup:1.31.0`** with `DB=postgres12` and `ENABLE_ES=false`. Visibility lands
+in a separate Postgres database (`temporal_visibility`) using the same credentials as the main
+Temporal database. Schema migrations are bundled into `auto-setup` for dev; for production self-host
+(if ever needed) run `temporalio/admin-tools` as a one-shot job.
+
+### Verified support
+
+| Question | Answer | Source |
+|----------|--------|--------|
+| Does Temporal still support Postgres advanced visibility? | Yes — Postgres v12+ on Temporal Server v1.20+ supports advanced visibility. **Not deprecated** as of v1.31.0. | [docs.temporal.io/self-hosted-guide/visibility](https://docs.temporal.io/self-hosted-guide/visibility) (HIGH) |
+| Does `auto-setup` configure Postgres visibility automatically? | Yes when `DB=postgres12`, `ENABLE_ES=false`, and `VISIBILITY_DBNAME` is set. The script creates both `temporal` and `temporal_visibility` databases and runs `temporal-sql-tool setup-schema` + `update-schema` against versioned schema directories. | [auto-setup.sh source](https://github.com/temporalio/docker-builds/blob/main/docker/auto-setup.sh) (HIGH) |
+| Is there a separate migration image? | `temporalio/admin-tools:<server-version>` ships `temporal-sql-tool` for production setups that don't want to run `auto-setup` in prod. | [Temporal visibility docs](https://docs.temporal.io/self-hosted-guide/visibility) (HIGH) |
+| Latest auto-setup tag? | `temporalio/auto-setup:1.31.0` (matches Temporal Server [v1.31.0](https://github.com/temporalio/temporal/releases/tag/v1.31.0), released 2026-04-29). | [Docker Hub](https://hub.docker.com/r/temporalio/auto-setup) (HIGH) |
+
+### Environment variables for the local-dev `temporal` service
+
+These replace the OpenSearch-dependent variables currently in `.env.temporal`:
+
+```bash
+DB=postgres12
+DB_PORT=5432
+POSTGRES_USER=temporal
+POSTGRES_PWD=temporal
+POSTGRES_SEEDS=postgres            # service name in compose
+DBNAME=temporal                    # main DB
+VISIBILITY_DBNAME=temporal_visibility
+ENABLE_ES=false                    # critical — disables ES/OS path
+TEMPORAL_ADDRESS=temporal:7233
+TEMPORAL_CLI_ADDRESS=temporal:7233
+DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+```
+
+**Critical:** the existing project Postgres user (`vici`, used by Alembic for the app schema) and
+the Temporal Postgres user (`temporal`) must be **different roles in the same Postgres instance**,
+or — cleaner — Temporal gets its own database within the same `postgres` service. Auto-setup creates
+`temporal` and `temporal_visibility` as separate databases. The app continues to use a third
+database (`vici`) on the same Postgres 16 image.
+
+### Schema migration tooling
+
+For local dev: `auto-setup` handles it on container boot. No action.
+
+For self-hosted production (out of scope but documented for completeness — Temporal Cloud is the
+target so this is a fallback path only):
+
+```yaml
+# docker-compose.prod.yml — temporal-admin-tools one-shot
+temporal-admin-tools:
+  image: temporalio/admin-tools:1.31.0
+  command: >
+    sh -c "
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal create &&
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal setup-schema -v 0.0 &&
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned &&
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal_visibility create &&
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal_visibility setup-schema -v 0.0 &&
+      temporal-sql-tool --plugin postgres12 --ep $${POSTGRES_HOST} -u $${POSTGRES_USER} -p 5432 --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+    "
+  environment:
+    SQL_PASSWORD: $${POSTGRES_PWD}
+  depends_on:
+    postgres: { condition: service_healthy }
+  restart: "no"
+```
+
+### Why not stay on OpenSearch
+
+- OpenSearch is the single largest dev-loop resource hog in the current stack (~1GB RAM, slow
+  startup, yellow-cluster-health gymnastics — see `[Phase 02.3]: opensearch replicas=0 for single-node
+  local dev` decision in `STATE.md`).
+- Temporal's Postgres advanced-visibility path is fully supported on v1.20+ and tested for our scale
+  (single inbound webhook, low workflow throughput). Search attribute queries via SQL are fast
+  enough for the volume v1 will see.
+- Removing OpenSearch eliminates the `jaeger-collector → opensearch` storage backend dependency.
+  Jaeger v2 will be reconfigured for **Badger** (file-based) or **memory** storage in dev — see
+  [companion research note in `PITFALLS.md`](./PITFALLS.md) for the Jaeger-storage migration trap.
+
+### Integration points
+
+| File | Change |
+|------|--------|
+| `docker-compose.yml` (dev) | Replace `opensearch` service with the env-var changes to `temporal`. Update `jaeger-collector` storage backend to `badger` (file) or `memory`. Bump `temporalio/auto-setup` from `1.26.2` → `1.31.0`. |
+| `.env.temporal` (dev) | Add `ENABLE_ES=false`, `VISIBILITY_DBNAME=temporal_visibility`, point `POSTGRES_SEEDS` at the existing `postgres` service. Remove any `ES_*` variables. |
+| `.env.opensearch` | Delete file. |
+| `.env.opensearch.example` | Delete file. |
+| `jaeger/collector-config.yaml`, `jaeger/query-config.yaml` | Reconfigure for Badger or memory backend (no longer talk to OpenSearch). |
+
+---
+
+## 3. Production Docker Compose Tooling
+
+### Recommendation
+
+Adopt **Compose Spec v5.x** (Mont Blanc, Dec 2025) features and use a layered file approach:
+`docker-compose.yml` (dev) + `docker-compose.prod.yml` (prod overrides) + `docker-compose.override.yml`
+(local-only secrets/dev tweaks, gitignored).
+
+| Item | Value | Source |
+|------|-------|--------|
+| Compose CLI minimum | v5.1.0+ (use latest v5.1.3) | [GH releases](https://github.com/docker/compose/releases) (HIGH) |
+| Compose Spec version | 5.0.0 "Mont Blanc" — no `version:` key needed in YAML | [Compose Spec](https://github.com/compose-spec/compose-spec/blob/main/spec.md) (HIGH) |
+| Validation in CI | `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet` (exits non-zero on invalid) | Context7 `/docker/docs` `compose_config.md` (HIGH) |
+
+### Required v1.1 features (all native to Compose Spec)
+
+| Feature | Used For | Spec Reference |
+|---------|----------|----------------|
+| `healthcheck:` | Liveness probes for `app`, `postgres`, `temporal`, `prometheus`, `grafana` (already in use; keep) | [spec.md#healthcheck](https://github.com/compose-spec/compose-spec/blob/main/spec.md#healthcheck) |
+| `depends_on:` with `condition: service_healthy` | Boot order: `postgres` → `temporal` → `app-migrate` → `app` | Already in use, keep |
+| `restart: unless-stopped` | Production restart policy (NOT `always` — prevents container thrash on bad config) | [spec.md#restart](https://github.com/compose-spec/compose-spec/blob/main/spec.md#restart) |
+| `secrets:` (top-level + service-level) | mTLS certs, DB passwords, API keys mounted at `/run/secrets/<name>` | [Docker Docs — Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/) |
+| `env_file:` (list, layered) | Per-environment defaults — e.g. `[.env.app, .env.app.production]` | [Compose Spec](https://github.com/compose-spec/compose-spec/blob/main/spec.md#env_file) |
+| `deploy.resources.limits` (cpus, memory) | Resource caps. **Note:** in non-Swarm mode these are honoured by Compose v2.x+ via the bridge to Engine resource limits — verified in [docker/compose#7307](https://github.com/docker/compose/issues/7307) (closed: implemented). For belt-and-suspenders compatibility, also set top-level `mem_limit:` and `cpus:` (Compose v2 still respects both). | [Deploy Spec](https://docs.docker.com/reference/compose-file/deploy/) |
+| `pull_policy: always` | Force prod to fetch the immutable digest each deploy | [spec.md#pull_policy](https://github.com/compose-spec/compose-spec/blob/main/spec.md#pull_policy) |
+| Image digests (`image: foo@sha256:...`) | Reproducible deploys; render via `docker compose config --resolve-image-digests --lock-image-digests` in CI | Context7 `/docker/docs` `compose_config.md` (HIGH) |
+| `profiles:` | Enable optional services (`tools`, `migrate`, `worker`) without polluting the default stack | [spec.md#profiles](https://github.com/compose-spec/compose-spec/blob/main/spec.md#profiles) |
+
+### CI validation pattern
+
+```yaml
+# .github/workflows/ci.yml — compose-validate job
+- name: Validate dev compose
+  run: docker compose -f docker-compose.yml config --quiet
+- name: Validate prod compose
+  run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+- name: Lint with hadolint (Dockerfile) + yamllint (compose files)
+  run: |
+    docker run --rm -i hadolint/hadolint < Dockerfile
+    yamllint docker-compose.yml docker-compose.prod.yml
+```
+
+The `--quiet` flag is documented in `compose config`'s help: *"Only validate the configuration, don't print anything"* (Source: Context7 `/docker/docs` — `compose_config.md`, HIGH confidence).
+
+### Compose v1 vs v2
+
+Compose v1 (the Python `docker-compose` binary) is **end-of-life** and has been deprecated since
+2023; v2 is a Go-native CLI plugin (`docker compose ...`, no hyphen). Vici's CI runners must use v2.
+GitHub-hosted runners ship Compose v2 by default ([GitHub changelog 2026-01-30](https://github.blog/changelog/2026-01-30-docker-and-docker-compose-version-upgrades-on-hosted-runners/)). No v1-specific syntax is in our current `docker-compose.yml` (no `version: '3.x'` header, no `links:`, no `extends:` in the legacy form), so the migration is trivial.
+
+### Multi-stage Dockerfile (existing)
+
+`Dockerfile` already follows best practice: distinct `builder` and `runtime` stages, non-root user,
+HEALTHCHECK probe, `uv sync --frozen --no-dev`. **No changes required** for v1.1. Optional polish:
+add `--mount=type=cache,target=/root/.cache/uv` for builder-stage caching when CI BuildKit is
+available. Defer.
+
+---
+
+## 4. Secrets Management (Replacing ESO)
+
+### Recommendation: layered approach
+
+| Layer | Tool | Use Case |
+|-------|------|----------|
+| **Code-resident** (committed) | none — never commit secrets | — |
+| **Local dev** | `.env.<service>` files (gitignored, per `.gitignore` already has `.env*`) | Developer machines and CI test runs use placeholder/test secrets |
+| **Production at rest** | **SOPS + age** encrypting `secrets/` directory in repo | Operators decrypt at deploy with `SOPS_AGE_KEY` env var |
+| **Production runtime** | Compose Spec `secrets:` block sourcing the decrypted files | Mounts at `/run/secrets/<name>` with file permissions; never visible in `docker inspect`/`ps`/process env |
+
+### Why not just `env_file` in production
+
+Per Docker's own guidance ([Manage secrets securely in Docker Compose](https://docs.docker.com/compose/how-tos/use-secrets/), HIGH confidence):
+
+> "Environment variables are often available to all processes, and it can be difficult to track access. They can also be printed in logs when debugging errors. Using secrets mitigates these risks."
+
+Secrets-as-files (mounted under `/run/secrets/`) are read-only, owned by the container user, and
+not visible in `docker inspect`. Twelve-factor purists object, but the security-vs-purity tradeoff
+clearly favours files for credentials (mTLS keys, DB passwords, API tokens).
+
+### Why SOPS + age (not Vault, not cloud KMS)
+
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| **SOPS + age** | Single binary, no server, git-native diffs (only values encrypted, keys plaintext), works offline, ~5MB total tooling | Requires age key distribution to operators | **Chosen** — matches "deploy anywhere" goal |
+| HashiCorp Vault | Industry standard | Server to run, auth complexity, overkill for v1.1 | Defer until multi-environment / multi-tenant |
+| Cloud KMS (AWS/GCP/Azure) | Managed | Re-introduces cloud lock-in we just removed | Anti-goal |
+| Doppler / Infisical | Hosted UX | SaaS dependency, network coupling at deploy time | Defer |
+| Plain encrypted tarball (`gpg`) | Trivial | No key rotation story, no per-file encryption, painful diffs | No |
+
+**Source confidence:** MEDIUM — pattern is widely adopted (see [Stackademic Mar 2026 article](https://blog.stackademic.com/secrets-management-in-docker-compose-env-sops-bitwarden-and-the-good-enough-threat-model-2bbc6d8e1064?gi=ea947853c9c5), [SOPS official repo](https://github.com/getsops/sops), [phoenixtrap.com Dec 2025](https://phoenixtrap.com/2025/12/22/10-lines-to-better-docker-compose-secrets/)) and validated against three independent recent posts. Caveat: SOPS workflow choice is opinionated; the team can swap to Vault later without rewriting the Compose `secrets:` blocks (only the source-file-generation step changes).
+
+### Recommended additions
+
+| Tool | Version | Purpose | Why |
+|------|---------|---------|-----|
+| `sops` | v3.9.x+ (latest 2026: ~3.10) | Encrypt `secrets/*.yaml` and `secrets/*.env` files | Mozilla's tool, age-native, git-friendly diffs |
+| `age` | v1.2.x | Underlying encryption | Modern, simple, no PGP keyring complexity |
+| (No Python deps) | — | — | These are operator/CI tools, not app deps |
+
+Install: `brew install sops age` (Mac), `apt install age && curl -L .../sops_v3.10_amd64.deb` (Linux/CI).
+
+### Compose secrets block (canonical pattern)
+
+```yaml
+# docker-compose.prod.yml
+services:
+  app:
+    secrets:
+      - source: postgres_password
+        target: postgres_password
+        mode: 0400
+      - source: openai_api_key
+      - source: pinecone_api_key
+      - source: temporal_client_cert
+      - source: temporal_client_key
+      - source: twilio_auth_token
+      - source: braintrust_api_key
+    environment:
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      # ... mirror for each *_FILE convention
+
+secrets:
+  postgres_password:
+    file: ./secrets/decrypted/postgres_password
+  openai_api_key:
+    file: ./secrets/decrypted/openai_api_key
+  pinecone_api_key:
+    file: ./secrets/decrypted/pinecone_api_key
+  temporal_client_cert:
+    file: ./secrets/decrypted/temporal_client.pem
+  temporal_client_key:
+    file: ./secrets/decrypted/temporal_client.key
+  twilio_auth_token:
+    file: ./secrets/decrypted/twilio_auth_token
+  braintrust_api_key:
+    file: ./secrets/decrypted/braintrust_api_key
+```
+
+### Settings code change (Pydantic Settings)
+
+`pydantic-settings` already supports the `_FILE` suffix convention via the `secrets_dir`
+configuration:
+
+```python
+# src/config.py
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        secrets_dir="/run/secrets",  # NEW — pydantic auto-reads files here
+        extra="ignore",
+    )
+```
+
+When `/run/secrets/openai_api_key` exists at boot, pydantic reads the file content as the
+`openai_api_key` field value. Falls back to env var if file missing — meaning **dev keeps the
+existing `.env` flow unchanged**. Confidence: HIGH ([pydantic-settings secrets docs](https://docs.pydantic.dev/latest/concepts/pydantic_settings/#secrets)).
+
+### Deploy workflow
+
+```bash
+# Operator workstation — encrypt once
+sops --encrypt --age $RECIPIENT_PUBLIC_KEY secrets/raw/openai_api_key > secrets/encrypted/openai_api_key.enc
+
+# Production host — decrypt at deploy
+export SOPS_AGE_KEY_FILE=/etc/sops/age.key
+mkdir -p secrets/decrypted
+for f in secrets/encrypted/*.enc; do
+  sops --decrypt "$f" > "secrets/decrypted/$(basename "${f%.enc}")"
+done
+chmod 0400 secrets/decrypted/*
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+`secrets/encrypted/` is checked in. `secrets/decrypted/` is `.gitignore`d and `chmod 0700`. The age
+private key lives outside the repo — typically a single file the deploying operator scp's once and
+forgets.
+
+---
+
+## 5. What Can Be Removed
+
+### Python dependencies — confirmed audit
+
+I read every line of `pyproject.toml`. **None of the listed deps are GCP/GKE/Render/ESO-specific.**
+The current dep list (`alembic, asyncpg, braintrust, fastapi, greenlet, openai, opentelemetry-*,
+pinecone, prometheus-fastapi-instrumentator, pydantic-settings, python-dotenv, python-multipart,
+sqlmodel, structlog, temporalio, tenacity, twilio, uvicorn[standard]`) plus dev deps (`aiosqlite,
+httpx, psycopg2-binary, pytest, pytest-asyncio, pytest-cov, ruff`) is fully cloud-agnostic.
+
+There is no `google-cloud-*`, `kubernetes`, `pulumi`, or render-flavoured library to remove from
+`pyproject.toml`. The cleanup is entirely outside `src/`:
+
+### Files and directories to delete
+
+| Path | Reason |
+|------|--------|
+| `infra/` (entire directory) | Pulumi IaC for GKE — replaced by docker-compose.prod.yml |
+| `infra/Pulumi.{dev,staging,prod}.yaml` | GCP project configs |
+| `infra/components/` | Pulumi component classes for GKE/Cloud SQL |
+| `infra/pyproject.toml`, `infra/uv.lock`, `infra/requirements.txt` | Separate Pulumi venv |
+| `infra/DOMAIN-SETUP.md`, `infra/OPERATIONS.md` | GKE-specific runbooks (port to a generic `OPERATIONS.md` at repo root if any content is salvageable) |
+| `helm/` (if present — confirm) | Temporal Helm chart 0.74.0 customizations |
+| `k8s/` (if present — confirm) | K8s manifests, ESO ExternalSecrets, ServiceAccounts |
+| `render.yaml` (if present — confirm) | Render.com Blueprint |
+| `.planning/workstreams/gks-refactor/` | GKE refactor workstream history — keep for reference; do **not** delete (audit trail) |
+
+> Per `STATE.md`, the gks-refactor workstream produced these directories. The Phase 03 decisions
+> ("Auth Proxy TCP mode for schema Job", "server.sidecarContainers for Helm release",
+> "numHistoryShards=512 permanent") confirm `helm/` and Pulumi-driven K8s manifests existed.
+> Confirm with `find . -maxdepth 3 -type d -name 'helm' -o -name 'k8s' -o -name 'render.yaml'`
+> before the delete commit.
+
+### Compose services to remove
+
+| Service | Reason | Replaces with |
+|---------|--------|---------------|
+| `opensearch` | Replaced by Postgres visibility | nothing (deleted) |
+| `.env.opensearch`, `.env.opensearch.example` | Service deletion | nothing |
+| Cloud SQL Auth Proxy sidecar (k8s only) | GKE-specific, never in compose | n/a |
+| ESO `ExternalSecret` / `SecretStore` manifests | GKE-only | Compose `secrets:` + SOPS |
+
+### Compose services to keep, modified
+
+| Service | Modification |
+|---------|--------------|
+| `postgres` | Add a startup script or init SQL to create three databases: `vici`, `temporal`, `temporal_visibility` (currently only `vici` via `.env.postgres`). Use `/docker-entrypoint-initdb.d/init.sql`. |
+| `temporal` | Switch to `auto-setup:1.31.0`; env vars `DB=postgres12`, `ENABLE_ES=false`, `VISIBILITY_DBNAME=temporal_visibility`. |
+| `jaeger-collector` / `jaeger-query` | Switch storage backend from OpenSearch to Badger (single binary) or memory. |
+| `app` | Add `secrets_dir=/run/secrets` mount; mount mTLS certs for prod profile only. |
+| `prometheus`, `grafana`, `temporal-ui` | No change. |
+
+### Compose services to add
+
+| Service | Profile | Purpose |
+|---------|---------|---------|
+| `app-migrate` | `default` (prod) | One-shot Alembic upgrade. Currently the dev `app` runs `uv run alembic upgrade head && uvicorn ...` inline — split for prod clarity. |
+| `temporal-admin-tools` | `tools` (opt-in) | Manual schema setup/upgrade for self-host fallback (won't run by default). |
+
+---
+
+## Recommended Stack (v1.1 additions only)
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| temporalio Python SDK | `>=1.27.0,<2.0.0` | Bumped pin (was `>=1.24.0`) | mTLS support stable; OTel for standalone activities; future-proofs Cloud connect API |
+| Temporal Server (auto-setup image) | `temporalio/auto-setup:1.31.0` | Local dev visibility migration | Bumped from 1.26.2; native Postgres advanced visibility |
+| Temporal admin-tools (image) | `temporalio/admin-tools:1.31.0` | One-shot schema migration (`tools` profile) | Production fallback path |
+| Docker Compose | CLI v5.1.3+ | Production orchestration | Compose Spec v5.0 "Mont Blanc" features |
+| SOPS | v3.9+ | Git-encrypted secrets | Replaces ESO; cloud-agnostic |
+| age | v1.2+ | SOPS encryption backend | Modern, simple, no GPG keyring |
+
+### Operator/CI tooling (not Python deps)
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| sops | 3.9+ | secret encrypt/decrypt at deploy |
+| age | 1.2+ | encryption keys |
+| docker | 26.x+ | container runtime |
+| docker compose | v5.1.3+ | orchestration |
+| yamllint | 1.35+ | compose file linting in CI |
+| hadolint | 2.x | Dockerfile linting in CI |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| SQLAlchemy 2.0 async | Tortoise ORM | If you want a Django-style async ORM with simpler migration story; not recommended here because Alembic is required by the layered architecture constraint. |
-| SQLAlchemy 2.0 async | SQLModel | SQLModel (FastAPI author's lib) is thin SQLAlchemy + Pydantic wrapper; fine for simple apps but adds an abstraction layer that complicates async session scoping. Avoid for this complexity level. |
-| asyncpg | psycopg3 (async) | psycopg3 has excellent async support and is more standard; either works. asyncpg has the larger existing body of community examples for SQLAlchemy + FastAPI. Stick with asyncpg unless you hit a specific compatibility issue. |
-| Pinecone | External vector DB (e.g. self-hosted) | Pinecone is the external vector store in this project. Decision is final — postgres:16 plain image is in use. No vector extension needed. |
-| structlog | Python stdlib logging | stdlib logging doesn't produce structured JSON by default; structlog requires ~5 lines of config and the observability benefit is immediate in a production webhook handler. |
-| uv | poetry | poetry is viable; uv is 10-100x faster and has become the community standard as of 2025. Either works; uv is the better default for new projects. |
-| Inngest | Celery + Redis | Inngest is already implemented; handles retries, cron, and event-driven async without Redis operational overhead. |
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Temporal hosting (prod) | **Temporal Cloud** (mTLS) | Self-host with `auto-setup` in prod | Auto-setup is documented as **dev/test only**. Self-hosted prod requires running Frontend/History/Matching/Worker as separate services with cluster config — out of scope for v1.1 "deploy anywhere" goal. Defer to v1.2+ if Cloud cost becomes a concern. |
+| Temporal visibility (dev) | **Postgres advanced visibility** | OpenSearch / Elasticsearch | Already established as a goal; Postgres is supported on v1.20+ and our scale fits well within SQL visibility's performance envelope. |
+| Secrets at rest | **SOPS + age** | HashiCorp Vault | Vault requires a server, auth strategy, sealing/unsealing — too much for one-app, one-environment v1.1. Migrate later if multi-tenant needs emerge. |
+| Secrets at rest | **SOPS + age** | Doppler / Infisical | SaaS lock-in re-introduces a network dependency at deploy time, conflicting with "deploy anywhere" goal. |
+| Compose features | **Compose Spec v5 native** | Docker Swarm | Swarm adds an orchestrator we don't need (FastAPI scales fine with a single container per host for v1; reverse-proxy/LB sits outside compose). |
+| Compose secrets | **`secrets:` file source** | `env_file:` only | Files mounted at `/run/secrets/` aren't visible to `docker inspect`/process env — significantly better posture. |
+| Migration job | **Separate `app-migrate` service** | Run migrations in `app` startup CMD | Inline migrations couple deploy + schema, prevent rolling deploys, make rollback ambiguous. Separate one-shot service makes the schema state explicit. |
+| Jaeger storage (dev) | **Badger (file)** | Memory | Memory loses traces on restart; Badger is single-file, persists across `down`/`up`. |
 
 ---
 
-## What NOT to Use
+## Installation / Setup Diff
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| psycopg2 | Synchronous only; blocks the event loop in async FastAPI handlers, causing cascading latency under concurrent SMS traffic | asyncpg (via SQLAlchemy `postgresql+asyncpg://`) |
-| Flask | No native async; every Twilio webhook handler blocks the process; poor OpenAPI support | FastAPI |
-| Django ORM | Sync-only ORM (Django async support is partial); limited SQLAlchemy/Alembic compatibility | SQLAlchemy 2.0 async |
-| SQLAlchemy 1.x | The legacy `Query` API is removed in 2.0; 1.x async patterns require significant boilerplate vs. 2.0's unified API | SQLAlchemy 2.0 |
-| Pydantic v1 | FastAPI 0.100+ uses Pydantic v2 internally; mixing v1 models causes `ValidationError` import conflicts | Pydantic v2 (comes with FastAPI) |
-| LangChain | Significant abstraction overhead for a single-model, single-prompt use case; hides token costs, complicates structured output schemas | Direct `openai` SDK with Pydantic schema |
-| FastAPI BackgroundTasks | Not used for this async pattern — Inngest is the async queue | Inngest event-driven processing |
-| Celery + Redis | Overkill for SMS webhook volume; adds operational complexity for a use case that Inngest handles with retries and cron | Inngest (already implemented) |
-| requests | Synchronous HTTP client; blocks event loop | httpx (async) |
+```bash
+# pyproject.toml — single-line change
+- "temporalio>=1.24.0",
++ "temporalio>=1.27.0,<2.0.0",
 
----
+# CI dependencies (.github/workflows/ci.yml)
++ - run: |
++     curl -L https://github.com/getsops/sops/releases/download/v3.10.0/sops-v3.10.0.linux.amd64 -o /usr/local/bin/sops
++     chmod +x /usr/local/bin/sops
++ - run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
 
-## Stack Patterns by Variant
-
-**Deploying to Render.com (actual deployment target):** render.yaml Blueprint already exists (PROD-04 complete). Web service uses Docker runtime directly (no gunicorn). Pre-deploy migration hook: `alembic upgrade head`. GIT_SHA env var must be set manually or via deploy hooks. PostgreSQL 16 basic-256mb instance provisioned via Blueprint. First production deploy validation is Phase 4.
-
-**If running locally:**
-- `docker compose up` starts 8 services: postgres (postgres:16), opensearch, jaeger-collector, jaeger-query, app, inngest, prometheus, grafana
-- `uv run uvicorn src.main:app --reload` for hot reload
-- Use `ngrok http 8000` to expose local endpoint to Twilio webhook config
-
-**If OpenAI rate limits become a bottleneck:**
-- Inngest handles function-level retries (3 retries configured with exponential backoff)
-- Consider batching multiple extractions into a single prompt (but v1 volume is low enough this won't be needed)
-
----
-
-## Version Compatibility
-
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| fastapi ^0.111 | pydantic v2.x | FastAPI 0.100+ dropped pydantic v1 support; do not mix |
-| sqlalchemy ^2.0 | asyncpg ^0.29 | SQLAlchemy 2.0 async engine requires asyncpg 0.24+; 0.29 is safe |
-| alembic ^1.13 | sqlalchemy ^2.0 | Alembic 1.13 is the first release with full SQLAlchemy 2.0 support for async migration env config |
-| pytest-asyncio ^0.23 | pytest ^8.0 | pytest-asyncio 0.21+ changed the default mode to `strict`; set `asyncio_mode = "auto"` in `pyproject.toml` or annotate every async test |
-| openai ^1.30 | python 3.12 | openai v1.x requires Python 3.7.1+; no known conflicts on 3.12 |
-| twilio ^9.0 | python 3.12 | twilio 9.x dropped Python 3.7 support; requires 3.8+; compatible with 3.12 |
-
----
-
-## Critical Integration Patterns
-
-### Twilio Webhook Handler
-
-Twilio sends `application/x-www-form-urlencoded` POST, not JSON. FastAPI does not auto-parse form data as Pydantic models; use `Form(...)` params or a dedicated `Request` object.
-
-```python
-# Actual implemented pattern — no TwiML returned
-@router.post("/webhook/sms")
-async def handle_sms(request: Request, ...):
-    # 5-gate security chain: signature → idempotency → user → rate limit → persist
-    await emit_message_received_event(message_id=message.id, sms_text=body)
-    return Response(status_code=200)  # HTTP 200 after Inngest event emit; no TwiML
+# Operator local install (one-time)
+$ brew install sops age   # macOS
+$ apt install age && curl -L .../sops.deb && sudo dpkg -i sops.deb   # Debian/Ubuntu
 ```
 
-All GPT processing happens in Inngest `process-message` function outside the Twilio response window.
+---
 
-**Twilio signature validation is mandatory in production.** Without it, any HTTP client can POST to your webhook and trigger SMS sends.
+## Confidence Assessment
 
-### OpenAI Structured Outputs
-
-Use `response_format` with a Pydantic model schema for reliable extraction. GPT-4o and later models support JSON schema mode natively.
-
-```python
-# Correct pattern for structured extraction
-from openai import AsyncOpenAI
-from pydantic import BaseModel
-
-class JobPosting(BaseModel):
-    description: str
-    location: str
-    pay_rate: float
-    # ...
-
-client = AsyncOpenAI()
-response = await client.beta.chat.completions.parse(
-    model="gpt-5.3-chat-latest",
-    messages=[...],
-    response_format=JobPosting,
-)
-posting = response.choices[0].message.parsed  # typed JobPosting instance
-```
-
-Use `AsyncOpenAI` not `OpenAI` — the synchronous client blocks the event loop.
-
-### SQLAlchemy Async Session Scoping
-
-Use FastAPI dependency injection to scope sessions per request, not per application. Inngest functions are NOT FastAPI request handlers — they create their own sessions via the module-level session factory.
-
-```python
-# Correct pattern
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_factory() as session:
-        yield session
-
-@router.post("/sms")
-async def handle_sms(db: AsyncSession = Depends(get_db), ...):
-    ...
-
-# In Inngest function — create a fresh session directly (not via Depends)
-async def process_message(ctx, step):
-    async with async_session_factory() as session:
-        await _orchestrator.run(ctx.event.data["message_id"], session)
-```
-
-`expire_on_commit=False` is required for async; otherwise accessing attributes after `commit()` triggers a lazy-load which fails outside a session context.
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Temporal Python SDK Cloud connect API | HIGH | Verified via Context7 `/websites/python_temporal_io` (TLSConfig, Client.connect signature); cross-checked against [docs.temporal.io samples](https://github.com/temporalio/documentation) |
+| Temporal SDK version (1.27.0) | HIGH | Verified via PyPI + GH releases (current as of 2026-04-30) |
+| Postgres advanced visibility support | HIGH | [docs.temporal.io/self-hosted-guide/visibility](https://docs.temporal.io/self-hosted-guide/visibility); auto-setup.sh source code; not deprecated as of v1.31.0 |
+| auto-setup env vars | HIGH | Read directly from [auto-setup.sh](https://github.com/temporalio/docker-builds/blob/main/docker/auto-setup.sh) |
+| Compose Spec v5 features | HIGH | Context7 `/docker/docs` + GH releases (v5.1.3 latest 2026-04-15) |
+| Compose `secrets:` semantics | HIGH | Context7 `/docker/docs` `use-secrets.md`; multiple official examples |
+| Compose `deploy.resources.limits` honoured outside Swarm | MEDIUM | Verified resolved in [docker/compose#7307](https://github.com/docker/compose/issues/7307); behaviour is current but historically had ambiguity — recommend belt-and-suspenders top-level `mem_limit`/`cpus` for safety |
+| SOPS + age idiom for compose | MEDIUM | Multiple recent (2025–2026) blog posts converge on the pattern; not Docker-official-blessed but widely adopted |
+| Pydantic Settings `secrets_dir` reads `/run/secrets` | HIGH | [pydantic-settings docs](https://docs.pydantic.dev/latest/concepts/pydantic_settings/#secrets) |
+| Removable files audit | HIGH for `infra/`, `.env.opensearch*`; MEDIUM for `helm/` / `k8s/` / `render.yaml` (need filesystem confirmation in implementation phase) |
 
 ---
 
 ## Sources
 
-Sources: STATE.md, PROJECT.md, REQUIREMENTS.md (HIGH confidence — derived from built system). Updated 2026-03-08.
+### Primary (Context7 — HIGH confidence)
+- `/websites/python_temporal_io` — `temporalio.client.Client.connect`, `TLSConfig` API surface
+- `/temporalio/documentation` — Cloud connect samples, visibility configuration, env var contract
+- `/docker/docs` — `compose_config.md`, `use-secrets.md`, `compose secrets` patterns
+- `/docker/compose` — release notes, v5 spec features
 
----
+### Secondary (verified releases — HIGH confidence)
+- [temporalio/sdk-python releases](https://github.com/temporalio/sdk-python/releases) — 1.27.0 (2026-04-30)
+- [temporalio/temporal releases](https://github.com/temporalio/temporal/releases) — v1.31.0 (2026-04-29)
+- [docker/compose releases](https://github.com/docker/compose/releases) — v5.1.3 (2026-04-15), v5.0.0 "Mont Blanc" (2025-12-02)
+- [temporalio/auto-setup Docker Hub](https://hub.docker.com/r/temporalio/auto-setup) — 1.28.4 listed; 1.31.0 confirmed via temporal/server tag
+- [temporalio/docker-builds auto-setup.sh](https://github.com/temporalio/docker-builds/blob/main/docker/auto-setup.sh) — env var enumeration
 
-*Stack research for: Vici SMS job matching API*
-*Researched: 2026-03-08*
+### Tertiary (community / best-practice — MEDIUM confidence)
+- [Self-hosted Visibility setup](https://docs.temporal.io/self-hosted-guide/visibility) — Postgres v12+ schema commands
+- [Compose Deploy Specification](https://docs.docker.com/reference/compose-file/deploy/) — resources.limits semantics
+- [SOPS official repo](https://github.com/getsops/sops) — encryption tool
+- [10 Lines to Better Docker Compose Secrets (Dec 2025)](https://phoenixtrap.com/2025/12/22/10-lines-to-better-docker-compose-secrets/) — env-from-secrets pattern
+- [Secrets management in Docker Compose (Stackademic Mar 2026)](https://blog.stackademic.com/secrets-management-in-docker-compose-env-sops-bitwarden-and-the-good-enough-threat-model-2bbc6d8e1064) — threat-model framing
+- [docker/compose#7307](https://github.com/docker/compose/issues/7307) — resource limits non-Swarm support history
+- [GitHub changelog 2026-01-30](https://github.blog/changelog/2026-01-30-docker-and-docker-compose-version-upgrades-on-hosted-runners/) — runner Compose v2 default
