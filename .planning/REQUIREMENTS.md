@@ -86,4 +86,53 @@ The v1.0 product surface is shipped and validated: SEC-01..04, IDN-01..02, EXT-0
 
 ## Requirement Traceability
 
-(Filled by `gsd-roadmapper` after roadmap approval.)
+Every v1.1 requirement is mapped to exactly one phase. Coverage: 27/27 (100%) — no orphans.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INFRA-01 | Phase 9 | Pending |
+| INFRA-02 | Phase 9 | Pending |
+| INFRA-03 | Phase 9 | Pending |
+| INFRA-04 | Phase 9 | Pending |
+| COMPOSE-01 | Phase 6 | Pending |
+| COMPOSE-02 | Phase 6 | Pending |
+| COMPOSE-03 | Phase 6 | Pending |
+| COMPOSE-04 | Phase 6 | Pending |
+| COMPOSE-05 | Phase 6 | Pending |
+| COMPOSE-06 | Phase 6 | Pending |
+| TEMPORAL-01 | Phase 8 | Pending |
+| TEMPORAL-02 | Phase 8 | Pending |
+| TEMPORAL-03 | Phase 8 | Pending |
+| TEMPORAL-04 | Phase 8 | Pending |
+| OBS-05 | Phase 8 | Pending |
+| OBS-06 | Phase 8 | Pending |
+| OBS-07 | Phase 8 | Pending |
+| OBS-08 | Phase 8 | Pending |
+| OBS-09 | Phase 8 | Pending |
+| SECRETS-01 | Phase 7 | Pending |
+| SECRETS-02 | Phase 7 | Pending |
+| SECRETS-03 | Phase 7 | Pending |
+| SECRETS-04 | Phase 7 | Pending |
+| CI-01 | Phase 5 | Pending |
+| CI-02 | Phase 5 | Pending |
+| CI-03 | Phase 5 | Pending |
+| CI-04 | Phase 5 | Pending |
+
+### Coverage by Phase
+
+| Phase | Requirements | Count |
+|-------|--------------|-------|
+| Phase 5 — GHCR Image Distribution & CI Validation | CI-01, CI-02, CI-03, CI-04 | 4 |
+| Phase 6 — 3-File Compose Overlay & Production Hardening | COMPOSE-01, COMPOSE-02, COMPOSE-03, COMPOSE-04, COMPOSE-05, COMPOSE-06 | 6 |
+| Phase 7 — Compose-Native Secrets via SOPS + age | SECRETS-01, SECRETS-02, SECRETS-03, SECRETS-04 | 4 |
+| Phase 8 — Temporal Postgres Visibility + Observability Container Removal | TEMPORAL-01, TEMPORAL-02, TEMPORAL-03, TEMPORAL-04, OBS-05, OBS-06, OBS-07, OBS-08, OBS-09 | 9 |
+| Phase 9 — GKE/GCP/Pulumi/Helm/ESO/Render Cleanup | INFRA-01, INFRA-02, INFRA-03, INFRA-04 | 4 |
+| **Total** | | **27** |
+
+**Notes:**
+- Phase 8 intentionally couples Temporal (TEMPORAL-01..04) and observability removal (OBS-05..09) because removing OpenSearch + bumping Temporal `auto-setup` + dropping the bundled observability containers + reconfiguring the OTel exporter all touch the same compose services in the same edit pass; splitting them would create cross-cutting partial states.
+- Phase 9 is the cleanup phase and runs **last by mandate** (per user instruction and PITFALL-14 — `pulumi destroy` clean-exit is a hard gate before any Pulumi state file deletion).
+- Phase 5 (CI/Image distribution) is sequenced first because it is independent and produces the SHA-tagged GHCR images that Phase 6's prod overlay references via `image:`.
+- Temporal Cloud was rejected by the user; no phase exists for it. Self-hosted Temporal in compose stays.
+- Bundled observability UIs (Prometheus/Grafana/Jaeger) were rejected by the user for prod; OBS-05..09 cover their removal and the OTel console-exporter fallback.
+- SBOM + provenance attestations were deferred (see `.planning/todos/pending/260501-sbom-provenance-attestations.md`); no phase covers them in v1.1.

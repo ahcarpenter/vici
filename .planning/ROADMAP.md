@@ -2,13 +2,14 @@
 
 ## Overview
 
-Vici is built in phases that follow a strict dependency order: infrastructure before domain logic, domain logic before integration, integration before deployment. Phase 1 lays the async foundation (DB, schema, security, observability, Temporal skeleton). The inserted decimal phases (01.1, 02.1, 02.3, 02.4, 02.5, 02.6, 02.7, 02.8, 02.8.1, 02.9, 02.10, 02.11, 02.12, 02.13, 02.13.1, 02.14) addressed schema normalization, architecture refactors, production hardening, documentation, Temporal migration, distributed tracing, edge-case hardening, and 3NF normalization before moving forward. Phase 3 adds deterministic earnings-math matching. Phase 4 wires all components end-to-end and ships to Render.com.
+Vici is built in phases that follow a strict dependency order: infrastructure before domain logic, domain logic before integration, integration before deployment. Phase 1 lays the async foundation (DB, schema, security, observability, Temporal skeleton). The inserted decimal phases (01.1, 02.1, 02.3, 02.4, 02.5, 02.6, 02.7, 02.8, 02.8.1, 02.9, 02.10, 02.11, 02.12, 02.13, 02.13.1, 02.14) addressed schema normalization, architecture refactors, production hardening, documentation, Temporal migration, distributed tracing, edge-case hardening, and 3NF normalization before moving forward. Phase 3 adds deterministic earnings-math matching. Phase 4 wires all components end-to-end (deferred). Phases 5–9 are the v1.1 *De-platform* milestone: re-baseline the repo as a hosting-agnostic, Docker-only application — GHCR image distribution + CI compose validation (5), 3-file compose overlay with production hardening (6), Compose-native secrets via SOPS+age (7), Temporal Postgres visibility + observability container removal (8), and final GKE/GCP/Pulumi/Helm/ESO/Render cleanup (9, last by mandate).
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (1, 2, 3, 4): Planned milestone work
-- Decimal phases (1.1, 2.1, 2.3–2.14): Urgent insertions (marked INSERTED)
+- Integer phases (1, 2, 3, 4): v1.0 planned milestone work
+- Decimal phases (1.1, 2.1, 2.3–2.14): v1.0 urgent insertions (marked INSERTED)
+- Integer phases (5, 6, 7, 8, 9): v1.1 *De-platform* milestone — continues from v1.0's last phase number (no `--reset-phase-numbers`)
 
 Decimal phases appear between their surrounding integers in numeric order.
 
@@ -31,7 +32,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 02.13.1: Distributed tracing gap coverage** - OTel span coverage for orchestrator, handlers, router, activities; PII fix; semconv fix (completed 2026-04-03)
 - [x] **Phase 02.14: Normalize schema to 3NF** - Drop transitive user_id from Job/WorkGoal, fix rate_limit constraint, add audit_log check (completed 2026-04-03)
 - [x] **Phase 3: Earnings Math Matching** - Deterministic SQL matching query, ranked SMS formatter, and empty-match handling (completed 2026-04-04)
-- [ ] **Phase 4: End-to-End Integration & Deployment** - Temporal orchestration fully wired, outbound SMS replies, STOP/START compliance, and Render.com production deploy
+- [ ] **Phase 4: End-to-End Integration & Deployment** - Temporal orchestration fully wired, outbound SMS replies, STOP/START compliance, and Render.com production deploy *(v1.0 — deferred)*
+
+### v1.1 De-platform — Docker-Only Base
+
+- [ ] **Phase 5: GHCR Image Distribution & CI Validation** - Multi-arch images to GHCR (SHA-tagged, no `:latest`); CI validates both compose overlays; legacy GKE CD workflows deleted
+- [ ] **Phase 6: 3-File Compose Overlay & Production Hardening** - `docker-compose.yml` + `docker-compose.override.yml` (dev) + `docker-compose.prod.yml` (prod); healthchecks, restart policies, named volumes, resource limits, log rotation, `127.0.0.1:` bindings, `app-migrate` one-shot service; latent dev-compose bugs fixed
+- [ ] **Phase 7: Compose-Native Secrets via SOPS + age** - Top-level `secrets:` block with file source for every credential; SOPS+age encryption at rest; pydantic Settings reads `/run/secrets/` via `secrets_dir=`; `grafana_admin_password = "admin"` literal removed
+- [ ] **Phase 8: Temporal Postgres Visibility + Observability Container Removal** - `temporalio/auto-setup:1.31.0` with `ENABLE_ES=false`; three logical DBs in shared `postgres` service; OpenSearch + Prometheus + Grafana + Jaeger services removed; OTel console exporter as fallback; `/metrics` endpoint stays
+- [ ] **Phase 9: GKE/GCP/Pulumi/Helm/ESO/Render Cleanup** - `infra/`, `helm/`, `k8s/`, ESO manifests, `render.yaml`, `Pulumi.*.yaml`, `.env.opensearch*` deleted; `gks-refactor` workstream archived; `pulumi destroy` runbook with hard-gate clean-exit before state deletion (last by mandate)
 
 ## Phase Details
 
@@ -272,10 +281,70 @@ Plans:
 - [ ] 04-01: Temporal `ProcessMessageWorkflow` fully wired (matching + SMS reply + poster confirmation + STOP/START pass-through)
 - [ ] 04-02: Render.com production deploy, Temporal Cloud wiring, environment variable documentation, smoke test
 
+---
+
+## v1.1 De-platform — Docker-Only Base
+
+### Phase 5: GHCR Image Distribution & CI Validation
+**Goal**: Multi-arch Docker images published to GHCR with SHA-pinned tags on every `main` push and tag, and CI validates both compose overlays before merge — so subsequent phases can reference an immutable `image:` in `docker-compose.prod.yml` without ever building on a deploy host
+**Depends on**: Nothing (independent of compose split; unblocks `image:` references for Phase 6)
+**Requirements**: CI-01, CI-02, CI-03, CI-04
+**Success Criteria** (what must be TRUE):
+  1. A push to `main` triggers a GitHub Actions workflow that builds linux/amd64 + linux/arm64 images via QEMU + buildx and pushes them to `ghcr.io/<org>/vici:sha-<short>` (no `:latest` tag)
+  2. The published image is pullable by an unauthenticated CI job and reports both architectures in `docker manifest inspect`
+  3. Every push runs `docker compose -f docker-compose.yml config --quiet` AND `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`; either failing returns a non-zero exit and blocks the merge
+  4. The legacy GKE-targeted CD workflows (`cd-base.yml`, `cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml`) no longer run on push (deleted as part of CI-04, completed by Phase 9 INFRA-01 — but the workflow files are removed in this phase as the CI surface is reauthored)
+**Plans**: TBD
+
+### Phase 6: 3-File Compose Overlay & Production Hardening
+**Goal**: The compose stack is split into a 3-file overlay (`docker-compose.yml` base + `docker-compose.override.yml` dev + `docker-compose.prod.yml` prod via explicit `-f`); the production overlay is operationally hardened (healthchecks, restart policies, named volumes, resource limits, log rotation, localhost-only port bindings) and the two latent dev-compose bugs (missing `postgres_data` named volume, `0.0.0.0` port bindings on internal services) are fixed in the same pass
+**Depends on**: Phase 5 (so the prod overlay can reference `image: ghcr.io/<org>/vici:sha-${GIT_SHA}` from the start)
+**Requirements**: COMPOSE-01, COMPOSE-02, COMPOSE-03, COMPOSE-04, COMPOSE-05, COMPOSE-06
+**Success Criteria** (what must be TRUE):
+  1. `docker compose up` (no flags) starts the dev stack with hot-reload via `docker-compose.override.yml` auto-loaded; `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` starts the production stack with no source bind mounts and no `--reload`
+  2. After `docker compose down && docker compose up`, the `postgres` service retains all data (verified by writing a row, restarting, and reading it back) — the `postgres_data` named volume is present in `docker volume ls`
+  3. The production overlay binds every non-public service port to `127.0.0.1:` (verified via `nmap` from off-host showing only the app's HTTP listener); every long-running service has `restart: unless-stopped`, a healthcheck, `depends_on: { condition: service_healthy }` for upstream gates, a named volume for stateful paths, a pinned image (digest or SHA-tagged GHCR ref), `deploy.resources.limits` plus `mem_limit`/`cpus`, and JSON-file logging with `max-size`/`max-file` rotation
+  4. The app's database migrations run as a one-shot `app-migrate` service that exits cleanly; the long-running `app` service starts only after `app-migrate` reports `service_completed_successfully` (no inline `alembic upgrade head` in the app's `command:`)
+**Plans**: TBD
+
+### Phase 7: Compose-Native Secrets via SOPS + age
+**Goal**: All sensitive credentials in production are sourced from Compose-native `secrets:` (file source) mounted at `/run/secrets/`; the source files are encrypted at rest in the repo via SOPS + age and decrypted at deploy time via a documented operator command; pydantic Settings reads them via `secrets_dir=` while preserving the existing flat-env path for local dev; the obsolete `grafana_admin_password = "admin"` literal default is removed from `src/config.py`
+**Depends on**: Phase 6 (production overlay must exist before secrets can be mounted into it)
+**Requirements**: SECRETS-01, SECRETS-02, SECRETS-03, SECRETS-04
+**Success Criteria** (what must be TRUE):
+  1. The production overlay declares a top-level `secrets:` block that file-sources every sensitive credential (DB password, OpenAI key, Pinecone key, Twilio account SID + auth token, Twilio request validation token, Braintrust API key); each consuming service references them via `secrets:` and reads them through `/run/secrets/<name>`
+  2. The Settings class reads secret values via `secrets_dir="/run/secrets"` when files are present and falls back to flat `.env` values when they are not; both paths are exercised by tests
+  3. An operator can run a documented one-line command (e.g. `make decrypt-secrets`) that reads SOPS-encrypted files from `secrets/encrypted/`, decrypts them with an `SOPS_AGE_KEY_FILE` outside the repo, and writes plaintext files to `secrets/decrypted/` (gitignored, mode 0400) ready for `docker compose up -d`
+  4. `rg -n 'grafana_admin_password.*=.*"admin"' src/` returns zero hits; any other secret defaults that are unsafe to ship are removed from `src/config.py`
+**Plans**: TBD
+
+### Phase 8: Temporal Postgres Visibility + Observability Container Removal
+**Goal**: Temporal stays self-hosted in compose (no Cloud) but switches to Postgres-only advanced visibility — auto-setup is bumped to `temporalio/auto-setup:1.31.0` with `ENABLE_ES=false`, `VISIBILITY_DBNAME=temporal_visibility`, `DB=postgres12`, and Temporal's three logical databases (`temporal`, `temporal_visibility`, `vici`) live in the single shared `postgres` service via init scripts; OpenSearch, Prometheus, Grafana, and Jaeger services are removed from `docker-compose.yml` entirely; the app's OTel exporter defaults to a console (stdout) span exporter when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset and uses OTLP when it is set; obsolete config files (Grafana provisioning, Prometheus rules, Jaeger collector configs) are deleted alongside the services
+**Depends on**: Phase 6 (compose overlay split must exist before reshaping services)
+**Requirements**: TEMPORAL-01, TEMPORAL-02, TEMPORAL-03, TEMPORAL-04, OBS-05, OBS-06, OBS-07, OBS-08, OBS-09
+**Success Criteria** (what must be TRUE):
+  1. `docker compose up` starts a stack containing Postgres, the app, the one-shot migrate service, and `temporalio/auto-setup:1.31.0` — no `opensearch`, `prometheus`, `grafana`, or `jaeger` services are present in `docker-compose.yml` or any overlay; obsolete config directories (Grafana provisioning, Prometheus rules, Jaeger collector configs) are deleted from the repo
+  2. The Temporal server boots cleanly against Postgres-only visibility (`ENABLE_ES=false`, `VISIBILITY_DBNAME=temporal_visibility`, `DB=postgres12`); a workflow can be started, queried via `temporal workflow list`, and its history viewed without OpenSearch present
+  3. The shared `postgres` service hosts three logical databases (`vici`, `temporal`, `temporal_visibility`) provisioned via init scripts on first boot; no second Postgres instance exists in any compose file
+  4. `docker compose logs app` shows OTel spans printed via the console (stdout) span exporter when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset; setting `OTEL_EXPORTER_OTLP_ENDPOINT` switches the app to the OTLP exporter without code changes; structlog continues to emit JSON logs to stdout for every inbound message and outbound reply
+  5. The app's `/metrics` Prometheus endpoint stays exposed and returns valid metrics for any external scraper an operator wires up; the app does not require Prometheus, Grafana, or Jaeger to be present at runtime
+**Plans**: TBD
+
+### Phase 9: GKE/GCP/Pulumi/Helm/ESO/Render Cleanup
+**Goal**: Every artifact tied to the abandoned platforms is removed from the repo (`infra/` Pulumi project, `helm/`, `k8s/`, External Secrets Operator manifests, `render.yaml`, `Pulumi.*.yaml`, the `cd-*.yml` workflows already deleted in Phase 5, `.env.opensearch*`); the `gks-refactor` workstream artifacts are archived to `.planning/milestones/v1.0-gks-refactor/`; a documented runbook captures the GCP teardown sequence (state export → `pulumi destroy` clean exit on every stack → GCP billing audit → only then delete Pulumi state files); a final repo-wide grep returns clean — no orphan references to the abandoned platforms anywhere in code, compose files, env templates, scripts, or docs
+**Depends on**: Phase 8 (the new Docker-only baseline must be verified working end-to-end before deleting the only fallback)
+**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04
+**Success Criteria** (what must be TRUE):
+  1. A documented runbook (`docs/RUNBOOK-gcp-teardown.md` or equivalent) describes the destruction sequence and is executed end-to-end: `pulumi stack export > backup-state.json` for every stack → `pulumi destroy` returns clean exit code on every stack → GCP console + billing audit confirm zero recurring charges → only then are Pulumi state files deleted (this is a hard gate — no state deletion before clean-exit destroy)
+  2. The repo no longer contains `infra/`, `helm/`, `k8s/`, External Secrets Operator manifests, `render.yaml`, `Pulumi.*.yaml`, or `.env.opensearch*` files; `git ls-files` confirms their absence
+  3. `rg -i 'gke|gcp|helm|pulumi|cloud_sql|external-secret|render\.yaml'` against the working tree (excluding `.planning/milestones/` historical archives) returns zero hits in code, compose files, env templates, scripts, README, or AGENTS.md
+  4. The `gks-refactor` workstream artifacts are moved from `.planning/workstreams/gks-refactor/` to `.planning/milestones/v1.0-gks-refactor/`; the active workstream pointer no longer references `gks-refactor`
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-1 → 01.1 → 2 → 02.1 → 02.3 → 02.4 → 02.5 → 02.6 → 02.7 → 02.8 → 02.8.1 → 02.9 → 02.10 → 02.11 → 02.12 → 02.13 → 02.13.1 → 02.14 → 3 → 4
+1 → 01.1 → 2 → 02.1 → 02.3 → 02.4 → 02.5 → 02.6 → 02.7 → 02.8 → 02.8.1 → 02.9 → 02.10 → 02.11 → 02.12 → 02.13 → 02.13.1 → 02.14 → 3 → 4 *(v1.0 deferred)* → **5 → 6 → 7 → 8 → 9** *(v1.1 De-platform)*
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -298,7 +367,12 @@ Plans:
 | 02.13.1. Distributed tracing gaps | 1/1 | Complete | 2026-04-03 |
 | 02.14. Normalize schema to 3NF | 1/1 | Complete | 2026-04-03 |
 | 3. Earnings Math Matching | 1/1 | Complete   | 2026-04-05 |
-| 4. End-to-End Integration & Deployment | 0/2 | Not started | -- |
+| 4. End-to-End Integration & Deployment | 0/2 | Deferred (v1.0) | -- |
+| 5. GHCR Image Distribution & CI Validation | 0/0 | Not started | -- |
+| 6. 3-File Compose Overlay & Production Hardening | 0/0 | Not started | -- |
+| 7. Compose-Native Secrets via SOPS + age | 0/0 | Not started | -- |
+| 8. Temporal Postgres Visibility + Observability Removal | 0/0 | Not started | -- |
+| 9. GKE/GCP/Pulumi/Helm/ESO/Render Cleanup | 0/0 | Not started | -- |
 
 ## Backlog
 

@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: De-platform — Docker-Only Base
-status: planning
-last_updated: "2026-05-02T00:32:07.006Z"
-last_activity: 2026-05-02
+status: in_progress
+last_updated: "2026-05-01T00:00:00.000Z"
+last_activity: 2026-05-01
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** A worker who texts their earnings goal must receive a ranked list of jobs that lets them hit that goal in the shortest possible time.
-**Current focus:** Phase 03 — temporal-in-cluster
+**Current focus:** Phase 5 (v1.1 De-platform — Docker-Only Base) — GHCR Image Distribution & CI Validation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 5 — GHCR Image Distribution & CI Validation (v1.1 De-platform)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-02 — Milestone v1.1 started
+Status: Roadmap approved; planning Phase 5
+Last activity: 2026-05-01 — Milestone v1.1 roadmap created (Phases 5–9)
+
+### v1.1 Milestone Phases (5 total)
+
+| # | Phase | Requirements | Status |
+|---|-------|--------------|--------|
+| 5 | GHCR Image Distribution & CI Validation | CI-01..04 (4) | Not started |
+| 6 | 3-File Compose Overlay & Production Hardening | COMPOSE-01..06 (6) | Not started |
+| 7 | Compose-Native Secrets via SOPS + age | SECRETS-01..04 (4) | Not started |
+| 8 | Temporal Postgres Visibility + Observability Removal | TEMPORAL-01..04, OBS-05..09 (9) | Not started |
+| 9 | GKE/GCP/Pulumi/Helm/ESO/Render Cleanup | INFRA-01..04 (4) | Not started (last by mandate) |
+
+**Coverage:** 27/27 v1.1 requirements mapped — no orphans.
+
+**Progress:** 0/5 phases complete — 0%
 
 ## What's Built
 
@@ -161,6 +175,7 @@ Recent decisions affecting current work:
 
 ### Roadmap Evolution
 
+- v1.1 milestone roadmap created 2026-05-01: Phases 5–9 (GHCR/CI → Compose overlay → Secrets → Temporal Postgres visibility + Observability removal → GKE/GCP cleanup). 27/27 requirements mapped. Phase numbering continues from v1.0's last phase (4) — no `--reset-phase-numbers`.
 - Phase 1.1 inserted after Phase 1: Apply revised 3NF schema (URGENT)
 - Phase 2.1 inserted after Phase 2: Refactor persistence layer and service boundaries (INSERTED)
 - Phase 02.3 inserted after Phase 2: Migrate Jaeger to v2 (URGENT)
@@ -207,18 +222,24 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-11T19:30:00Z
-Stopped at: gks-refactor workstream Phase 05.1 complete; Phase 06 plans ready to execute
-Active workstream: gks-refactor (see .planning/workstreams/gks-refactor/STATE.md)
+Last session: 2026-05-01T00:00:00Z
+Stopped at: v1.1 roadmap (Phases 5–9) approved and written; ready to plan Phase 5.
+Active milestone: v1.1 De-platform — Docker-Only Base
 Resume file: None
-Next action: `/gsd-execute-phase 06 --ws gks-refactor`
+Next action: `/gsd-plan-phase 5`
 
-**Milestone workstream status (this file):** Paused with 19/20 phases complete. Phase 04
-(end-to-end integration + outbound SMS) is deferred — see
-`.planning/workstreams/milestone/v1.0-MILESTONE-AUDIT.md` for the unresolved app-level
-blockers (migration 003 work_request/work_goal mismatch, Pinecone sync SQL referencing
-dropped j.user_id, MatchService not wired into WorkerGoalHandler, SEC-05 / STR-03 /
-ASYNC-02 unsatisfied).
+**v1.0 status:** Phase 4 (end-to-end integration + outbound SMS) is deferred; v1.0 application
+surface (Twilio webhook, classify+extract, MatchService, Pinecone embeddings, Temporal
+workflows, observability) is shipped and validated. See PROJECT.md "Validated" requirements.
 
-**Infra workstream:** All recent activity has been in the gks-refactor workstream — that
-STATE.md is the source of truth for current infra position.
+**v1.1 status:** Roadmap approved 2026-05-01. Phases 5–9 cover GHCR image distribution,
+3-file compose overlay with prod hardening, compose-native secrets via SOPS+age, Temporal
+Postgres visibility migration with observability container removal, and GKE/GCP cleanup
+(last by mandate). Temporal Cloud was rejected by the user — self-hosted Temporal in compose
+stays. Bundled observability stack (Prometheus, Grafana, Jaeger) was rejected for prod —
+removed entirely; OTel console exporter is the fallback. SBOM/provenance attestations
+deferred (see `.planning/todos/pending/260501-sbom-provenance-attestations.md`).
+
+**Archived workstreams:** The `gks-refactor` workstream is being archived as part of Phase 9
+(INFRA-04). Its artifacts will move to `.planning/milestones/v1.0-gks-refactor/` once the new
+Docker-only baseline is verified end-to-end.
