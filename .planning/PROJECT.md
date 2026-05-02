@@ -10,13 +10,17 @@ A worker who texts their earnings goal must receive a ranked list of jobs that l
 
 ## Current Milestone: v1.1 De-platform — Docker-Only Base
 
-**Goal:** Re-baseline the repo as a hosting-agnostic, Docker-only application. No GCP, no Kubernetes, no provider-specific deploy config.
+**Goal:** Re-baseline the repo as a hosting-agnostic, Docker-only application. No GCP, no Kubernetes, no provider-specific deploy config. Strip the operator footprint to the minimum: app + Postgres + self-hosted Temporal in compose. No bundled observability stack.
 
 **Target features:**
-- Provider-neutral `docker-compose.prod.yml` as the canonical production deploy spec (healthchecks, restart policies, volume conventions)
-- Temporal Cloud integration (replace in-cluster Temporal Helm chart)
-- Postgres visibility for Temporal (drop OpenSearch entirely from the stack)
-- Self-contained observability in compose for production (Jaeger + Prometheus + Grafana)
+- 3-file Docker Compose overlay: `docker-compose.yml` (base) + `docker-compose.override.yml` (dev) + `docker-compose.prod.yml` (prod, explicit `-f`); production hardening (healthchecks, restart policies, named volumes, resource limits, log rotation)
+- Self-hosted Temporal in compose (kept) with Postgres visibility (replaces OpenSearch); single-binary `temporalio/auto-setup:1.31.0` with `ENABLE_ES=false`, `VISIBILITY_DBNAME=temporal_visibility`
+- Drop OpenSearch entirely
+- Drop bundled observability containers (Prometheus, Grafana, Jaeger). App stays OTel-instrumented; default exporter is console (stdout) when no OTLP endpoint is configured. Logs continue to write JSON to stdout via structlog. Operator wires their own backend.
+- Compose-native `secrets:` block + SOPS + age for git-encrypted secrets at rest; pydantic Settings reads `/run/secrets/`
+- Latent dev-compose bug fixes: `postgres_data` named volume; `127.0.0.1:` port bindings for non-public services
+- GHCR multi-arch image publish (amd64 + arm64) via GitHub Actions buildx; SHA-tagged (no `:latest`)
+- CI compose-config validation (`docker compose config --quiet` for both dev and prod overlays)
 - Full GKE/GCP removal: delete `pulumi/`, `helm/`, `k8s/`, ESO config, `render.yaml`, and the `gks-refactor` workstream artifacts
 
 ## Requirements
