@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.repository import BaseRepository
+from src.sms.constants import AuditEvent
 from src.sms.models import AuditLog
 
 
@@ -9,7 +10,7 @@ class AuditLogRepository(BaseRepository):
         self,
         session: AsyncSession,
         message_sid: str,
-        event: str,
+        event: AuditEvent,
         detail: str | None = None,
         message_id: int | None = None,
     ) -> None:

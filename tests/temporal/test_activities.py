@@ -1,8 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 import src.temporal.activities as acts
+from src.extraction.constants import SyncStatus
+from src.extraction.models import PineconeSyncQueue
 from src.temporal.activities import (
     ProcessMessageInput,
     handle_process_message_failure_activity,
@@ -176,70 +179,51 @@ async def test_on_failure_increments_counter():
     assert after == before + 1
 
 
-# --- sync_pinecone_queue tests ---
+# --- sync_pinecone_queue tests (real DB via async_session fixture) ---
 
 
-def _make_pending_row(
-    row_id=1, job_id=10, description="Mover needed", phone_hash="abc123"
-):
-    return {
-        "id": row_id,
-        "job_id": job_id,
-        "description": description,
-        "phone_hash": phone_hash,
-    }
+def _sessionmaker_over(session):
+    """Factory whose sessions are non-closing wrappers around *session*, so the
+    activity's `async with get_sessionmaker()() as s:` uses the test session."""
+
+    class _NonClosing:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *args):
+            return None
+
+    return MagicMock(side_effect=lambda: _NonClosing())
+
+
+@pytest_asyncio.fixture
+async def make_pending_entry(async_session, make_job):
+    async def _factory(**job_kwargs) -> PineconeSyncQueue:
+        job = await make_job(**job_kwargs)
+        entry = PineconeSyncQueue(job_id=job.id)
+        async_session.add(entry)
+        await async_session.flush()
+        return entry
+
+    return _factory
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_success_path():
-    """Pending row processed, status updated to success."""
-    row = _make_pending_row()
+async def test_sync_pinecone_queue_success_path(async_session, make_pending_entry):
+    """Pending entry processed and marked synced."""
+    entry = await make_pending_entry(description="Mover needed")
     mock_write = AsyncMock(return_value=None)
-    mock_openai = MagicMock()
 
-    select_session = AsyncMock()
-    update_session = AsyncMock()
-
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row]
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    update_session.execute = AsyncMock(return_value=MagicMock())
-    update_session.commit = AsyncMock()
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        else:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=update_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
-
-    mock_sessionmaker = MagicMock(side_effect=make_session)
-
-    mock_settings = MagicMock()
     original = acts._openai_client
-    acts._openai_client = mock_openai
+    acts._openai_client = MagicMock()
     try:
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=mock_sessionmaker,
+                return_value=_sessionmaker_over(async_session),
             ),
-            patch(
-                "src.temporal.activities.write_job_embedding",
-                mock_write,
-            ),
-            patch(
-                "src.temporal.activities.get_settings",
-                return_value=mock_settings,
-            ),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
         ):
             result = await sync_pinecone_queue_activity()
     finally:
@@ -248,105 +232,53 @@ async def test_sync_pinecone_queue_success_path():
     assert result == "ok"
     assert mock_write.await_count == 1
     kw = mock_write.call_args.kwargs
-    assert kw["job_id"] == 10
+    assert kw["job_id"] == entry.job_id
     assert kw["description"] == "Mover needed"
 
-    query_str = str(update_session.execute.call_args.args[0])
-    assert "synced" in query_str
+    assert entry.status == SyncStatus.SYNCED
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_failure_path():
-    """write_job_embedding raises: status updated to failed."""
-    row = _make_pending_row(row_id=2, job_id=20)
+async def test_sync_pinecone_queue_failure_path(async_session, make_pending_entry):
+    """write_job_embedding raises: entry marked failed with attempts + error."""
+    entry = await make_pending_entry()
     mock_write = AsyncMock(side_effect=Exception("Pinecone timeout"))
-    mock_openai = MagicMock()
 
-    select_session = AsyncMock()
-    update_session = AsyncMock()
-
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row]
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    update_session.execute = AsyncMock(return_value=MagicMock())
-    update_session.commit = AsyncMock()
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        else:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=update_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
-
-    mock_sessionmaker = MagicMock(side_effect=make_session)
-
-    mock_settings = MagicMock()
     original = acts._openai_client
-    acts._openai_client = mock_openai
+    acts._openai_client = MagicMock()
     try:
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=mock_sessionmaker,
+                return_value=_sessionmaker_over(async_session),
             ),
-            patch(
-                "src.temporal.activities.write_job_embedding",
-                mock_write,
-            ),
-            patch(
-                "src.temporal.activities.get_settings",
-                return_value=mock_settings,
-            ),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
         ):
             result = await sync_pinecone_queue_activity()
     finally:
         acts._openai_client = original
 
     assert result == "ok"
-    query_str = str(update_session.execute.call_args.args[0])
-    assert "failed" in query_str
-    assert "retry_count" in query_str
+    assert entry.status == SyncStatus.FAILED
+    assert entry.attempts == 1
+    assert "Pinecone timeout" in entry.last_error
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_empty_queue():
+async def test_sync_pinecone_queue_empty_queue(async_session):
     """No pending rows: returns ok, no writes."""
     mock_write = AsyncMock(return_value=None)
-    mock_openai = MagicMock()
-
-    select_session = AsyncMock()
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = []
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    def make_session():
-        cm = MagicMock()
-        cm.__aenter__ = AsyncMock(return_value=select_session)
-        cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
-
-    mock_sessionmaker = MagicMock(side_effect=make_session)
 
     original = acts._openai_client
-    acts._openai_client = mock_openai
+    acts._openai_client = MagicMock()
     try:
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=mock_sessionmaker,
+                return_value=_sessionmaker_over(async_session),
             ),
-            patch(
-                "src.temporal.activities.write_job_embedding",
-                mock_write,
-            ),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
         ):
             result = await sync_pinecone_queue_activity()
     finally:
@@ -357,62 +289,23 @@ async def test_sync_pinecone_queue_empty_queue():
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_mixed_rows():
+async def test_sync_pinecone_queue_mixed_rows(async_session, make_pending_entry):
     """Multiple rows: success and failure paths coexist."""
-    row1 = _make_pending_row(row_id=1, job_id=10)
-    row2 = _make_pending_row(row_id=2, job_id=20)
+    entry_ok = await make_pending_entry()
+    entry_bad = await make_pending_entry()
 
     mock_write = AsyncMock(side_effect=[None, Exception("Pinecone error")])
-    mock_openai = MagicMock()
 
-    select_session = AsyncMock()
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row1, row2]
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    update_sessions = []
-
-    def make_update_session():
-        s = AsyncMock()
-        s.execute = AsyncMock(return_value=MagicMock())
-        s.commit = AsyncMock()
-        update_sessions.append(s)
-        return s
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        else:
-            s = make_update_session()
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=s)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
-
-    mock_sessionmaker = MagicMock(side_effect=make_session)
-
-    mock_settings = MagicMock()
     original = acts._openai_client
-    acts._openai_client = mock_openai
+    acts._openai_client = MagicMock()
     try:
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=mock_sessionmaker,
+                return_value=_sessionmaker_over(async_session),
             ),
-            patch(
-                "src.temporal.activities.write_job_embedding",
-                mock_write,
-            ),
-            patch(
-                "src.temporal.activities.get_settings",
-                return_value=mock_settings,
-            ),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
         ):
             result = await sync_pinecone_queue_activity()
     finally:
@@ -420,9 +313,32 @@ async def test_sync_pinecone_queue_mixed_rows():
 
     assert result == "ok"
     assert mock_write.await_count == 2
+    assert entry_ok.status == SyncStatus.SYNCED
+    assert entry_bad.status == SyncStatus.FAILED
 
-    q1 = str(update_sessions[0].execute.call_args.args[0])
-    assert "synced" in q1
 
-    q2 = str(update_sessions[1].execute.call_args.args[0])
-    assert "failed" in q2
+@pytest.mark.asyncio
+async def test_sync_pinecone_queue_skips_non_pending(async_session, make_pending_entry):
+    """Synced/failed entries are not re-processed."""
+    entry = await make_pending_entry()
+    entry.status = SyncStatus.SYNCED
+    await async_session.flush()
+
+    mock_write = AsyncMock(return_value=None)
+
+    original = acts._openai_client
+    acts._openai_client = MagicMock()
+    try:
+        with (
+            patch(
+                "src.temporal.activities.get_sessionmaker",
+                return_value=_sessionmaker_over(async_session),
+            ),
+            patch("src.temporal.activities.write_job_embedding", mock_write),
+        ):
+            result = await sync_pinecone_queue_activity()
+    finally:
+        acts._openai_client = original
+
+    assert result == "ok"
+    mock_write.assert_not_awaited()

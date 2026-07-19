@@ -16,7 +16,7 @@ class JobExtraction(BaseModel):
     pay_type: Literal["hourly", "flat", "unknown"]
 
 
-class WorkerExtraction(BaseModel):
+class WorkGoalExtraction(BaseModel):
     target_earnings: float = Field(gt=0)
     target_timeframe: str = Field(min_length=1, max_length=255)
 
@@ -28,5 +28,5 @@ class UnknownMessage(BaseModel):
 class ExtractionResult(BaseModel):
     message_type: Literal["job_posting", "work_goal", "unknown"]
     job: Optional[JobExtraction] = None
-    work_goal: Optional[WorkerExtraction] = None
+    work_goal: Optional[WorkGoalExtraction] = None
     unknown: Optional[UnknownMessage] = None

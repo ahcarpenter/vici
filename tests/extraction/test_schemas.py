@@ -5,7 +5,7 @@ from src.extraction.schemas import (
     ExtractionResult,
     JobExtraction,
     UnknownMessage,
-    WorkerExtraction,
+    WorkGoalExtraction,
 )
 
 
@@ -35,7 +35,7 @@ def test_job_extraction_rejects_default_on_required():
 
 
 def test_worker_extraction_schema():
-    worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
+    worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
     assert worker.target_earnings == 200.0
     assert worker.target_timeframe == "today"
 

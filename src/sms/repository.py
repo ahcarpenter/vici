@@ -1,11 +1,16 @@
 from datetime import UTC, datetime, timedelta
+from typing import Optional
 
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.repository import BaseRepository
-from src.sms.constants import MAX_MESSAGES_PER_WINDOW, RATE_LIMIT_WINDOW_SECONDS
+from src.sms.constants import (
+    MAX_MESSAGES_PER_WINDOW,
+    RATE_LIMIT_WINDOW_SECONDS,
+    MessageType,
+)
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
 from src.sms.models import Message
 
@@ -67,3 +72,22 @@ class MessageRepository(BaseRepository):
             body=body,
         )
         return await self._persist(session, message)
+
+    async def record_classification(
+        self,
+        session: AsyncSession,
+        message_id: int,
+        message_type: MessageType,
+        raw_gpt_response: Optional[str] = None,
+    ) -> None:
+        """Record the pipeline's classification of a message.
+
+        Classification is a Message lifecycle event owned by this domain —
+        handlers must call this rather than updating the message table directly.
+        Flush-only — caller owns the transaction.
+        """
+        await session.execute(
+            update(Message)
+            .where(Message.id == message_id)
+            .values(message_type=message_type, raw_gpt_response=raw_gpt_response)
+        )

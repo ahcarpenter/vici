@@ -57,7 +57,6 @@ async def test_job_persistence(async_session, user_and_message):
         pay_rate=25.0,
         pay_type="hourly",
         datetime_flexible=False,
-        raw_sms="Need a mover for Saturday downtown Chicago $25/hr",
     )
     job = await JobRepository().create(async_session, job_create)
 
@@ -85,7 +84,6 @@ async def test_worker_persistence(async_session, user_and_message):
         message_id=msg2.id,
         target_earnings=200.0,
         target_timeframe="today",
-        raw_sms="I need $200 today",
     )
     wg = await WorkGoalRepository().create(async_session, wg_create)
 

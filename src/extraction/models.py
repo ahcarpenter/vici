@@ -4,6 +4,8 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from src.extraction.constants import SyncStatus
+
 
 class PineconeSyncQueue(SQLModel, table=True):
     __tablename__ = "pinecone_sync_queue"
@@ -14,7 +16,7 @@ class PineconeSyncQueue(SQLModel, table=True):
             sa.Integer, sa.ForeignKey("job.id", ondelete="CASCADE"), nullable=False
         )
     )
-    status: str = Field(default="pending")
+    status: str = Field(default=SyncStatus.PENDING)
     attempts: int = Field(default=0)
     last_error: Optional[str] = None
     created_at: datetime = Field(

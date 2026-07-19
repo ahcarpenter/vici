@@ -7,7 +7,7 @@ from src.extraction.schemas import (
     ExtractionResult,
     JobExtraction,
     UnknownMessage,
-    WorkerExtraction,
+    WorkGoalExtraction,
 )
 from src.extraction.service import ExtractionService
 from tests.extraction.conftest import make_mock_openai_client
@@ -57,7 +57,7 @@ async def test_classify_job():
 
 @pytest.mark.asyncio
 async def test_classify_worker():
-    worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
+    worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
     expected = ExtractionResult(message_type="work_goal", work_goal=worker)
     mock_client = make_mock_openai_client(expected)
 
