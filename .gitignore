@@ -24,3 +24,6 @@ __pycache__/
 
 # Accidental path-expansion directory (e.g. `cp -r foo ~/bar` with unquoted ~)
 ~/
+
+.gemini/
+gha-creds-*.json

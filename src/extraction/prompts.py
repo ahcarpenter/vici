@@ -22,7 +22,7 @@ Your job: classify each inbound SMS as one of three types and extract structured
 - `estimated_duration_hours`: Best-guess float for duration. Convert vague phrases: "a few hours" → 3.0, "half a day" → 4.0. Null if truly unknown.
 - `raw_duration_text`: The original duration phrase (e.g., "a few hours").
 
-### WorkerExtraction fields
+### WorkGoalExtraction fields
 - `target_earnings`: Dollar amount the worker wants to earn (e.g., 200.0).
 - `target_timeframe`: The time window stated (e.g., "today", "this week", "by Friday").
 

@@ -3,13 +3,14 @@ from typing import TYPE_CHECKING
 
 import structlog
 from opentelemetry import trace as otel_trace
-from sqlalchemy import text
 from sqlmodel import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from src.config import get_settings
 from src.database import get_sessionmaker
+from src.extraction.constants import PINECONE_SYNC_BATCH_SIZE
+from src.extraction.repository import PineconeSyncQueueRepository
 from src.extraction.utils import write_job_embedding
 from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 from src.sms.models import Message
@@ -96,72 +97,57 @@ async def handle_process_message_failure_activity(
 
 @activity.defn
 async def sync_pinecone_queue_activity() -> str:
-    """Sweeps pinecone_sync_queue for pending rows and upserts to Pinecone."""
+    """Sweeps pinecone_sync_queue for pending rows and upserts to Pinecone.
+
+    One session for the whole sweep: claim_pending's row locks stay held while
+    rows are processed, so concurrent sweeps skip them; the single commit at
+    the end releases the locks. Pinecone upserts are idempotent by job id, so
+    a crashed sweep that rolls back statuses is safe to re-run.
+    """
     logger = structlog.get_logger()
+    repo = PineconeSyncQueueRepository()
 
     with tracer.start_as_current_span("temporal.sync_pinecone_queue") as span:
         logger.info("sync-pinecone-queue: starting sweep")
 
         async with get_sessionmaker()() as session:
-            result = await session.execute(
-                text(
-                    "SELECT q.id, q.job_id, j.description, u.phone_hash "
-                    "FROM pinecone_sync_queue q "
-                    "JOIN job j ON j.id = q.job_id "
-                    'JOIN "user" u ON u.id = j.user_id '
-                    "WHERE q.status = 'pending' LIMIT 50 "
-                    "FOR UPDATE OF q SKIP LOCKED"
-                )
-            )
-            rows = result.mappings().all()
+            pending = await repo.claim_pending(session, PINECONE_SYNC_BATCH_SIZE)
 
-        logger.info("sync-pinecone-queue: rows fetched", count=len(rows))
-        span.set_attribute("pinecone.rows_fetched", len(rows))
+            logger.info("sync-pinecone-queue: rows fetched", count=len(pending))
+            span.set_attribute("pinecone.rows_fetched", len(pending))
 
-        failed = 0
-        for row in rows:
-            try:
-                await write_job_embedding(
-                    job_id=row["job_id"],
-                    description=row["description"],
-                    phone_hash=row["phone_hash"],
-                    openai_client=_openai_client,
-                    settings=get_settings(),
-                )
-                async with get_sessionmaker()() as session:
-                    await session.execute(
-                        text(
-                            "UPDATE pinecone_sync_queue"
-                            " SET status='synced' WHERE id=:id"
-                        ),
-                        {"id": row["id"]},
+            failed = 0
+            for row in pending:
+                try:
+                    await write_job_embedding(
+                        job_id=row.entry.job_id,
+                        description=row.description,
+                        phone_hash=row.phone_hash,
+                        openai_client=_openai_client,
+                        settings=get_settings(),
                     )
-                    await session.commit()
-            except Exception as exc:
-                failed += 1
-                span.add_event("row_upsert_failed", {"job_id": str(row["job_id"])})
-                logger.warning(
-                    "sync-pinecone-queue: upsert failed",
-                    job_id=row["job_id"],
-                    error=str(exc),
-                )
-                async with get_sessionmaker()() as session:
-                    await session.execute(
-                        text(
-                            "UPDATE pinecone_sync_queue SET status='failed', "
-                            "retry_count=retry_count+1 WHERE id=:id"
-                        ),
-                        {"id": row["id"]},
+                    await repo.mark_synced(session, row.entry)
+                except Exception as exc:
+                    failed += 1
+                    span.add_event(
+                        "row_upsert_failed", {"job_id": str(row.entry.job_id)}
                     )
-                    await session.commit()
+                    logger.warning(
+                        "sync-pinecone-queue: upsert failed",
+                        job_id=row.entry.job_id,
+                        error=str(exc),
+                    )
+                    await repo.mark_failed(session, row.entry, error=str(exc))
+
+            await session.commit()
 
         span.set_attribute("pinecone.rows_failed", failed)
         if failed:
             logger.warning(
                 "sync-pinecone-queue: sweep completed with failures",
-                processed=len(rows),
+                processed=len(pending),
                 failed=failed,
             )
-        logger.info("sync-pinecone-queue: sweep complete", processed=len(rows))
+        logger.info("sync-pinecone-queue: sweep complete", processed=len(pending))
 
     return "ok"

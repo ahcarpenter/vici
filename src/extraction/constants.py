@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 GPT_MODEL = "gpt-5.3-chat-latest"
 UNKNOWN_REPLY_TEXT = (
     "Hi from Vici! We didn't understand your message. "
@@ -14,3 +16,14 @@ GPT_RETRY_WAIT_MULTIPLIER: int = 1
 GPT_RETRY_WAIT_MIN_SECONDS: int = 1
 GPT_RETRY_WAIT_MAX_SECONDS: int = 60
 OPENAI_MAX_RETRIES: int = 0
+
+# Pinecone sync queue
+PINECONE_SYNC_BATCH_SIZE: int = 50
+
+
+class SyncStatus(StrEnum):
+    """States of a pinecone_sync_queue entry (outbox for the search index)."""
+
+    PENDING = "pending"
+    SYNCED = "synced"
+    FAILED = "failed"

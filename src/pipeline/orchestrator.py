@@ -10,20 +10,27 @@ from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
+from src.sms.constants import AuditEvent
+from src.sms.repository import MessageRepository
 
 tracer = otel_trace.get_tracer(__name__)
 log = structlog.get_logger()
 
 
 class PipelineOrchestrator:
+    """Application service: classifies a message, dispatches to a handler,
+    and owns the unit of work. Handlers stage writes; this commits them."""
+
     def __init__(
         self,
         extraction_service: ExtractionService,
         audit_repo: AuditLogRepository,
+        message_repo: MessageRepository,
         handlers: list[MessageHandler],
     ):
         self._extraction_service = extraction_service
         self._audit_repo = audit_repo
+        self._message_repo = message_repo
         self._handlers = handlers
 
     async def run(
@@ -47,7 +54,7 @@ class PipelineOrchestrator:
             await self._audit_repo.write(
                 session,
                 message_sid,
-                "gpt_classified",
+                AuditEvent.GPT_CLASSIFIED,
                 detail=json.dumps({"message_type": result.message_type}),
                 message_id=message_id,
             )
@@ -64,9 +71,27 @@ class PipelineOrchestrator:
                 from_number=from_number,
             )
 
-            for handler in self._handlers:
-                if handler.can_handle(result):
-                    await handler.handle(ctx)
-                    break
+            dispatched = next((h for h in self._handlers if h.can_handle(result)), None)
+            if dispatched is not None:
+                await dispatched.handle(ctx)
+                await self._message_repo.record_classification(
+                    session,
+                    message_id,
+                    dispatched.message_type,
+                    raw_gpt_response=result.model_dump_json(),
+                )
+
+            # 4. Single unit of work, then deferred external side effects
+            await session.commit()
+
+            for action in ctx.post_commit_actions:
+                try:
+                    await action()
+                except Exception as exc:
+                    log.error(
+                        "pipeline.post_commit_action_failed",
+                        message_sid=message_sid,
+                        error=str(exc),
+                    )
 
             return result

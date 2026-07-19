@@ -1,6 +1,7 @@
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.request_validator import RequestValidator
 
@@ -8,12 +9,14 @@ from src.config import get_settings
 from src.database import get_session
 from src.sms import service as sms_service
 from src.sms.audit_repository import AuditLogRepository
+from src.sms.constants import AuditEvent
 from src.sms.exceptions import (
     DuplicateMessageSid,
     RateLimitExceeded,
     TwilioSignatureInvalid,
 )
 from src.sms.repository import MessageRepository
+from src.sms.schemas import InboundSms, TwilioWebhookPayload
 from src.users.repository import UserRepository
 
 
@@ -44,68 +47,71 @@ def _public_request_url(request: Request) -> str:
     return f"{base}{path}" + (f"?{query}" if query else "")
 
 
-async def validate_twilio_request(request: Request) -> dict:
-    from fastapi import HTTPException
-
+async def validate_twilio_request(request: Request) -> TwilioWebhookPayload:
+    """Gate 1: Parse the payload (400 on contract violation) and verify the
+    Twilio signature against the raw form (403 via handler on mismatch)."""
     settings = get_settings()
     form_data = dict(await request.form())
-    if not form_data.get("MessageSid") or not form_data.get("From"):
+    try:
+        payload = TwilioWebhookPayload(**form_data)
+    except ValidationError as exc:
+        missing = ", ".join(str(err["loc"][0]) for err in exc.errors())
         raise HTTPException(
             status_code=400,
-            detail="Missing required fields: MessageSid, From",
-        )
+            detail=f"Invalid Twilio payload: {missing}",
+        ) from exc
     if settings.sms.disable_twilio_signature_validation:
-        return form_data
+        return payload
     validator = RequestValidator(settings.sms.auth_token)
     url = _public_request_url(request)
     signature = request.headers.get("X-Twilio-Signature", "")
     if not validator.validate(url, form_data, signature):
         raise TwilioSignatureInvalid()
-    return form_data
+    return payload
 
 
 async def check_idempotency(
-    form_data: dict = Depends(validate_twilio_request),
+    payload: TwilioWebhookPayload = Depends(validate_twilio_request),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> TwilioWebhookPayload:
     """Gate 2: Raise DuplicateMessageSid (-> HTTP 200 via handler) if MessageSid seen.
-    Returns form_data for downstream deps to chain."""
-    message_sid = form_data.get("MessageSid", "")
+    Returns the payload for downstream deps to chain."""
     try:
         async with session.begin():
-            await MessageRepository.check_idempotency(session, message_sid)
+            await MessageRepository.check_idempotency(session, payload.MessageSid)
     except DuplicateMessageSid:
         async with session.begin():
-            await AuditLogRepository().write(session, message_sid, "duplicate")
+            await AuditLogRepository().write(
+                session, payload.MessageSid, AuditEvent.DUPLICATE
+            )
         raise
-    return form_data
+    return payload
 
 
 async def get_or_create_user(
-    form_data: dict = Depends(check_idempotency),
+    payload: TwilioWebhookPayload = Depends(check_idempotency),
     session: AsyncSession = Depends(get_session),
-):
-    """Gate 3: Upsert user by phone_hash. Returns (form_data, user) tuple."""
-    from_number = form_data.get("From", "")
-    phone_hash = sms_service.hash_phone(from_number)
+) -> InboundSms:
+    """Gate 3: Upsert user by phone_hash. Returns the admitted InboundSms."""
+    phone_hash = sms_service.hash_phone(payload.From)
     async with session.begin():
         user = await UserRepository.get_or_create(session, phone_hash)
-    return form_data, user
+    return InboundSms(payload=payload, sender=user)
 
 
 async def enforce_rate_limit(
-    form_and_user=Depends(get_or_create_user),
+    inbound: InboundSms = Depends(get_or_create_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> InboundSms:
     """Gate 4: Raise RateLimitExceeded (-> HTTP 200 via handler) if over limit.
-    Returns (form_data, user) for route to consume."""
-    form_data, user = form_and_user
-    message_sid = form_data.get("MessageSid", "")
+    Returns the admitted InboundSms for the route to consume."""
     try:
         async with session.begin():
-            await MessageRepository.enforce_rate_limit(session, user.id)
+            await MessageRepository.enforce_rate_limit(session, inbound.sender.id)
     except RateLimitExceeded:
         async with session.begin():
-            await AuditLogRepository().write(session, message_sid, "rate_limited")
+            await AuditLogRepository().write(
+                session, inbound.payload.MessageSid, AuditEvent.RATE_LIMITED
+            )
         raise
-    return form_data, user
+    return inbound

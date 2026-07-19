@@ -3,10 +3,12 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from src.extraction.models import PineconeSyncQueue
 from src.temporal.activities import ProcessMessageInput
 
 
@@ -26,6 +28,29 @@ def span_exporter():
 
     acts_module.tracer = original_tracer
     exporter.shutdown()
+
+
+def _sessionmaker_over(session):
+    class _NonClosing:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *args):
+            return None
+
+    return MagicMock(side_effect=lambda: _NonClosing())
+
+
+@pytest_asyncio.fixture
+async def make_pending_entry(async_session, make_job):
+    async def _factory(**job_kwargs) -> PineconeSyncQueue:
+        job = await make_job(**job_kwargs)
+        entry = PineconeSyncQueue(job_id=job.id)
+        async_session.add(entry)
+        await async_session.flush()
+        return entry
+
+    return _factory
 
 
 @pytest.mark.asyncio
@@ -80,33 +105,14 @@ async def test_process_message_emits_temporal_span(span_exporter):
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_emits_span(span_exporter):
+async def test_sync_pinecone_queue_emits_span(
+    span_exporter, async_session, make_pending_entry
+):
     """Activity emits span named temporal.sync_pinecone_queue with row attributes."""
     import src.temporal.activities as acts
     from src.temporal.activities import sync_pinecone_queue_activity
 
-    row = {"id": 1, "job_id": 10, "description": "Mover needed", "phone_hash": "abc"}
-
-    select_session = AsyncMock()
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row]
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    update_session = AsyncMock()
-    update_session.execute = AsyncMock(return_value=MagicMock())
-    update_session.commit = AsyncMock()
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        cm = MagicMock()
-        if call_count["n"] == 1:
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-        else:
-            cm.__aenter__ = AsyncMock(return_value=update_session)
-        cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
+    await make_pending_entry(description="Mover needed")
 
     original_openai = acts._openai_client
     acts._openai_client = MagicMock()
@@ -114,12 +120,13 @@ async def test_sync_pinecone_queue_emits_span(span_exporter):
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=MagicMock(side_effect=make_session),
+                return_value=_sessionmaker_over(async_session),
             ),
             patch(
                 "src.temporal.activities.write_job_embedding",
                 AsyncMock(return_value=None),
             ),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
         ):
             await sync_pinecone_queue_activity()
     finally:
@@ -136,33 +143,14 @@ async def test_sync_pinecone_queue_emits_span(span_exporter):
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_span_records_failure_event(span_exporter):
+async def test_sync_pinecone_queue_span_records_failure_event(
+    span_exporter, async_session, make_pending_entry
+):
     """Failed row adds row_upsert_failed event to span."""
     import src.temporal.activities as acts
     from src.temporal.activities import sync_pinecone_queue_activity
 
-    row = {"id": 2, "job_id": 20, "description": "Test", "phone_hash": "xyz"}
-
-    select_session = AsyncMock()
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row]
-    select_session.execute = AsyncMock(return_value=select_result)
-
-    update_session = AsyncMock()
-    update_session.execute = AsyncMock(return_value=MagicMock())
-    update_session.commit = AsyncMock()
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        cm = MagicMock()
-        if call_count["n"] == 1:
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-        else:
-            cm.__aenter__ = AsyncMock(return_value=update_session)
-        cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
+    entry = await make_pending_entry()
 
     original_openai = acts._openai_client
     acts._openai_client = MagicMock()
@@ -170,12 +158,13 @@ async def test_sync_pinecone_queue_span_records_failure_event(span_exporter):
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=MagicMock(side_effect=make_session),
+                return_value=_sessionmaker_over(async_session),
             ),
             patch(
                 "src.temporal.activities.write_job_embedding",
                 AsyncMock(side_effect=Exception("timeout")),
             ),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
         ):
             await sync_pinecone_queue_activity()
     finally:
@@ -189,7 +178,7 @@ async def test_sync_pinecone_queue_span_records_failure_event(span_exporter):
     event_names = [e.name for e in sync_span.events]
     assert "row_upsert_failed" in event_names
     failed_event = next(e for e in sync_span.events if e.name == "row_upsert_failed")
-    assert failed_event.attributes.get("job_id") == "20"
+    assert failed_event.attributes.get("job_id") == str(entry.job_id)
 
 
 @pytest.mark.asyncio

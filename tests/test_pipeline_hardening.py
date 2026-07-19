@@ -170,7 +170,6 @@ async def test_job_datetime_parse_failure_logs_warning():
     job_create.raw_datetime_text = None
     job_create.inferred_timezone = None
     job_create.datetime_flexible = True
-    job_create.raw_sms = "Need a mover"
 
     logged_warnings = []
 
@@ -202,44 +201,27 @@ async def test_job_datetime_parse_failure_logs_warning():
 
 
 @pytest.mark.asyncio
-async def test_sync_pinecone_queue_logs_failure_summary():
+async def test_sync_pinecone_queue_logs_failure_summary(async_session, make_job):
     """sync_pinecone_queue_activity logs warning with failed count."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     import src.temporal.activities as acts
+    from src.extraction.models import PineconeSyncQueue
     from src.temporal.activities import sync_pinecone_queue_activity
 
-    row1 = {"id": 1, "job_id": 10, "description": "Mover", "phone_hash": "abc"}
-    row2 = {"id": 2, "job_id": 20, "description": "Driver", "phone_hash": "def"}
+    for _ in range(2):
+        job = await make_job()
+        async_session.add(PineconeSyncQueue(job_id=job.id))
+    await async_session.flush()
 
     mock_write = AsyncMock(side_effect=[None, Exception("Pinecone error")])
-    mock_openai = MagicMock()
-    mock_settings = MagicMock()
 
-    select_session = AsyncMock()
-    select_result = MagicMock()
-    select_result.mappings.return_value.all.return_value = [row1, row2]
-    select_session.execute = AsyncMock(return_value=select_result)
+    class _NonClosing:
+        async def __aenter__(self):
+            return async_session
 
-    update_session = AsyncMock()
-    update_session.execute = AsyncMock(return_value=MagicMock())
-    update_session.commit = AsyncMock()
-
-    call_count = {"n": 0}
-
-    def make_session():
-        call_count["n"] += 1
-        if call_count["n"] == 1:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=select_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        else:
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=update_session)
-            cm.__aexit__ = AsyncMock(return_value=None)
-        return cm
-
-    mock_sessionmaker = MagicMock(side_effect=make_session)
+        async def __aexit__(self, *args):
+            return None
 
     class CapturingLogger:
         def __init__(self):
@@ -255,16 +237,16 @@ async def test_sync_pinecone_queue_logs_failure_summary():
             pass
 
     original = acts._openai_client
-    acts._openai_client = mock_openai
+    acts._openai_client = MagicMock()
     try:
         capturing_logger = CapturingLogger()
         with (
             patch(
                 "src.temporal.activities.get_sessionmaker",
-                return_value=mock_sessionmaker,
+                return_value=MagicMock(side_effect=lambda: _NonClosing()),
             ),
             patch("src.temporal.activities.write_job_embedding", mock_write),
-            patch("src.temporal.activities.get_settings", return_value=mock_settings),
+            patch("src.temporal.activities.get_settings", return_value=MagicMock()),
             patch("structlog.get_logger", return_value=capturing_logger),
         ):
             result = await sync_pinecone_queue_activity()

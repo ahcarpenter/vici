@@ -26,36 +26,35 @@ async def test_job_posting_queue_insert_failure_is_caught():
     mock_audit_repo = MagicMock()
     mock_audit_repo.write = AsyncMock()
 
-    async def pinecone_that_raises(**kwargs):
+    async def embedding_writer_that_raises(**kwargs):
         raise Exception("Pinecone down")
 
     handler = JobPostingHandler(
         job_repo=mock_job_repo,
         audit_repo=mock_audit_repo,
-        pinecone_client=pinecone_that_raises,
+        job_embedding_writer=embedding_writer_that_raises,
         extraction_service=mock_extraction_service,
     )
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock()
-    mock_session.commit = AsyncMock()
 
-    ctx = MagicMock(spec=PipelineContext)
-    ctx.message_id = 1
-    ctx.message_sid = "SMtest"
-    ctx.from_number = "+13125551234"
-    ctx.phone_hash = "abc123"
-    ctx.user_id = 1
-    ctx.sms_text = "Need a mover"
-    ctx.session = mock_session
-    ctx.result = ExtractionResult(
-        message_type="job_posting",
-        job=JobExtraction(
-            description="Need a mover",
-            datetime_flexible=True,
-            location="Chicago",
-            pay_type="hourly",
+    ctx = PipelineContext(
+        session=mock_session,
+        result=ExtractionResult(
+            message_type="job_posting",
+            job=JobExtraction(
+                description="Need a mover",
+                datetime_flexible=True,
+                location="Chicago",
+                pay_type="hourly",
+            ),
         ),
+        sms_text="Need a mover",
+        phone_hash="abc123",
+        message_id=1,
+        user_id=1,
+        message_sid="SMtest",
+        from_number="+13125551234",
     )
 
     logged_errors = []
@@ -71,8 +70,7 @@ async def test_job_posting_queue_insert_failure_is_caught():
             pass
 
     failing_session = AsyncMock()
-    failing_session.execute = AsyncMock(side_effect=Exception("DB down"))
-    failing_session.commit = AsyncMock()
+    failing_session.add = MagicMock(side_effect=Exception("DB down"))
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=failing_session)
     cm.__aexit__ = AsyncMock(return_value=None)
@@ -85,11 +83,15 @@ async def test_job_posting_queue_insert_failure_is_caught():
             return_value=mock_sessionmaker_fn,
         ),
     ):
-        # Should not raise
+        # Should not raise: handler stages the write, deferred action degrades
         await handler.handle(ctx)
+        for action in ctx.post_commit_actions:
+            await action()
 
     assert any("pinecone_write_failed" in e for e in logged_errors)
     assert any("pinecone_queue_insert_failed" in e for e in logged_errors)
+    # Flush-only contract: the handler must not commit the pipeline session
+    mock_session.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -24,17 +24,18 @@ from twilio.rest import Client as TwilioClient
 from src.config import get_settings
 from src.database import get_engine, get_sessionmaker
 from src.exceptions import twilio_signature_invalid_handler
-from src.extraction.constants import OPENAI_MAX_RETRIES
+from src.extraction.constants import OPENAI_MAX_RETRIES, SyncStatus
 from src.extraction.service import ExtractionService
 from src.extraction.utils import write_job_embedding
 from src.jobs.repository import JobRepository
 from src.metrics import pinecone_sync_queue_depth
 from src.pipeline.handlers.job_posting import JobPostingHandler
 from src.pipeline.handlers.unknown import UnknownMessageHandler
-from src.pipeline.handlers.worker_goal import WorkerGoalHandler
+from src.pipeline.handlers.work_goal import WorkGoalHandler
 from src.pipeline.orchestrator import PipelineOrchestrator
 from src.sms.audit_repository import AuditLogRepository
 from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid, early_return_handler
+from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
 from src.temporal.constants import WORKER_SHUTDOWN_TIMEOUT_SECONDS
 from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
@@ -102,8 +103,9 @@ async def _update_gauges() -> None:
                 result = await session.execute(
                     text(
                         "SELECT COUNT(*) FROM pinecone_sync_queue"
-                        " WHERE status = 'pending'"
-                    )
+                        " WHERE status = :status"
+                    ),
+                    {"status": SyncStatus.PENDING.value},
                 )
                 pinecone_sync_queue_depth.set(result.scalar_one())
                 consecutive_failures = 0
@@ -156,7 +158,7 @@ async def lifespan(app: FastAPI):
     extraction_service = ExtractionService(
         openai_client=openai_client, settings=settings
     )
-    pinecone_client = write_job_embedding
+    job_embedding_writer = write_job_embedding
     twilio_client = TwilioClient(settings.sms.account_sid, settings.sms.auth_token)
 
     audit_repo = AuditLogRepository()
@@ -164,10 +166,10 @@ async def lifespan(app: FastAPI):
         JobPostingHandler(
             job_repo=JobRepository(),
             audit_repo=audit_repo,
-            pinecone_client=pinecone_client,
+            job_embedding_writer=job_embedding_writer,
             extraction_service=extraction_service,
         ),
-        WorkerGoalHandler(
+        WorkGoalHandler(
             work_goal_repo=WorkGoalRepository(),
             audit_repo=audit_repo,
         ),
@@ -179,6 +181,7 @@ async def lifespan(app: FastAPI):
     orchestrator = PipelineOrchestrator(
         extraction_service=extraction_service,
         audit_repo=audit_repo,
+        message_repo=MessageRepository(),
         handlers=handlers,
     )
 

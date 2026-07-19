@@ -16,7 +16,7 @@ from src.extraction.schemas import (
     ExtractionResult,
     JobExtraction,
     UnknownMessage,
-    WorkerExtraction,
+    WorkGoalExtraction,
 )
 
 
@@ -27,7 +27,7 @@ def _make_orchestrator(
     """Build a PipelineOrchestrator with all deps mocked via handler chain."""
     from src.pipeline.handlers.job_posting import JobPostingHandler
     from src.pipeline.handlers.unknown import UnknownMessageHandler
-    from src.pipeline.handlers.worker_goal import WorkerGoalHandler
+    from src.pipeline.handlers.work_goal import WorkGoalHandler
     from src.pipeline.orchestrator import PipelineOrchestrator
 
     mock_extraction_service = AsyncMock()
@@ -51,6 +51,9 @@ def _make_orchestrator(
     mock_audit_repo = AsyncMock()
     mock_audit_repo.write = AsyncMock(return_value=None)
 
+    mock_message_repo = AsyncMock()
+    mock_message_repo.record_classification = AsyncMock(return_value=None)
+
     mock_pinecone = AsyncMock()
     if pinecone_side_effect is not None:
         mock_pinecone.side_effect = pinecone_side_effect
@@ -61,10 +64,10 @@ def _make_orchestrator(
         JobPostingHandler(
             job_repo=mock_job_repo,
             audit_repo=mock_audit_repo,
-            pinecone_client=mock_pinecone,
+            job_embedding_writer=mock_pinecone,
             extraction_service=mock_extraction_service,
         ),
-        WorkerGoalHandler(
+        WorkGoalHandler(
             work_goal_repo=mock_wr_repo,
             audit_repo=mock_audit_repo,
         ),
@@ -77,6 +80,7 @@ def _make_orchestrator(
     orchestrator = PipelineOrchestrator(
         extraction_service=mock_extraction_service,
         audit_repo=mock_audit_repo,
+        message_repo=mock_message_repo,
         handlers=handlers,
     )
     return (
@@ -134,7 +138,7 @@ async def test_job_branch_commits_once():
 @pytest.mark.asyncio
 async def test_worker_branch_commits_once():
     """Worker branch: work_goal_repo.create called, audit written, commit once."""
-    worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
+    worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
     result = ExtractionResult(message_type="work_goal", work_goal=worker)
     orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
         _make_orchestrator(result)
@@ -205,6 +209,7 @@ async def test_pinecone_failure_enqueues_retry():
     session = _make_session()
 
     mock_s2 = AsyncMock()
+    mock_s2.add = MagicMock()
     mock_s2.__aenter__ = AsyncMock(return_value=mock_s2)
     mock_s2.__aexit__ = AsyncMock(return_value=None)
     mock_sessionmaker = MagicMock(return_value=mock_s2)
@@ -228,7 +233,7 @@ async def test_pinecone_failure_enqueues_retry():
     # Main commit still happened (before Pinecone attempt)
     session.commit.assert_awaited_once()
     # Enqueue via separate session
-    mock_s2.execute.assert_awaited()
+    mock_s2.add.assert_called_once()
     mock_s2.commit.assert_awaited()
 
 
@@ -353,7 +358,7 @@ async def test_orchestrator_emits_pipeline_span():
     orch_module.tracer = test_tracer
 
     try:
-        worker = WorkerExtraction(target_earnings=200.0, target_timeframe="today")
+        worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
         result = ExtractionResult(message_type="work_goal", work_goal=worker)
         orchestrator, _, _, _, _, _ = _make_orchestrator(result)
         session = _make_session()

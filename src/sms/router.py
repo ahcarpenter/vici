@@ -13,9 +13,11 @@ from src.pipeline.constants import (
 )
 from src.sms import service as sms_service
 from src.sms.audit_repository import AuditLogRepository
+from src.sms.constants import AuditEvent
 from src.sms.dependencies import enforce_rate_limit
 from src.sms.exceptions import EMPTY_TWIML
 from src.sms.repository import MessageRepository
+from src.sms.schemas import InboundSms
 from src.sms.service import hash_phone, scrub_phone_fields
 
 router = APIRouter(prefix="/webhook", tags=["sms"])
@@ -24,7 +26,7 @@ router = APIRouter(prefix="/webhook", tags=["sms"])
 @router.post("/sms")
 async def receive_sms(
     request: Request,
-    gates=Depends(enforce_rate_limit),
+    inbound: InboundSms = Depends(enforce_rate_limit),
     session: AsyncSession = Depends(get_session),
 ):
     """Receive inbound SMS from Twilio.
@@ -33,28 +35,30 @@ async def receive_sms(
     rate limiting) handled by Depends() chain. Route body only persists
     and emits (per D-07).
     """
-    form_data, user = gates
-    message_sid = form_data.get("MessageSid", "")
-    from_number = form_data.get("From", "")
-    body = form_data.get("Body", "")
+    payload = inbound.payload
 
     span = otel_trace.get_current_span()
-    span.set_attribute(OTEL_ATTR_MESSAGE_ID, message_sid)
-    span.set_attribute(OTEL_ATTR_PHONE_HASH, hash_phone(from_number))
+    span.set_attribute(OTEL_ATTR_MESSAGE_ID, payload.MessageSid)
+    span.set_attribute(OTEL_ATTR_PHONE_HASH, hash_phone(payload.From))
     span.set_attribute(OTEL_ATTR_MESSAGING_SYSTEM, "twilio")
 
     async with session.begin():
-        message = await MessageRepository().create(session, message_sid, user.id, body)
+        message = await MessageRepository().create(
+            session, payload.MessageSid, inbound.sender.id, payload.Body
+        )
         await AuditLogRepository().write(
             session,
-            message_sid,
-            "received",
-            detail=json.dumps(scrub_phone_fields(form_data)),
+            payload.MessageSid,
+            AuditEvent.RECEIVED,
+            detail=json.dumps(scrub_phone_fields(payload.model_dump())),
             message_id=message.id,
         )
 
     await sms_service.emit_message_received_event(
-        request.app.state.temporal_client, message_sid, from_number, body
+        request.app.state.temporal_client,
+        payload.MessageSid,
+        payload.From,
+        payload.Body,
     )
 
     return Response(content=EMPTY_TWIML, media_type="text/xml")

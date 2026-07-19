@@ -10,12 +10,37 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 
+def _make_ctx(session, from_number: str, message_sid: str):
+    from src.extraction.schemas import ExtractionResult, UnknownMessage
+    from src.pipeline.context import PipelineContext
+
+    return PipelineContext(
+        session=session,
+        result=ExtractionResult(
+            message_type="unknown",
+            unknown=UnknownMessage(reason="unclear"),
+        ),
+        sms_text="Hello",
+        phone_hash="hashunknown",
+        message_id=1,
+        user_id=1,
+        message_sid=message_sid,
+        from_number=from_number,
+    )
+
+
+async def _handle_and_run_deferred(handler, ctx):
+    await handler.handle(ctx)
+    for action in ctx.post_commit_actions:
+        await action()
+
+
 @pytest.mark.asyncio
 async def test_unknown_twilio_failure_does_not_raise():
-    """Twilio raises: UnknownMessageHandler.handle completes without propagating."""
+    """Twilio raises: UnknownMessageHandler deferred send completes without
+    propagating."""
     from twilio.base.exceptions import TwilioRestException
 
-    from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.unknown import UnknownMessageHandler
 
     mock_extraction_service = MagicMock()
@@ -32,14 +57,7 @@ async def test_unknown_twilio_failure_does_not_raise():
     )
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock()
-    mock_session.commit = AsyncMock()
-
-    ctx = MagicMock(spec=PipelineContext)
-    ctx.message_id = 1
-    ctx.message_sid = "SMtest"
-    ctx.from_number = "+13125551234"
-    ctx.session = mock_session
+    ctx = _make_ctx(mock_session, from_number="+13125551234", message_sid="SMtest")
 
     logged_errors = []
 
@@ -55,16 +73,17 @@ async def test_unknown_twilio_failure_does_not_raise():
 
     with patch("src.pipeline.handlers.unknown.log", CapturingLogger()):
         # Should not raise
-        await handler.handle(ctx)
+        await _handle_and_run_deferred(handler, ctx)
 
     assert any("unknown_reply_failed" in e for e in logged_errors)
+    # Flush-only contract: the handler must not commit
+    mock_session.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_unknown_handler_span_uses_hashed_phone():
     """UnknownMessageHandler emits twilio.send_sms span with hashed phone."""
     import src.pipeline.handlers.unknown as unknown_module
-    from src.pipeline.context import PipelineContext
     from src.pipeline.handlers.unknown import UnknownMessageHandler
     from src.sms.service import hash_phone
 
@@ -88,20 +107,13 @@ async def test_unknown_handler_span_uses_hashed_phone():
 
         raw_phone = "+13125559999"
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock()
-        mock_session.commit = AsyncMock()
-
-        ctx = MagicMock(spec=PipelineContext)
-        ctx.message_id = 1
-        ctx.message_sid = "SMunknown"
-        ctx.from_number = raw_phone
-        ctx.session = mock_session
+        ctx = _make_ctx(mock_session, from_number=raw_phone, message_sid="SMunknown")
 
         with patch(
             "src.pipeline.handlers.unknown.asyncio.to_thread",
             new=AsyncMock(return_value=None),
         ):
-            await handler.handle(ctx)
+            await _handle_and_run_deferred(handler, ctx)
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]

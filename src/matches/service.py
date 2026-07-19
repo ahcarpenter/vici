@@ -3,14 +3,11 @@ from datetime import UTC, datetime
 import structlog
 from opentelemetry import trace as otel_trace
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from src.jobs.models import Job
 from src.jobs.repository import JobRepository
 from src.matches.repository import MatchRepository
 from src.matches.schemas import JobCandidate, MatchResult
-from src.sms.models import Message
-from src.users.models import User
 from src.work_goals.models import WorkGoal
 
 tracer = otel_trace.get_tracer(__name__)
@@ -60,41 +57,31 @@ class MatchService:
         self, session: AsyncSession, jobs: list[Job]
     ) -> list[JobCandidate]:
         """
-        For each job, compute earnings and fetch poster phone via:
-        job.message_id -> message.user_id -> user.phone_e164
-
-        Load all relevant users in a single query to avoid N+1.
+        For each job, compute earnings from its PayTerms and attach the
+        poster's phone (single batched traversal via JobRepository).
         """
-        message_ids = [j.message_id for j in jobs]
-
-        msg_result = await session.execute(
-            select(Message).where(Message.id.in_(message_ids))
-        )
-        messages = {m.id: m for m in msg_result.scalars().all()}
-
-        user_ids = list({m.user_id for m in messages.values()})
-        user_result = await session.execute(select(User).where(User.id.in_(user_ids)))
-        users = {u.id: u for u in user_result.scalars().all()}
+        posters = await self._job_repo.find_posters(session, jobs)
 
         candidates = []
         for job in jobs:
-            msg = messages.get(job.message_id)
-            user = users.get(msg.user_id) if msg else None
-            poster_phone = user.phone_e164 if user else None
+            terms = job.pay_terms
+            earnings = terms.earnings()
+            if earnings is None:
+                # find_candidates_for_goal already excludes these; stay defensive.
+                log.warning(
+                    "match.job_excluded",
+                    job_id=job.id,
+                    reason=terms.incomputable_reason(),
+                )
+                continue
 
-            if job.pay_type == "hourly":
-                earnings = int(round(job.pay_rate * job.estimated_duration_hours))
-                duration = job.estimated_duration_hours
-            else:  # flat
-                earnings = job.pay_rate
-                duration = job.estimated_duration_hours or 0.0
-
+            poster = posters.get(job.id)
             candidates.append(
                 JobCandidate(
                     job=job,
                     earnings=earnings,
-                    duration=duration,
-                    poster_phone=poster_phone,
+                    duration=terms.duration_hours or 0.0,
+                    poster_phone=poster.phone_e164 if poster else None,
                 )
             )
         return candidates

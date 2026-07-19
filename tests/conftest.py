@@ -1,6 +1,7 @@
 import hashlib
 import os
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -113,14 +114,12 @@ def mock_twilio_validator():
 
 @pytest_asyncio.fixture
 async def make_user(async_session):
-    _counter = {"n": 0}
-
     async def _factory(
         phone_hash: str | None = None, phone_e164: str | None = None
     ) -> User:
         if phone_hash is None:
-            _counter["n"] += 1
-            phone_hash = hashlib.sha256(f"phone_{_counter['n']}".encode()).hexdigest()
+            # uuid-based so tests that commit can't collide across sessions
+            phone_hash = hashlib.sha256(uuid4().hex.encode()).hexdigest()
         user = User(phone_hash=phone_hash, phone_e164=phone_e164)
         async_session.add(user)
         await async_session.flush()
@@ -136,7 +135,7 @@ async def make_message(async_session, make_user):
         if user is None:
             user = await make_user()
         message = Message(
-            message_sid=kwargs.get("message_sid", "test-sid-" + str(id(kwargs))),
+            message_sid=kwargs.get("message_sid", "test-sid-" + uuid4().hex[:12]),
             user_id=kwargs.get("user_id", user.id),
             body=kwargs.get("body", "test body"),
         )
