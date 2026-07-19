@@ -1,24 +1,19 @@
-<!-- generated-by: gsd-doc-writer -->
 # Vici
 
 An SMS-driven platform for the gig economy
 
-## How It Works
-
-Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with the relevant details (desc, pay, duration, expected done date). GPT classifies each inbound message and extracts structured data from both. Matching algorithm surfaces the gig(s) on-demand that the worker can then do to achieve their earnings goal in the shortest amount of time possible.
-
-## Roadmap
-
-See [here](https://github.com/ahcarpenter/vici/blob/main/.planning/ROADMAP.md) for the current roadmap, and progress.
-
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+
+## How It Works
+
+Workers text in an earnings goal (e.g. "I need $1200 by Thursday of next week."). Job posters text in a job listing with the relevant details (desc, pay, duration, expected done date). GPT classifies each inbound message and extracts structured data from both. A matching engine then selects the combination of gigs that reaches the worker's earnings goal in the least time and texts it back.
 
 ## Features
 
 - **FastAPI** async webhook API with `/webhook/sms`, `/health`, `/readyz`, and `/metrics` endpoints
 - **Twilio** inbound SMS ingestion with signature validation, idempotency, and per-sender rate limiting
-- **OpenAI GPT** extraction pipeline for parsing unstructured SMS into job postings and worker goals
+- **OpenAI GPT** extraction pipeline for parsing unstructured SMS into job postings and work goals
 - **Pinecone** vector index for semantic job/worker matching (async SDK)
 - **Temporal** workflow orchestration with a cron-scheduled Pinecone sync worker
 - **PostgreSQL** persistence via SQLAlchemy / SQLModel with **Alembic** migrations
@@ -102,16 +97,18 @@ vici/
 │   ├── main.py          # FastAPI app factory + lifespan (OTel, Temporal worker, gauges)
 │   ├── config.py        # Pydantic Settings (flat env vars remapped into sub-models)
 │   ├── database.py      # Async SQLAlchemy engine + session factory
-│   ├── sms/             # Twilio webhook: router, service, rate-limit, audit
-│   ├── extraction/      # OpenAI GPT extraction + Pinecone embedding writes
-│   ├── pipeline/        # Orchestrator + handlers (job posting, worker goal, unknown)
-│   ├── jobs/            # Job posting domain (models, repository)
-│   ├── work_goals/      # Worker goal domain (models, repository)
-│   ├── matches/         # Semantic match results
+│   ├── sms/             # Twilio webhook: gate chain, router, rate-limit, audit
+│   ├── extraction/      # OpenAI GPT extraction + Pinecone sync-queue repository
+│   ├── pipeline/        # Orchestrator (owns the unit of work) + handlers
+│   │                    #   (job posting, work goal, unknown)
+│   ├── jobs/            # Job posting domain (Job model, PayTerms, repository)
+│   ├── work_goals/      # Work goal domain (models, repository)
+│   ├── matches/         # Matching engine: knapsack job selection + SMS formatting
 │   ├── users/           # User domain
 │   ├── temporal/        # Temporal client, worker, cron schedules
 │   ├── metrics.py       # Prometheus gauges/counters
-│   └── models.py        # Shared SQLModel base classes
+│   ├── money.py         # Money convention: integer cents everywhere
+│   └── models.py        # Imports every table model so metadata is registered
 ├── migrations/          # Alembic revision scripts
 ├── tests/               # Pytest (async mode) suite
 ├── infra/               # Pulumi-on-GKE stack (Python)
@@ -156,12 +153,12 @@ Configuration lives in `pyproject.toml` under `[tool.ruff]` (target `py312`, rul
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md)       | Environment variables and settings           |
 | [docs/TESTING.md](docs/TESTING.md)                   | Test framework and conventions                |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)             | Deployment and infrastructure                |
-| [AGENTS.md](AGENTS.md)                               | FastAPI conventions for contributors          |
+| [AGENTS.md](AGENTS.md)                               | Working agreement for AI-agent contributors   |
 | [CONTRIBUTING.md](CONTRIBUTING.md)                   | Contribution guidelines                       |
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, and [AGENTS.md](AGENTS.md) for the FastAPI coding conventions this project follows (async route rules, domain-oriented layout, Pydantic settings-per-domain, etc.).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. AI agents working in this repo should also read [AGENTS.md](AGENTS.md).
 
 ## License
 
