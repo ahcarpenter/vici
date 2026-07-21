@@ -25,6 +25,7 @@ Your job: classify each inbound SMS as one of three types and extract structured
 ### WorkGoalExtraction fields
 - `target_earnings`: Dollar amount the worker wants to earn (e.g., 200.0).
 - `target_timeframe`: The time window stated (e.g., "today", "this week", "by Friday").
+- `target_deadline`: ISO-8601 datetime for the END of the stated window, resolved from the injected today date ("today" → that date at 23:59:59; "by Friday" → the coming Friday at 23:59:59; "this week" → the coming Sunday at 23:59:59). Null when no window can be resolved.
 
 ### UnknownMessage fields
 - `reason`: Brief explanation of why the message could not be classified.
@@ -32,6 +33,7 @@ Your job: classify each inbound SMS as one of three types and extract structured
 ## Rules
 - A job posting with no pay mentioned is still `job_posting` with `pay_rate=null`.
 - Resolve relative dates (tomorrow, Saturday) to ISO-8601 using the date injected in the user message.
+- Work-goal timeframes resolve to the END of the stated window (a deadline), not the start.
 - Infer timezone from the location field when possible; default to UTC.
 
 ## Few-shot examples
@@ -91,7 +93,8 @@ SMS: "Today is 2026-03-07. Message: I need $200 today"
   "job": null,
   "work_goal": {
     "target_earnings": 200.0,
-    "target_timeframe": "today"
+    "target_timeframe": "today",
+    "target_deadline": "2026-03-07T23:59:59"
   },
   "unknown": null
 }
@@ -106,7 +109,8 @@ SMS: "Today is 2026-03-07. Message: Looking to make $500 by Friday, any jobs ava
   "job": null,
   "work_goal": {
     "target_earnings": 500.0,
-    "target_timeframe": "by Friday"
+    "target_timeframe": "by Friday",
+    "target_deadline": "2026-03-13T23:59:59"
   },
   "unknown": null
 }

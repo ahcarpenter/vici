@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
-import structlog
 from pydantic import BaseModel, Field, field_validator
 
+from src.datetimes import coerce_llm_datetime
 from src.jobs.constants import PayType
 
 
@@ -28,16 +28,4 @@ class JobCreate(BaseModel):
         value must degrade to "no datetime" (raw_datetime_text is preserved),
         not poison the whole pipeline run.
         """
-        if value is None or isinstance(value, datetime):
-            parsed = value
-        else:
-            try:
-                parsed = datetime.fromisoformat(str(value))
-            except (ValueError, TypeError):
-                structlog.get_logger().warning(
-                    "job.ideal_datetime_parse_failed", raw_value=str(value)
-                )
-                return None
-        if parsed is not None and parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
-        return parsed
+        return coerce_llm_datetime(value, log_event="job.ideal_datetime_parse_failed")

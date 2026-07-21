@@ -38,6 +38,17 @@ def test_worker_extraction_schema():
     worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
     assert worker.target_earnings == 200.0
     assert worker.target_timeframe == "today"
+    # Optional deadline defaults to None
+    assert worker.target_deadline is None
+
+
+def test_worker_extraction_schema_with_deadline():
+    worker = WorkGoalExtraction(
+        target_earnings=500.0,
+        target_timeframe="by Friday",
+        target_deadline="2026-03-13T23:59:59",
+    )
+    assert worker.target_deadline == "2026-03-13T23:59:59"
 
 
 def test_unknown_message_schema():

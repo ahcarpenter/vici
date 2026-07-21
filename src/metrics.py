@@ -36,9 +36,8 @@ pinecone_sync_queue_depth = Gauge(
 
 temporal_queue_depth = Gauge(
     "temporal_queue_depth",
-    "Stub gauge — Temporal task queue depth not yet instrumented",
+    "Approximate Temporal task-queue backlog (workflow + activity tasks)",
 )
-# temporal_queue_depth always reads 0; placeholder for future instrumentation
 
 pipeline_failures_total = Counter(
     "pipeline_failures_total",

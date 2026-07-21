@@ -59,6 +59,8 @@ class WorkGoalHandler(MessageHandler):
             message_id=ctx.message_id,
             target_earnings=dollars_to_cents(extracted.target_earnings),
             target_timeframe=extracted.target_timeframe,
+            # str from the LLM — WorkGoalCreate parses it, nulling junk values.
+            target_deadline=extracted.target_deadline,  # type: ignore[arg-type]
         )
         wg = await self._work_goal_repo.create(ctx.session, wg_create)
 
@@ -71,8 +73,11 @@ class WorkGoalHandler(MessageHandler):
         )
 
         # Match inside the same unit of work (job selection + match rows),
-        # then reply after the orchestrator commits.
-        match_result = await self._match_service.match(ctx.session, wg)
+        # then reply after the orchestrator commits. The raw SMS text feeds
+        # semantic candidate retrieval.
+        match_result = await self._match_service.match(
+            ctx.session, wg, query_text=ctx.sms_text
+        )
         reply_body = format_match_sms(match_result)
 
         message_sid = ctx.message_sid

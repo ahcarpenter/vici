@@ -125,13 +125,16 @@ No formal branch naming convention is documented. The default branch is `main`. 
 ## PR process
 
 - Open pull requests against the `main` branch.
-- CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request targeting `main`. The `test` job runs on `ubuntu-latest` and performs four steps:
+- CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request targeting `main`. The `test` job runs on `ubuntu-latest` and performs these steps:
   1. `actions/checkout@v4`
   2. `astral-sh/setup-uv@v5` (with cache enabled)
   3. `uv sync --frozen`
-  4. `uv run ruff check src/ tests/`
-  5. `uv run pytest tests/ -x --tb=short -q`
-- Tests execute against an in-memory-style SQLite database in CI (`DATABASE_URL=sqlite+aiosqlite:///./test.db`), so no external services are required for the test suite to pass. CI also injects placeholder secrets for Twilio, OpenAI, Pinecone, Braintrust, Inngest, and the webhook base URL — see the `env:` block of the `Test` step in `ci.yml` for the exact list.
+  4. `uv run ruff check src/ tests/ infra/`
+  5. `uv run ruff format --check src/ tests/ infra/`
+  6. `uv run mypy`
+  7. `uvx pip-audit` (non-blocking CVE scan)
+  8. `uv run pytest tests/ -x --tb=short -q`
+- Tests execute against an in-memory-style SQLite database in CI (`DATABASE_URL=sqlite+aiosqlite:///./test.db`), so no external services are required for the test suite to pass. CI also injects placeholder secrets for Twilio, OpenAI, Pinecone, Braintrust, and the webhook base URL — see the `env:` block of the `Test` step in `ci.yml` for the exact list.
 - No pull request template is configured under `.github/`. Ensure your PR description explains the motivation for the change, the scope of affected domains, and any manual testing performed.
 - The deployment workflows (`cd-base.yml`, `cd-dev.yml`, `cd-staging.yml`, `cd-prod.yml`) are documented in [DEPLOYMENT.md](DEPLOYMENT.md); they are not part of the PR-time feedback loop.
 

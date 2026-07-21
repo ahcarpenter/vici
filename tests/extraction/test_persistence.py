@@ -7,6 +7,7 @@ as PipelineOrchestrator now owns all storage orchestration.
 """
 
 import hashlib
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -84,10 +85,12 @@ async def test_worker_persistence(async_session, user_and_message):
         message_id=msg2.id,
         target_earnings=200.0,
         target_timeframe="today",
+        target_deadline="2026-07-25T23:59:59",
     )
     wg = await WorkGoalRepository().create(async_session, wg_create)
 
     assert wg.id is not None
     assert wg.target_earnings == 200.0
     assert wg.target_timeframe == "today"
+    assert wg.target_deadline == datetime(2026, 7, 25, 23, 59, 59, tzinfo=UTC)
     assert wg.message_id == msg2.id

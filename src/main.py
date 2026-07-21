@@ -3,6 +3,7 @@ import logging
 import os
 from collections.abc import MutableMapping
 from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
@@ -19,8 +20,10 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
+from prometheus_client import Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
+from temporalio.client import Client as TemporalClient
 from twilio.rest import Client as TwilioClient
 
 from src.config import get_settings
@@ -28,11 +31,11 @@ from src.database import get_engine, get_sessionmaker
 from src.extraction.constants import OPENAI_MAX_RETRIES
 from src.extraction.repository import PineconeSyncQueueRepository
 from src.extraction.service import ExtractionService
-from src.extraction.utils import write_job_embedding
+from src.extraction.utils import search_job_embeddings, write_job_embedding
 from src.jobs.repository import JobRepository
 from src.matches.repository import MatchRepository
 from src.matches.service import MatchService
-from src.metrics import pinecone_sync_queue_depth
+from src.metrics import pinecone_sync_queue_depth, temporal_queue_depth
 from src.pipeline.handlers.job_posting import JobPostingHandler
 from src.pipeline.handlers.unknown import UnknownMessageHandler
 from src.pipeline.handlers.work_goal import WorkGoalHandler
@@ -46,6 +49,7 @@ from src.sms.exceptions import EarlyReturn, TwilioSignatureInvalid
 from src.sms.repository import MessageRepository
 from src.sms.router import router as sms_router
 from src.temporal.constants import WORKER_SHUTDOWN_TIMEOUT_SECONDS
+from src.temporal.stats import get_task_queue_backlog
 from src.temporal.worker import get_temporal_client, run_worker, start_cron_if_needed
 from src.work_goals.repository import WorkGoalRepository
 
@@ -115,31 +119,67 @@ def _configure_braintrust() -> None:
         )
 
 
-async def _update_gauges() -> None:
-    """Poll pinecone_sync_queue every 15 s and update the depth gauge."""
+@dataclass
+class _GaugeHealth:
+    """Consecutive-failure counters, one per independently polled gauge."""
+
+    db_failures: int = 0
+    temporal_failures: int = 0
+
+
+def _record_gauge_failure(
+    gauge_name: str, consecutive_failures: int, exc: Exception, gauge: Gauge
+) -> None:
+    """Log a poll failure; after repeated failures mark the gauge unreliable."""
+    if consecutive_failures > _GAUGE_MAX_CONSECUTIVE_FAILURES:
+        structlog.get_logger().critical(
+            f"gauge_updater: repeated {gauge_name} failures, metric unreliable",
+            consecutive_failures=consecutive_failures,
+            error=str(exc),
+        )
+        gauge.set(-1)
+    else:
+        structlog.get_logger().warning(
+            f"gauge_updater: {gauge_name} depth read failed — metric stale",
+            error=str(exc),
+        )
+
+
+async def _poll_gauges_once(
+    temporal_client: TemporalClient,
+    sync_queue_repo: PineconeSyncQueueRepository,
+    health: _GaugeHealth,
+) -> None:
+    """One poll of each depth gauge; failures are independent per gauge."""
+    try:
+        async with get_sessionmaker()() as session:
+            depth = await sync_queue_repo.count_pending(session)
+            pinecone_sync_queue_depth.set(depth)
+            health.db_failures = 0
+    except Exception as exc:
+        health.db_failures += 1
+        _record_gauge_failure(
+            "pinecone_sync_queue", health.db_failures, exc, pinecone_sync_queue_depth
+        )
+    try:
+        backlog = await get_task_queue_backlog(
+            temporal_client, get_settings().temporal.task_queue
+        )
+        temporal_queue_depth.set(backlog)
+        health.temporal_failures = 0
+    except Exception as exc:
+        health.temporal_failures += 1
+        _record_gauge_failure(
+            "temporal_task_queue", health.temporal_failures, exc, temporal_queue_depth
+        )
+
+
+async def _update_gauges(temporal_client: TemporalClient) -> None:
+    """Poll queue-depth gauges every 15 s (pinecone outbox + Temporal backlog)."""
     sync_queue_repo = PineconeSyncQueueRepository()
-    consecutive_failures = 0
+    health = _GaugeHealth()
     while True:
-        try:
-            async with get_sessionmaker()() as session:
-                depth = await sync_queue_repo.count_pending(session)
-                pinecone_sync_queue_depth.set(depth)
-                consecutive_failures = 0
-        except Exception as exc:
-            consecutive_failures += 1
-            if consecutive_failures > _GAUGE_MAX_CONSECUTIVE_FAILURES:
-                structlog.get_logger().critical(
-                    "gauge_updater: repeated DB failures, metric unreliable",
-                    consecutive_failures=consecutive_failures,
-                    error=str(exc),
-                )
-                pinecone_sync_queue_depth.set(-1)
-            else:
-                structlog.get_logger().warning(
-                    "gauge_updater: pinecone_sync_queue depth read failed"
-                    " — metric stale",
-                    error=str(exc),
-                )
+        await _poll_gauges_once(temporal_client, sync_queue_repo, health)
         await asyncio.sleep(_GAUGE_POLL_INTERVAL_SECONDS)
 
 
@@ -164,12 +204,19 @@ def _build_orchestrator(
         openai_client=openai_client, settings=settings
     )
     audit_repo = AuditLogRepository()
-    # Bind infrastructure into the embedding-writer port here so handlers
-    # never touch the OpenAI client or settings.
+    # Bind infrastructure into the embedding ports here so handlers and
+    # services never touch the OpenAI client or settings.
     job_embedding_writer = partial(
         write_job_embedding, openai_client=openai_client, settings=settings
     )
-    match_service = MatchService(job_repo=JobRepository(), match_repo=MatchRepository())
+    job_embedding_searcher = partial(
+        search_job_embeddings, openai_client=openai_client, settings=settings
+    )
+    match_service = MatchService(
+        job_repo=JobRepository(),
+        match_repo=MatchRepository(),
+        embedding_searcher=job_embedding_searcher,
+    )
     handlers = [
         JobPostingHandler(
             job_repo=JobRepository(),
@@ -227,8 +274,8 @@ async def lifespan(app: FastAPI):
     )
     await start_cron_if_needed(temporal_client)
 
-    # Background gauge updater — polls pinecone_sync_queue every 15s
-    _gauge_task = asyncio.create_task(_update_gauges())
+    # Background gauge updater — polls queue depths every 15s
+    _gauge_task = asyncio.create_task(_update_gauges(temporal_client))
     yield
     _worker_task.cancel()
     with suppress(TimeoutError, asyncio.CancelledError):
