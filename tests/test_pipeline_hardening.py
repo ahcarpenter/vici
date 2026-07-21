@@ -141,35 +141,11 @@ def test_hash_phone_valid():
     assert all(c in "0123456789abcdef" for c in result)
 
 
-@pytest.mark.asyncio
-async def test_job_datetime_parse_failure_logs_warning():
-    """JobRepository.create with unparseable ideal_datetime logs warning."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+def test_job_datetime_parse_failure_logs_warning():
+    """JobCreate with unparseable ideal_datetime nulls it and logs a warning."""
+    from unittest.mock import patch
 
-    from src.jobs.repository import JobRepository
-
-    # Construct a fake job_create with an ideal_datetime that looks truthy
-    # but whose str() representation fails fromisoformat.
-    class BadDateTime:
-        def __str__(self):
-            return "not-a-date"
-
-        def __bool__(self):
-            return True  # passes the `if job_create.ideal_datetime:` check
-
-    job_create = MagicMock()
-    job_create.ideal_datetime = BadDateTime()
-    job_create.user_id = 1
-    job_create.message_id = 1
-    job_create.description = "Need a mover"
-    job_create.location = "Chicago"
-    job_create.pay_rate = 25.0
-    job_create.pay_type = "hourly"
-    job_create.estimated_duration_hours = None
-    job_create.raw_duration_text = None
-    job_create.raw_datetime_text = None
-    job_create.inferred_timezone = None
-    job_create.datetime_flexible = True
+    from src.jobs.schemas import JobCreate
 
     logged_warnings = []
 
@@ -183,18 +159,15 @@ async def test_job_datetime_parse_failure_logs_warning():
         def error(self, *a, **kw):
             pass
 
-    mock_job = MagicMock()
-    mock_job.id = 1
+    with patch("src.jobs.schemas.structlog.get_logger", return_value=CapturingLogger()):
+        job_create = JobCreate(
+            message_id=1,
+            description="Need a mover",
+            location="Chicago",
+            ideal_datetime="not-a-date",
+        )
 
-    repo = JobRepository()
-
-    with patch(
-        "src.jobs.repository.structlog.get_logger", return_value=CapturingLogger()
-    ):
-        with patch.object(repo, "_persist", AsyncMock(return_value=mock_job)):
-            job = await repo.create(MagicMock(), job_create)
-
-    assert job is mock_job
+    assert job_create.ideal_datetime is None
     assert any("ideal_datetime_parse_failed" in e for e, _ in logged_warnings)
     raw_values = [kw.get("raw_value") for _, kw in logged_warnings]
     assert "not-a-date" in raw_values

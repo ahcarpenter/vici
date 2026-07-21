@@ -43,7 +43,8 @@ class MatchService:
             is_partial = total < work_goal.target_earnings
 
             if sorted_selected:
-                job_ids = [c.job.id for c in sorted_selected]
+                assert work_goal.id is not None  # persisted before matching
+                job_ids = [c.job.id for c in sorted_selected if c.job.id is not None]
                 await self._match_repo.persist_matches(session, job_ids, work_goal.id)
 
             return MatchResult(
@@ -64,6 +65,7 @@ class MatchService:
 
         candidates = []
         for job in jobs:
+            assert job.id is not None  # rows loaded from the DB
             terms = job.pay_terms
             earnings = terms.earnings()
             if earnings is None:
@@ -116,7 +118,10 @@ class MatchService:
         NEG_INF = float("-inf")
         dp = [(NEG_INF, 0.0)] * (capacity + 1)
         dp[0] = (0, 0.0)
-        keep = [[False] * (capacity + 1) for _ in range(n)]
+        # bytearray rows, not list-of-bool: the reconstruction table is
+        # n × capacity entries — at realistic targets (cents!) pointer-sized
+        # bools cost hundreds of MB; bytes keep it ~1/8 of that.
+        keep = [bytearray(capacity + 1) for _ in range(n)]
 
         for i, cand in enumerate(candidates):
             e = cand.earnings
@@ -128,7 +133,7 @@ class MatchService:
                 candidate_val = (prev_e + e, prev_neg_d - dur)
                 if candidate_val > dp[w]:
                     dp[w] = candidate_val
-                    keep[i][w] = True
+                    keep[i][w] = 1
 
         best_w = max(
             (w for w in range(capacity + 1) if dp[w][0] != NEG_INF),

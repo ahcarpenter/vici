@@ -18,6 +18,7 @@ from src.extraction.schemas import (
     UnknownMessage,
     WorkGoalExtraction,
 )
+from src.matches.schemas import MatchResult
 
 
 def _make_orchestrator(
@@ -32,11 +33,6 @@ def _make_orchestrator(
 
     mock_extraction_service = AsyncMock()
     mock_extraction_service.process = AsyncMock(return_value=extraction_result)
-    # For UnknownMessageHandler — needs settings.sms.from_number
-    mock_extraction_service.settings = MagicMock()
-    mock_extraction_service.settings.sms.from_number = "+15559999999"
-    # For JobPostingHandler — needs openai_client
-    mock_extraction_service.openai_client = MagicMock()
 
     mock_job_repo = AsyncMock()
     mock_job = MagicMock()
@@ -58,22 +54,33 @@ def _make_orchestrator(
     if pinecone_side_effect is not None:
         mock_pinecone.side_effect = pinecone_side_effect
 
+    mock_sync_queue_repo = AsyncMock()
     mock_twilio = MagicMock()
+
+    mock_match_service = AsyncMock()
+    mock_match_service.match = AsyncMock(
+        return_value=MatchResult(
+            jobs=[], work_goal=mock_wr, total_earnings=0, is_partial=True
+        )
+    )
 
     handlers = [
         JobPostingHandler(
             job_repo=mock_job_repo,
             audit_repo=mock_audit_repo,
             job_embedding_writer=mock_pinecone,
-            extraction_service=mock_extraction_service,
+            sync_queue_repo=mock_sync_queue_repo,
         ),
         WorkGoalHandler(
             work_goal_repo=mock_wr_repo,
             audit_repo=mock_audit_repo,
+            match_service=mock_match_service,
+            twilio_client=mock_twilio,
+            from_number="+15559999999",
         ),
         UnknownMessageHandler(
             twilio_client=mock_twilio,
-            extraction_service=mock_extraction_service,
+            from_number="+15559999999",
         ),
     ]
 
@@ -90,6 +97,7 @@ def _make_orchestrator(
         mock_wr_repo,
         mock_audit_repo,
         mock_pinecone,
+        mock_sync_queue_repo,
     )
 
 
@@ -112,21 +120,20 @@ async def test_job_branch_commits_once():
         pay_rate=25.0,
     )
     result = ExtractionResult(message_type="job_posting", job=job)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone, _ = (
         _make_orchestrator(result)
     )
     session = _make_session()
 
-    with patch("src.pipeline.handlers.job_posting.get_sessionmaker"):
-        out = await orchestrator.run(
-            session=session,
-            sms_text="Need a mover for Saturday",
-            phone_hash="hash123",
-            message_id=1,
-            user_id=10,
-            message_sid="SMabc",
-            from_number="+15551234567",
-        )
+    out = await orchestrator.run(
+        session=session,
+        sms_text="Need a mover for Saturday",
+        phone_hash="hash123",
+        message_id=1,
+        user_id=10,
+        message_sid="SMabc",
+        from_number="+15551234567",
+    )
 
     assert out.message_type == "job_posting"
     job_repo.create.assert_awaited_once()
@@ -140,23 +147,26 @@ async def test_worker_branch_commits_once():
     """Worker branch: work_goal_repo.create called, audit written, commit once."""
     worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
     result = ExtractionResult(message_type="work_goal", work_goal=worker)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone, _ = (
         _make_orchestrator(result)
     )
     session = _make_session()
 
-    out = await orchestrator.run(
-        session=session,
-        sms_text="I need $200 today",
-        phone_hash="hash456",
-        message_id=2,
-        user_id=11,
-        message_sid="SMdef",
-        from_number="+15559876543",
-    )
+    with patch("src.sms.outbound.asyncio.to_thread", new=AsyncMock(return_value=None)):
+        out = await orchestrator.run(
+            session=session,
+            sms_text="I need $200 today",
+            phone_hash="hash456",
+            message_id=2,
+            user_id=11,
+            message_sid="SMdef",
+            from_number="+15559876543",
+        )
 
     assert out.message_type == "work_goal"
     wr_repo.create.assert_awaited_once()
+    # WorkGoalHandler now enqueues a post-commit match reply; the pipeline
+    # session commits once, then the reply's own send runs (no extra commit).
     session.commit.assert_awaited_once()
     # Audit must be written before commit (audit_repo.write called at least once)
     assert audit_repo.write.await_count >= 1
@@ -169,20 +179,21 @@ async def test_unknown_branch():
     """Unknown branch: commit called once, no job/work_goal rows created."""
     unknown = UnknownMessage(reason="Greeting with no actionable content")
     result = ExtractionResult(message_type="unknown", unknown=unknown)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
+    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone, _ = (
         _make_orchestrator(result)
     )
     session = _make_session()
 
-    out = await orchestrator.run(
-        session=session,
-        sms_text="Hello!",
-        phone_hash="hash789",
-        message_id=3,
-        user_id=12,
-        message_sid="SMghi",
-        from_number="+15550001111",
-    )
+    with patch("src.sms.outbound.asyncio.to_thread", new=AsyncMock(return_value=None)):
+        out = await orchestrator.run(
+            session=session,
+            sms_text="Hello!",
+            phone_hash="hash789",
+            message_id=3,
+            user_id=12,
+            message_sid="SMghi",
+            from_number="+15550001111",
+        )
 
     assert out.message_type == "unknown"
     session.commit.assert_awaited_once()
@@ -192,7 +203,7 @@ async def test_unknown_branch():
 
 @pytest.mark.asyncio
 async def test_pinecone_failure_enqueues_retry():
-    """Pinecone write failure: returns result, enqueues sync."""
+    """Pinecone write failure: returns result, enqueues sync via the repository."""
     job = JobExtraction(
         description="Painting job",
         datetime_flexible=True,
@@ -201,40 +212,68 @@ async def test_pinecone_failure_enqueues_retry():
         pay_rate=500.0,
     )
     result = ExtractionResult(message_type="job_posting", job=job)
-    orchestrator, extraction_svc, job_repo, wr_repo, audit_repo, pinecone = (
-        _make_orchestrator(
-            result, pinecone_side_effect=Exception("Pinecone unavailable")
-        )
+    (
+        orchestrator,
+        extraction_svc,
+        job_repo,
+        wr_repo,
+        audit_repo,
+        pinecone,
+        sync_queue_repo,
+    ) = _make_orchestrator(
+        result, pinecone_side_effect=Exception("Pinecone unavailable")
     )
     session = _make_session()
 
-    mock_s2 = AsyncMock()
-    mock_s2.add = MagicMock()
-    mock_s2.__aenter__ = AsyncMock(return_value=mock_s2)
-    mock_s2.__aexit__ = AsyncMock(return_value=None)
-    mock_sessionmaker = MagicMock(return_value=mock_s2)
-
-    with patch(
-        "src.pipeline.handlers.job_posting.get_sessionmaker",
-        return_value=mock_sessionmaker,
-    ):
-        out = await orchestrator.run(
-            session=session,
-            sms_text="Painting job downtown $500",
-            phone_hash="hashABC",
-            message_id=4,
-            user_id=13,
-            message_sid="SMjkl",
-            from_number="+15552223333",
-        )
+    out = await orchestrator.run(
+        session=session,
+        sms_text="Painting job downtown $500",
+        phone_hash="hashABC",
+        message_id=4,
+        user_id=13,
+        message_sid="SMjkl",
+        from_number="+15552223333",
+    )
 
     # Pipeline must not raise, must return result
     assert out.message_type == "job_posting"
-    # Main commit still happened (before Pinecone attempt)
-    session.commit.assert_awaited_once()
-    # Enqueue via separate session
-    mock_s2.add.assert_called_once()
-    mock_s2.commit.assert_awaited()
+    # Enqueue staged on the pipeline session, then committed again
+    sync_queue_repo.enqueue.assert_awaited_once_with(session, 42)
+    assert session.commit.await_count == 2  # pipeline commit + enqueue commit
+
+
+def test_orchestrator_rejects_chain_without_terminal_handler():
+    """Constructor fails fast when no catch-all handler terminates the chain."""
+    from src.pipeline.orchestrator import PipelineOrchestrator
+
+    non_terminal = MagicMock()
+    non_terminal.is_terminal = False
+
+    with pytest.raises(ValueError, match="terminal"):
+        PipelineOrchestrator(
+            extraction_service=AsyncMock(),
+            audit_repo=AsyncMock(),
+            message_repo=AsyncMock(),
+            handlers=[non_terminal],
+        )
+
+
+def test_orchestrator_rejects_terminal_handler_mid_chain():
+    """Constructor fails fast when a catch-all sits before the end."""
+    from src.pipeline.orchestrator import PipelineOrchestrator
+
+    terminal_a = MagicMock()
+    terminal_a.is_terminal = True
+    terminal_b = MagicMock()
+    terminal_b.is_terminal = True
+
+    with pytest.raises(ValueError, match="last"):
+        PipelineOrchestrator(
+            extraction_service=AsyncMock(),
+            audit_repo=AsyncMock(),
+            message_repo=AsyncMock(),
+            handlers=[terminal_a, terminal_b],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -269,19 +308,18 @@ async def test_job_branch_emits_pinecone_span():
             pay_rate=25.0,
         )
         result = ExtractionResult(message_type="job_posting", job=job)
-        orchestrator, _, job_repo, _, _, pinecone = _make_orchestrator(result)
+        orchestrator, _, job_repo, _, _, pinecone, _ = _make_orchestrator(result)
         session = _make_session()
 
-        with patch("src.pipeline.handlers.job_posting.get_sessionmaker"):
-            await orchestrator.run(
-                session=session,
-                sms_text="Need a mover for Saturday",
-                phone_hash="hash123",
-                message_id=1,
-                user_id=10,
-                message_sid="SMabc",
-                from_number="+15551234567",
-            )
+        await orchestrator.run(
+            session=session,
+            sms_text="Need a mover for Saturday",
+            phone_hash="hash123",
+            message_id=1,
+            user_id=10,
+            message_sid="SMabc",
+            from_number="+15551234567",
+        )
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]
@@ -302,21 +340,21 @@ async def test_job_branch_emits_pinecone_span():
 @pytest.mark.asyncio
 async def test_unknown_branch_emits_twilio_span():
     """Unknown branch emits a 'twilio.send_sms' span with attrs."""
-    import src.pipeline.handlers.unknown as unknown_handler_module
+    import src.sms.outbound as outbound_module
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
-    original_tracer = unknown_handler_module.tracer
-    unknown_handler_module.tracer = test_tracer
+    original_tracer = outbound_module.tracer
+    outbound_module.tracer = test_tracer
 
     try:
         unknown = UnknownMessage(reason="Greeting with no actionable content")
         result = ExtractionResult(message_type="unknown", unknown=unknown)
-        orchestrator, _, _, _, _, _ = _make_orchestrator(result)
+        orchestrator, _, _, _, _, _, _ = _make_orchestrator(result)
         session = _make_session()
 
         # Mock asyncio.to_thread to avoid real Twilio call
         with patch(
-            "src.pipeline.handlers.unknown.asyncio.to_thread",
+            "src.sms.outbound.asyncio.to_thread",
             new=AsyncMock(return_value=None),
         ):
             await orchestrator.run(
@@ -343,7 +381,7 @@ async def test_unknown_branch_emits_twilio_span():
         assert "messaging.destination" not in attrs
         assert attrs.get("messaging.destination.name") == _hash_phone("+15550001111")
     finally:
-        unknown_handler_module.tracer = original_tracer
+        outbound_module.tracer = original_tracer
         exporter.shutdown()
 
 
@@ -351,7 +389,7 @@ async def test_unknown_branch_emits_twilio_span():
 async def test_orchestrator_emits_pipeline_span():
     """PipelineOrchestrator.run() emits a pipeline.orchestrate span."""
     import src.pipeline.orchestrator as orch_module
-    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+    from src.observability import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 
     exporter, test_tracer = _span_exporter_for_orchestrator()
     original_tracer = orch_module.tracer
@@ -360,18 +398,21 @@ async def test_orchestrator_emits_pipeline_span():
     try:
         worker = WorkGoalExtraction(target_earnings=200.0, target_timeframe="today")
         result = ExtractionResult(message_type="work_goal", work_goal=worker)
-        orchestrator, _, _, _, _, _ = _make_orchestrator(result)
+        orchestrator, _, _, _, _, _, _ = _make_orchestrator(result)
         session = _make_session()
 
-        await orchestrator.run(
-            session=session,
-            sms_text="I need $200 today",
-            phone_hash="hash123",
-            message_id=1,
-            user_id=10,
-            message_sid="SMtest",
-            from_number="+15551234567",
-        )
+        with patch(
+            "src.sms.outbound.asyncio.to_thread", new=AsyncMock(return_value=None)
+        ):
+            await orchestrator.run(
+                session=session,
+                sms_text="I need $200 today",
+                phone_hash="hash123",
+                message_id=1,
+                user_id=10,
+                message_sid="SMtest",
+                from_number="+15551234567",
+            )
 
         spans = exporter.get_finished_spans()
         span_names = [s.name for s in spans]

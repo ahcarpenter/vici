@@ -1,145 +1,108 @@
 from functools import lru_cache
 
-from pydantic import BaseModel, model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.extraction.constants import GPT_MODEL as _DEFAULT_GPT_MODEL
 
-
-class SmsSettings(BaseModel):
-    auth_token: str = ""
-    account_sid: str = ""
-    from_number: str = ""
-    rate_limit_max: int = 5
-    rate_limit_window_seconds: int = 60
-    disable_twilio_signature_validation: bool = False
+# Every sub-settings model reads its own env vars (via validation_alias) so each
+# value has exactly one home — no flat/nested double representation.
+_ENV_CONFIG = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
 
-class ExtractionSettings(BaseModel):
-    openai_api_key: str = ""
-    gpt_model: str = _DEFAULT_GPT_MODEL
+class SmsSettings(BaseSettings):
+    model_config = _ENV_CONFIG
+
+    auth_token: str = Field(default="", validation_alias="TWILIO_AUTH_TOKEN")
+    account_sid: str = Field(default="", validation_alias="TWILIO_ACCOUNT_SID")
+    from_number: str = Field(default="", validation_alias="TWILIO_FROM_NUMBER")
+    rate_limit_max: int = Field(default=5, validation_alias="SMS_RATE_LIMIT_MAX")
+    rate_limit_window_seconds: int = Field(
+        default=60, validation_alias="SMS_RATE_LIMIT_WINDOW_SECONDS"
+    )
+    # Secret key for HMAC phone pseudonymization. Required in production —
+    # unsalted hashes of the small E.164 space are trivially reversible.
+    phone_hash_pepper: str = Field(default="", validation_alias="PHONE_HASH_PEPPER")
+    # Explicit opt-in escape hatch — never key on env name
+    disable_twilio_signature_validation: bool = Field(
+        default=False, validation_alias="DISABLE_TWILIO_SIGNATURE_VALIDATION"
+    )
 
 
-class PineconeSettings(BaseModel):
-    api_key: str = ""
-    index_host: str = ""
+class ExtractionSettings(BaseSettings):
+    model_config = _ENV_CONFIG
+
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    gpt_model: str = Field(default=_DEFAULT_GPT_MODEL, validation_alias="GPT_MODEL")
 
 
-class ObservabilitySettings(BaseModel):
-    braintrust_api_key: str = ""
-    otel_endpoint: str = ""
-    otel_service_name: str = "vici"
-    service_version: str = "dev"  # populated from GIT_SHA env var
+class PineconeSettings(BaseSettings):
+    model_config = _ENV_CONFIG
+
+    api_key: str = Field(default="", validation_alias="PINECONE_API_KEY")
+    index_host: str = Field(default="", validation_alias="PINECONE_INDEX_HOST")
 
 
-class TemporalSettings(BaseModel):
-    address: str = ""
-    task_queue: str = "vici-queue"
-    cron_schedule_pinecone_sync: str = "*/5 * * * *"
+class ObservabilitySettings(BaseSettings):
+    model_config = _ENV_CONFIG
+
+    braintrust_api_key: str = Field(default="", validation_alias="BRAINTRUST_API_KEY")
+    otel_endpoint: str = Field(
+        default="", validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
+    otel_service_name: str = Field(default="vici", validation_alias="OTEL_SERVICE_NAME")
+    service_version: str = Field(default="dev", validation_alias="GIT_SHA")
+
+
+class TemporalSettings(BaseSettings):
+    model_config = _ENV_CONFIG
+
+    address: str = Field(default="", validation_alias="TEMPORAL_ADDRESS")
+    task_queue: str = Field(
+        default="vici-queue", validation_alias="TEMPORAL_TASK_QUEUE"
+    )
+    cron_schedule_pinecone_sync: str = Field(
+        default="*/5 * * * *", validation_alias="CRON_SCHEDULE_PINECONE_SYNC"
+    )
 
 
 class Settings(BaseSettings):
-    # Flat env vars (kept for backward compatibility — populated from env)
+    model_config = _ENV_CONFIG
+
     database_url: str = ""
     webhook_base_url: str = ""
     env: str = ""
-    temporal_address: str = ""
 
-    # Flat Twilio env vars (remapped into sms sub-model)
-    twilio_auth_token: str = ""
-    twilio_account_sid: str = ""
-    twilio_from_number: str = ""
-
-    # Flat observability env vars (remapped into observability sub-model)
-    otel_exporter_otlp_endpoint: str = ""
-    otel_service_name: str = "vici"
-
-    # Flat extraction env vars (remapped into extraction sub-model)
-    openai_api_key: str = ""
-
-    # Flat Pinecone env vars (remapped into pinecone sub-model)
-    pinecone_api_key: str = ""
-    pinecone_index_host: str = ""
-
-    # Flat observability env vars
-    braintrust_api_key: str = ""
-    git_sha: str = "dev"  # populated from GIT_SHA env var in docker-compose
-
-    # Flat Temporal env vars (remapped into temporal sub-model)
-    temporal_task_queue: str = "vici-queue"
-    cron_schedule_pinecone_sync: str = "*/5 * * * *"
-
-    # Flat SMS rate limiting env vars
-    sms_rate_limit_window_seconds: int = 60
-
-    # Explicit opt-in escape hatch — never key on env name
-    disable_twilio_signature_validation: bool = False
-
-    # Flat Grafana env vars (used in docker-compose)
-    grafana_admin_user: str = "admin"
-    grafana_admin_password: str = "admin"
-
-    # Nested sub-models (populated via model_validator below)
-    sms: SmsSettings = SmsSettings()
-    extraction: ExtractionSettings = ExtractionSettings()
-    pinecone: PineconeSettings = PineconeSettings()
-    observability: ObservabilitySettings = ObservabilitySettings()
-    temporal: TemporalSettings = TemporalSettings()
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    sms: SmsSettings = Field(default_factory=SmsSettings)
+    extraction: ExtractionSettings = Field(default_factory=ExtractionSettings)
+    pinecone: PineconeSettings = Field(default_factory=PineconeSettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    temporal: TemporalSettings = Field(default_factory=TemporalSettings)
 
     @model_validator(mode="after")
     def _validate_required_credentials(self) -> "Settings":
         """Fail fast at startup if required credentials are empty."""
         missing = []
         if not self.database_url:
-            missing.append("database_url")
-        if not self.twilio_auth_token:
-            missing.append("twilio_auth_token")
-        if not self.openai_api_key:
-            missing.append("openai_api_key")
-        if not self.pinecone_api_key:
-            missing.append("pinecone_api_key")
-        if not self.temporal_address:
-            missing.append("temporal_address")
+            missing.append("DATABASE_URL")
+        if not self.sms.auth_token:
+            missing.append("TWILIO_AUTH_TOKEN")
+        if not self.extraction.openai_api_key:
+            missing.append("OPENAI_API_KEY")
+        if not self.pinecone.api_key:
+            missing.append("PINECONE_API_KEY")
+        if not self.temporal.address:
+            missing.append("TEMPORAL_ADDRESS")
         if not self.webhook_base_url:
-            missing.append("webhook_base_url")
+            missing.append("WEBHOOK_BASE_URL")
         if not self.env:
-            missing.append("env")
+            missing.append("ENV")
+        if self.env == "production" and not self.sms.phone_hash_pepper:
+            missing.append("PHONE_HASH_PEPPER")
         if missing:
             raise ValueError(
                 f"Required credentials are missing or empty: {', '.join(missing)}"
             )
-        return self
-
-    @model_validator(mode="after")
-    def _build_sub_models(self) -> "Settings":
-        """Remap flat env var fields into nested sub-models."""
-        self.sms = SmsSettings(
-            auth_token=self.twilio_auth_token,
-            account_sid=self.twilio_account_sid,
-            from_number=self.twilio_from_number,
-            rate_limit_window_seconds=self.sms_rate_limit_window_seconds,
-            disable_twilio_signature_validation=self.disable_twilio_signature_validation,
-        )
-        self.extraction = ExtractionSettings(
-            openai_api_key=self.openai_api_key,
-        )
-        self.pinecone = PineconeSettings(
-            api_key=self.pinecone_api_key,
-            index_host=self.pinecone_index_host,
-        )
-        self.observability = ObservabilitySettings(
-            braintrust_api_key=self.braintrust_api_key,
-            otel_endpoint=self.otel_exporter_otlp_endpoint,
-            otel_service_name=self.otel_service_name,
-            service_version=self.git_sha,
-        )
-        self.temporal = TemporalSettings(
-            address=self.temporal_address,
-            task_queue=self.temporal_task_queue,
-            cron_schedule_pinecone_sync=self.cron_schedule_pinecone_sync,
-        )
         return self
 
 

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
+from src.extraction.constants import MessageType
 from src.extraction.schemas import ExtractionResult
 from src.pipeline.context import PipelineContext
-from src.sms.constants import MessageType
 
 
 class MessageHandler(ABC):
@@ -11,6 +11,10 @@ class MessageHandler(ABC):
 
     # Classification this handler records on the message when it handles it.
     message_type: ClassVar[MessageType]
+
+    # A terminal handler accepts every result. The orchestrator requires the
+    # chain to end with exactly one — dispatch can then never fall through.
+    is_terminal: ClassVar[bool] = False
 
     @abstractmethod
     def can_handle(self, result: ExtractionResult) -> bool:

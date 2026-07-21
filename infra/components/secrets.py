@@ -28,6 +28,7 @@ _SECRET_DEFINITIONS: list[tuple[str, str, str]] = [
     ("temporal-address", "vici", "temporal-address"),
     ("otel-exporter-otlp-endpoint", "vici", "otel-exporter-otlp-endpoint"),
     ("webhook-base-url", "vici", "webhook-base-url"),
+    ("phone-hash-pepper", "vici", "phone-hash-pepper"),
     ("temporal-db-password", "temporal", "temporal-db-credentials"),
 ]
 

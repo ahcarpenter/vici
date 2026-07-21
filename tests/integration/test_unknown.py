@@ -43,9 +43,6 @@ async def test_unknown_twilio_failure_does_not_raise():
 
     from src.pipeline.handlers.unknown import UnknownMessageHandler
 
-    mock_extraction_service = MagicMock()
-    mock_extraction_service.settings.sms.from_number = "+10000000000"
-
     mock_twilio = MagicMock()
     mock_twilio.messages.create.side_effect = TwilioRestException(
         status=500, uri="/Messages"
@@ -53,7 +50,7 @@ async def test_unknown_twilio_failure_does_not_raise():
 
     handler = UnknownMessageHandler(
         twilio_client=mock_twilio,
-        extraction_service=mock_extraction_service,
+        from_number="+10000000000",
     )
 
     mock_session = AsyncMock()
@@ -82,8 +79,8 @@ async def test_unknown_twilio_failure_does_not_raise():
 
 @pytest.mark.asyncio
 async def test_unknown_handler_span_uses_hashed_phone():
-    """UnknownMessageHandler emits twilio.send_sms span with hashed phone."""
-    import src.pipeline.handlers.unknown as unknown_module
+    """The shared outbound sender emits twilio.send_sms span with hashed phone."""
+    import src.sms.outbound as outbound_module
     from src.pipeline.handlers.unknown import UnknownMessageHandler
     from src.sms.service import hash_phone
 
@@ -91,18 +88,15 @@ async def test_unknown_handler_span_uses_hashed_phone():
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     test_tracer = provider.get_tracer("test")
-    original_tracer = unknown_module.tracer
-    unknown_module.tracer = test_tracer
+    original_tracer = outbound_module.tracer
+    outbound_module.tracer = test_tracer
 
     try:
-        mock_extraction_service = MagicMock()
-        mock_extraction_service.settings.sms.from_number = "+10000000000"
-
         mock_twilio = MagicMock()
 
         handler = UnknownMessageHandler(
             twilio_client=mock_twilio,
-            extraction_service=mock_extraction_service,
+            from_number="+10000000000",
         )
 
         raw_phone = "+13125559999"
@@ -110,7 +104,7 @@ async def test_unknown_handler_span_uses_hashed_phone():
         ctx = _make_ctx(mock_session, from_number=raw_phone, message_sid="SMunknown")
 
         with patch(
-            "src.pipeline.handlers.unknown.asyncio.to_thread",
+            "src.sms.outbound.asyncio.to_thread",
             new=AsyncMock(return_value=None),
         ):
             await _handle_and_run_deferred(handler, ctx)
@@ -130,7 +124,7 @@ async def test_unknown_handler_span_uses_hashed_phone():
         # Deprecated attribute must be absent
         assert "messaging.destination" not in attrs
     finally:
-        unknown_module.tracer = original_tracer
+        outbound_module.tracer = original_tracer
         exporter.shutdown()
 
 

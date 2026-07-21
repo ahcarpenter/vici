@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import col, select
 
 from src.extraction.constants import SyncStatus
 from src.extraction.models import PineconeSyncQueue
@@ -17,11 +17,26 @@ class PendingJobEmbedding:
     """A claimed sync-queue entry joined with what the embedding upsert needs."""
 
     entry: PineconeSyncQueue
-    description: Optional[str]
+    description: str | None
     phone_hash: str
 
 
 class PineconeSyncQueueRepository(BaseRepository):
+    async def enqueue(self, session: AsyncSession, job_id: int) -> PineconeSyncQueue:
+        """Queue a job for a later embedding sync (outbox fallback).
+        Flush-only — caller owns the transaction."""
+        entry = PineconeSyncQueue(job_id=job_id, status=SyncStatus.PENDING)
+        return await self._persist(session, entry)
+
+    async def count_pending(self, session: AsyncSession) -> int:
+        """Number of entries still waiting to sync (feeds the depth gauge)."""
+        result = await session.execute(
+            select(func.count())
+            .select_from(PineconeSyncQueue)
+            .where(PineconeSyncQueue.status == SyncStatus.PENDING)
+        )
+        return result.scalar_one()
+
     async def claim_pending(
         self, session: AsyncSession, limit: int
     ) -> list[PendingJobEmbedding]:
@@ -33,11 +48,11 @@ class PineconeSyncQueueRepository(BaseRepository):
         """
         stmt = (
             select(PineconeSyncQueue, Job.description, User.phone_hash)
-            .join(Job, Job.id == PineconeSyncQueue.job_id)
-            .join(Message, Message.id == Job.message_id)
-            .join(User, User.id == Message.user_id)
+            .join(Job, col(Job.id) == col(PineconeSyncQueue.job_id))
+            .join(Message, col(Message.id) == col(Job.message_id))
+            .join(User, col(User.id) == col(Message.user_id))
             .where(PineconeSyncQueue.status == SyncStatus.PENDING)
-            .order_by(PineconeSyncQueue.id)
+            .order_by(col(PineconeSyncQueue.id))
             .limit(limit)
             .with_for_update(skip_locked=True, of=PineconeSyncQueue)
         )

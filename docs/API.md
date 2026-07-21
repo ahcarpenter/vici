@@ -61,7 +61,7 @@ After the gates pass, the route body:
 
 - Persists the message via `MessageRepository().create(session, message_sid, user.id, body)`
 - Writes a `"received"` audit log entry with the full form payload serialized as JSON
-- Emits a `message_received` event onto the Temporal workflow via `sms_service.emit_message_received_event`
+- Starts `ProcessMessageWorkflow` in Temporal via `start_process_message_workflow` (fire-and-forget; task queue comes from `Settings.temporal.task_queue`)
 - Returns an empty TwiML response to Twilio
 
 ### Response

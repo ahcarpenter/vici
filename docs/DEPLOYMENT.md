@@ -127,7 +127,7 @@ Production environment variables are managed via **GCP Secret Manager** and sync
 - `otel-exporter-otlp-endpoint` — OpenTelemetry trace export endpoint
 - `webhook-base-url` — `https://<app_hostname>`, written by Pulumi after the Ingress is provisioned (`infra/components/ingress.py` creates a `SecretVersion` whose value is `https://` concatenated with `APP_HOSTNAME`)
 
-Each `ExternalSecret` maps the Secret Manager entry to a K8s `Secret` in the `vici` namespace with the same name as the slug; the `secretKey` inside the synced K8s Secret is the slug uppercased with dashes replaced by underscores (e.g., `twilio-auth-token` -> `TWILIO_AUTH_TOKEN`).
+Each `ExternalSecret` maps the Secret Manager entry to a K8s `Secret` in the `vici` namespace with the same name as the slug; the `secretKey` inside the synced K8s Secret is the slug uppercased with dashes replaced by underscores (e.g., `twilio-auth-token` -> `TWILIO_AUTH_TOKEN`). The `phone-hash-pepper` slug must also be populated in Secret Manager — the app refuses to start in production without `PHONE_HASH_PEPPER`.
 
 The `ENV` variable is injected directly by Pulumi from the stack name (`dev`, `staging`, or `prod`). See [CONFIGURATION.md](CONFIGURATION.md) for the full variable reference.
 

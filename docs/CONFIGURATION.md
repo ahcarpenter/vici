@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Configuration
 
-Vici uses [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) for configuration management. All settings are defined in `src/config.py` as a single `Settings` class that reads environment variables (or a `.env` file) and remaps flat env vars into nested sub-models for each domain.
+Vici uses [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) for configuration management. All settings are defined in `src/config.py`. Each domain has its own sub-settings model (`SmsSettings`, `ExtractionSettings`, `PineconeSettings`, `ObservabilitySettings`, `TemporalSettings`) that reads its env vars directly via `validation_alias` — every value has exactly one home, and code always reads the nested form (`get_settings().sms.auth_token`).
 
 ## Environment Variables
 
@@ -25,27 +25,29 @@ The following variables are read by `src/config.py`. Variables documented in the
 | `OTEL_SERVICE_NAME` | No | `"vici"` | OpenTelemetry service name reported in traces |
 | `BRAINTRUST_API_KEY` | No | `""` | Braintrust observability API key |
 | `GIT_SHA` | No | `"dev"` | Git commit SHA used as `service.version` in telemetry; set by CI in production |
-| `SMS_RATE_LIMIT_WINDOW_SECONDS` | No | `60` | SMS rate-limit sliding-window size in seconds (bound to `Settings.sms_rate_limit_window_seconds`; note: the enforced rate-limit values used at runtime live in `src/sms/constants.py`) |
-| `GRAFANA_ADMIN_USER` | No | `"admin"` | Declared on `Settings` but not referenced anywhere in `src/`; dead field. The Grafana container instead reads `GF_SECURITY_ADMIN_USER` from `.env.grafana`. |
-| `GRAFANA_ADMIN_PASSWORD` | No | `"admin"` | Declared on `Settings` but not referenced anywhere in `src/`; dead field. The Grafana container instead reads `GF_SECURITY_ADMIN_PASSWORD` from `.env.grafana`. |
+| `SMS_RATE_LIMIT_MAX` | No | `5` | Max messages per sender per window, enforced by the webhook rate-limit gate |
+| `SMS_RATE_LIMIT_WINDOW_SECONDS` | No | `60` | SMS rate-limit rolling-window size in seconds, enforced by the webhook rate-limit gate |
+| `PHONE_HASH_PEPPER` | Prod only | `""` | Secret HMAC key for phone-number pseudonymization. Required when `ENV=production`; an empty value degrades to an unkeyed hash for local development |
+| `GPT_MODEL` | No | `"gpt-5.3-chat-latest"` | OpenAI model used for classification/extraction |
+| `DISABLE_TWILIO_SIGNATURE_VALIDATION` | No | `false` | Explicit opt-out of webhook signature validation (local development only) |
 
-> **Note:** `SMS_RATE_LIMIT_MAX` is documented in the README (`.env.app` table) but is not bound to any field on `Settings` in `src/config.py`. The effective rate-limit max is the compile-time constant `MAX_MESSAGES_PER_WINDOW = 5` in `src/sms/constants.py`, and the effective window is `RATE_LIMIT_WINDOW_SECONDS = 60` in the same file. The `sms_rate_limit_window_seconds` setting is currently a wiring hook that is not read by the SMS rate-limiter.
+The Grafana container reads `GF_SECURITY_ADMIN_USER`/`GF_SECURITY_ADMIN_PASSWORD` from `.env.grafana`; those variables are not part of the app's `Settings`.
 
 ## Config File Format
 
 There is no standalone config file. All configuration is driven by environment variables loaded via pydantic-settings. The `Settings` class in `src/config.py` accepts an optional `.env` file at the project root:
 
 ```python
-model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 ```
 
-Variable names are case-insensitive (pydantic-settings default). Any extra variables not declared on the model are silently ignored.
+Variable names are case-insensitive (pydantic-settings default). Any extra variables not declared on a model are silently ignored.
 
-Because flat env vars are remapped into nested sub-models via a `model_validator(mode="after")` (`Settings._build_sub_models`, `src/config.py` lines 111–138), downstream code should read structured settings through `get_settings().sms`, `.extraction`, `.pinecone`, `.observability`, and `.temporal` rather than reading the flat top-level fields directly.
+Each sub-settings model reads its own env vars via per-field `validation_alias` (e.g. `SmsSettings.auth_token` ← `TWILIO_AUTH_TOKEN`), so there are no flat duplicates on `Settings`. Downstream code reads structured settings through `get_settings().sms`, `.extraction`, `.pinecone`, `.observability`, and `.temporal`. Only `database_url`, `webhook_base_url`, and `env` remain top-level (they are genuinely global).
 
 ## Required vs Optional Settings
 
-The following variables cause a `ValueError` at startup if they are missing or empty. This validation runs inside `Settings._validate_required_credentials` (`src/config.py` lines 87–109):
+The following variables cause a `ValueError` at startup if they are missing or empty. This validation runs inside `Settings._validate_required_credentials` in `src/config.py`:
 
 - `DATABASE_URL`
 - `TWILIO_AUTH_TOKEN`
@@ -54,6 +56,7 @@ The following variables cause a `ValueError` at startup if they are missing or e
 - `TEMPORAL_ADDRESS`
 - `WEBHOOK_BASE_URL`
 - `ENV`
+- `PHONE_HASH_PEPPER` (only when `ENV=production`)
 
 Failure produces an error of the form: `Required credentials are missing or empty: <comma-separated names>`.
 
@@ -61,24 +64,16 @@ All other variables have defaults on `Settings` and are optional from the config
 
 ## Defaults
 
-| Variable / Field | Default | Source |
-|---|---|---|
-| `otel_service_name` | `"vici"` | `src/config.py` line 54 |
-| `git_sha` | `"dev"` | `src/config.py` line 65 |
-| `temporal_task_queue` | `"vici-queue"` | `src/config.py` line 68 |
-| `cron_schedule_pinecone_sync` | `"*/5 * * * *"` | `src/config.py` line 69 |
-| `sms_rate_limit_window_seconds` | `60` | `src/config.py` line 72 |
-| `grafana_admin_user` | `"admin"` | `src/config.py` line 75 |
-| `grafana_admin_password` | `"admin"` | `src/config.py` line 76 |
-| `SmsSettings.rate_limit_max` (nested) | `5` | `src/config.py` line 13 |
-| `SmsSettings.rate_limit_window_seconds` (nested) | `60` | `src/config.py` line 14 |
-| `ExtractionSettings.gpt_model` | `"gpt-5.3-chat-latest"` (from `_DEFAULT_GPT_MODEL`) | `src/extraction/constants.py` line 1 |
-| `ObservabilitySettings.otel_service_name` (nested) | `"vici"` | `src/config.py` line 30 |
-| `ObservabilitySettings.service_version` (nested) | `"dev"` | `src/config.py` line 31 |
-| `TemporalSettings.task_queue` (nested) | `"vici-queue"` | `src/config.py` line 36 |
-| `TemporalSettings.cron_schedule_pinecone_sync` (nested) | `"*/5 * * * *"` | `src/config.py` line 37 |
-| `MAX_MESSAGES_PER_WINDOW` (SMS rate-limit max, enforced at runtime) | `5` | `src/sms/constants.py` line 2 |
-| `RATE_LIMIT_WINDOW_SECONDS` (SMS rate-limit window, enforced at runtime) | `60` | `src/sms/constants.py` line 1 |
+| Field | Default |
+|---|---|
+| `SmsSettings.rate_limit_max` | `5` |
+| `SmsSettings.rate_limit_window_seconds` | `60` |
+| `SmsSettings.phone_hash_pepper` | `""` (required in production) |
+| `ExtractionSettings.gpt_model` | `"gpt-5.3-chat-latest"` (from `_DEFAULT_GPT_MODEL` in `src/extraction/constants.py`) |
+| `ObservabilitySettings.otel_service_name` | `"vici"` |
+| `ObservabilitySettings.service_version` | `"dev"` (from `GIT_SHA`) |
+| `TemporalSettings.task_queue` | `"vici-queue"` |
+| `TemporalSettings.cron_schedule_pinecone_sync` | `"*/5 * * * *"` |
 
 ## Per-Environment Overrides
 

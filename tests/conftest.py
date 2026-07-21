@@ -50,6 +50,7 @@ def _test_env():
     os.environ.setdefault("PINECONE_API_KEY", "pc-test")
     os.environ.setdefault("TEMPORAL_ADDRESS", "localhost:7233")
     os.environ.setdefault("ENV", "test")
+    os.environ.setdefault("PHONE_HASH_PEPPER", "test-pepper")
 
     # Clear caches in case tests are re-run in-process.
     get_settings.cache_clear()
@@ -159,14 +160,14 @@ async def make_job(async_session, make_user, make_message):
         job = Job(
             message_id=kwargs.get("message_id", message.id),
             description=kwargs.get("description", "Test job description"),
-            location=kwargs.get("location", None),
+            location=kwargs.get("location"),
             pay_rate=dollars_to_cents(pay_rate_arg)
             if pay_rate_arg is not None
             else None,
             pay_type=kwargs.get("pay_type", "hourly"),
-            estimated_duration_hours=kwargs.get("estimated_duration_hours", None),
-            ideal_datetime=kwargs.get("ideal_datetime", None),
-            datetime_flexible=kwargs.get("datetime_flexible", None),
+            estimated_duration_hours=kwargs.get("estimated_duration_hours"),
+            ideal_datetime=kwargs.get("ideal_datetime"),
+            datetime_flexible=kwargs.get("datetime_flexible"),
             status=kwargs.get("status", "available"),
         )
         async_session.add(job)

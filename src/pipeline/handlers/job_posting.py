@@ -1,17 +1,17 @@
 import json
+from typing import Protocol
 
 import structlog
 from opentelemetry import trace as otel_trace
 
-from src.database import get_sessionmaker
-from src.extraction.constants import SyncStatus
-from src.extraction.models import PineconeSyncQueue
+from src.extraction.constants import MessageType
+from src.extraction.repository import PineconeSyncQueueRepository
 from src.extraction.schemas import ExtractionResult
-from src.extraction.service import ExtractionService
+from src.jobs.constants import PayType
 from src.jobs.repository import JobRepository
 from src.jobs.schemas import JobCreate
 from src.money import dollars_to_cents
-from src.pipeline.constants import (
+from src.observability import (
     OTEL_ATTR_DB_OPERATION,
     OTEL_ATTR_DB_SYSTEM,
     OTEL_ATTR_DB_VECTOR_JOB_ID,
@@ -19,10 +19,22 @@ from src.pipeline.constants import (
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
-from src.sms.constants import AuditEvent, MessageType
+from src.sms.constants import AuditEvent
 
 tracer = otel_trace.get_tracer(__name__)
 log = structlog.get_logger()
+
+
+class JobEmbeddingWriter(Protocol):
+    """Port for writing a job embedding to the vector index.
+
+    The handler owns this contract; composition (main.py) binds the OpenAI
+    client and settings so the handler never touches either.
+    """
+
+    async def __call__(
+        self, *, job_id: int, description: str, phone_hash: str
+    ) -> None: ...
 
 
 class JobPostingHandler(MessageHandler):
@@ -32,35 +44,38 @@ class JobPostingHandler(MessageHandler):
         self,
         job_repo: JobRepository,
         audit_repo: AuditLogRepository,
-        job_embedding_writer,
-        extraction_service: ExtractionService,
+        job_embedding_writer: JobEmbeddingWriter,
+        sync_queue_repo: PineconeSyncQueueRepository,
     ):
         self._job_repo = job_repo
         self._audit_repo = audit_repo
         self._job_embedding_writer = job_embedding_writer
-        self._extraction_service = extraction_service
+        self._sync_queue_repo = sync_queue_repo
 
     def can_handle(self, result: ExtractionResult) -> bool:
         return result.message_type == MessageType.JOB_POSTING and result.job is not None
 
     async def handle(self, ctx: PipelineContext) -> None:
-        result = ctx.result
+        extracted = ctx.result.job
+        assert extracted is not None  # guaranteed by can_handle
         job_create = JobCreate(
             message_id=ctx.message_id,
-            description=result.job.description,
-            location=result.job.location,
-            pay_rate=dollars_to_cents(result.job.pay_rate)
-            if result.job.pay_rate is not None
+            description=extracted.description,
+            location=extracted.location,
+            pay_rate=dollars_to_cents(extracted.pay_rate)
+            if extracted.pay_rate is not None
             else None,
-            pay_type=result.job.pay_type,
-            estimated_duration_hours=result.job.estimated_duration_hours,
-            raw_duration_text=result.job.raw_duration_text,
-            ideal_datetime=result.job.ideal_datetime,
-            raw_datetime_text=result.job.raw_datetime_text,
-            inferred_timezone=result.job.inferred_timezone,
-            datetime_flexible=result.job.datetime_flexible,
+            pay_type=PayType(extracted.pay_type),
+            # str from the LLM — JobCreate parses it, nulling junk values.
+            ideal_datetime=extracted.ideal_datetime,  # type: ignore[arg-type]
+            estimated_duration_hours=extracted.estimated_duration_hours,
+            raw_duration_text=extracted.raw_duration_text,
+            raw_datetime_text=extracted.raw_datetime_text,
+            inferred_timezone=extracted.inferred_timezone,
+            datetime_flexible=extracted.datetime_flexible,
         )
         job = await self._job_repo.create(ctx.session, job_create)
+        assert job.id is not None  # DB-assigned on flush
 
         await self._audit_repo.write(
             ctx.session,
@@ -72,8 +87,11 @@ class JobPostingHandler(MessageHandler):
 
         # Capture plain values now — the ORM row must not be touched post-commit.
         job_id = job.id
-        description = result.job.description
+        description = extracted.description
         phone_hash = ctx.phone_hash
+        session = ctx.session
+        sync_queue_repo = self._sync_queue_repo
+        writer = self._job_embedding_writer
 
         async def upsert_embedding() -> None:
             try:
@@ -81,26 +99,24 @@ class JobPostingHandler(MessageHandler):
                     span.set_attribute(OTEL_ATTR_DB_SYSTEM, "pinecone")
                     span.set_attribute(OTEL_ATTR_DB_OPERATION, "upsert")
                     span.set_attribute(OTEL_ATTR_DB_VECTOR_JOB_ID, str(job_id))
-                    await self._job_embedding_writer(
+                    await writer(
                         job_id=job_id,
                         description=description,
                         phone_hash=phone_hash,
-                        openai_client=self._extraction_service.openai_client,
-                        settings=self._extraction_service.settings,
                     )
             except Exception as e:
                 log.error("pinecone_write_failed", job_id=job_id, error=str(e))
+                # Runs after the orchestrator's commit — the session is idle,
+                # so this enqueue is its own small transaction.
                 try:
-                    async with get_sessionmaker()() as s2:
-                        s2.add(
-                            PineconeSyncQueue(job_id=job_id, status=SyncStatus.PENDING)
-                        )
-                        await s2.commit()
+                    await sync_queue_repo.enqueue(session, job_id)
+                    await session.commit()
                 except Exception as queue_exc:
                     log.error(
                         "pinecone_queue_insert_failed",
                         job_id=job_id,
                         error=str(queue_exc),
                     )
+                    await session.rollback()
 
         ctx.run_after_commit(upsert_embedding)

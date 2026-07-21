@@ -7,6 +7,7 @@ with workflow.unsafe.imports_passed_through():
         ProcessMessageInput,
         handle_process_message_failure_activity,
         process_message_activity,
+        purge_rate_limit_activity,
         sync_pinecone_queue_activity,
     )
     from src.temporal.constants import (
@@ -17,6 +18,7 @@ with workflow.unsafe.imports_passed_through():
         PROCESS_MSG_RETRY_INITIAL_INTERVAL,
         PROCESS_MSG_RETRY_MAX_ATTEMPTS,
         PROCESS_MSG_RETRY_MAX_INTERVAL,
+        RATE_LIMIT_PURGE_ACTIVITY_TIMEOUT,
     )
 
 PROCESS_MESSAGE_RETRY = RetryPolicy(
@@ -58,5 +60,16 @@ class SyncPineconeQueueWorkflow:
         return await workflow.execute_activity(
             sync_pinecone_queue_activity,
             start_to_close_timeout=PINECONE_SYNC_ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=1),
+        )
+
+
+@workflow.defn
+class PurgeRateLimitWorkflow:
+    @workflow.run
+    async def run(self) -> str:
+        return await workflow.execute_activity(
+            purge_rate_limit_activity,
+            start_to_close_timeout=RATE_LIMIT_PURGE_ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=1),
         )

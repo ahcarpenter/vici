@@ -1,23 +1,18 @@
 from datetime import UTC, datetime, timedelta
-from typing import Optional
+from typing import Any, cast
 
-from sqlalchemy import text, update
+from sqlalchemy import CursorResult, delete, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import col, select
 
+from src.extraction.constants import MessageType
 from src.repository import BaseRepository
-from src.sms.constants import (
-    MAX_MESSAGES_PER_WINDOW,
-    RATE_LIMIT_WINDOW_SECONDS,
-    MessageType,
-)
 from src.sms.exceptions import DuplicateMessageSid, RateLimitExceeded
-from src.sms.models import Message
+from src.sms.models import Message, RateLimit
 
 
 class MessageRepository(BaseRepository):
-    @staticmethod
-    async def check_idempotency(session: AsyncSession, message_sid: str) -> None:
+    async def check_idempotency(self, session: AsyncSession, message_sid: str) -> None:
         """Raise DuplicateMessageSid if this message_sid has already been processed."""
         result = await session.execute(
             select(Message).where(Message.message_sid == message_sid)
@@ -25,27 +20,31 @@ class MessageRepository(BaseRepository):
         if result.first() is not None:
             raise DuplicateMessageSid(message_sid)
 
-    @staticmethod
-    async def enforce_rate_limit(session: AsyncSession, user_id: int) -> int:
+    async def enforce_rate_limit(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        *,
+        max_messages: int,
+        window_seconds: int,
+    ) -> int:
         """
-        Upsert a count for (user_id, window). Raise RateLimitExceeded if over
-        MAX_MESSAGES_PER_WINDOW. Returns current count if within limit.
+        Record this message and count the user's messages in the rolling window.
+        Raise RateLimitExceeded when the count exceeds *max_messages*.
+        Returns current count if within limit.
         """
-        # TODO: A migration to drop the UNIQUE constraint on (user_id, created_at)
-        # in the rate_limit table is needed before deploying this rolling-window change.
-        window = datetime.now(UTC) - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+        window = datetime.now(UTC) - timedelta(seconds=window_seconds)
 
         # Insert one row per event (rolling-window pattern — no upsert needed)
         await session.execute(
             text(
                 """
-                INSERT INTO rate_limit (user_id, created_at, count)
-                VALUES (:user_id, :now, 1)
+                INSERT INTO rate_limit (user_id, created_at)
+                VALUES (:user_id, :now)
                 """
             ),
             {"user_id": user_id, "now": datetime.now(UTC)},
         )
-        # Count messages in the last 60 seconds for this user.
         count_result = await session.execute(
             text(
                 "SELECT COUNT(*) FROM rate_limit "
@@ -54,9 +53,19 @@ class MessageRepository(BaseRepository):
             {"user_id": user_id, "window": window},
         )
         count = count_result.scalar_one()
-        if count > MAX_MESSAGES_PER_WINDOW:
+        if count > max_messages:
             raise RateLimitExceeded(f"user_id={user_id} count={count}")
         return count
+
+    async def purge_rate_limit_entries(
+        self, session: AsyncSession, older_than: datetime
+    ) -> int:
+        """Delete rate_limit rows older than *older_than*. Returns rows deleted.
+        Flush-only — caller owns the transaction."""
+        result = await session.execute(
+            delete(RateLimit).where(col(RateLimit.created_at) < older_than)
+        )
+        return cast(CursorResult[Any], result).rowcount
 
     async def create(
         self,
@@ -78,7 +87,7 @@ class MessageRepository(BaseRepository):
         session: AsyncSession,
         message_id: int,
         message_type: MessageType,
-        raw_gpt_response: Optional[str] = None,
+        raw_gpt_response: str | None = None,
     ) -> None:
         """Record the pipeline's classification of a message.
 
@@ -88,6 +97,6 @@ class MessageRepository(BaseRepository):
         """
         await session.execute(
             update(Message)
-            .where(Message.id == message_id)
+            .where(col(Message.id) == message_id)
             .values(message_type=message_type, raw_gpt_response=raw_gpt_response)
         )

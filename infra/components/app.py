@@ -37,7 +37,7 @@ _AUTH_PROXY_MEMORY_REQUEST = "256Mi"
 _AUTH_PROXY_CPU_LIMIT = "200m"
 _AUTH_PROXY_MEMORY_LIMIT = "512Mi"
 
-# All 11 ExternalSecret-generated K8s Secrets available to the app container
+# All ExternalSecret-generated K8s Secrets available to the app container
 _ENV_FROM_SOURCES = [
     "twilio-auth-token",
     "twilio-account-sid",
@@ -50,6 +50,7 @@ _ENV_FROM_SOURCES = [
     "temporal-address",
     "otel-exporter-otlp-endpoint",
     "webhook-base-url",
+    "phone-hash-pepper",
 ]
 
 # ---------------------------------------------------------------------------

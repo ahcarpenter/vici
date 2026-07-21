@@ -10,6 +10,7 @@ from src.temporal.activities import (
     ProcessMessageInput,
     handle_process_message_failure_activity,
     process_message_activity,
+    purge_rate_limit_activity,
     sync_pinecone_queue_activity,
 )
 
@@ -153,12 +154,14 @@ async def test_message_not_found():
     original = acts._orchestrator
     acts._orchestrator = mock_orchestrator
     try:
-        with patch(
-            "src.temporal.activities.get_sessionmaker",
-            return_value=mock_sessionmaker,
+        with (
+            patch(
+                "src.temporal.activities.get_sessionmaker",
+                return_value=mock_sessionmaker,
+            ),
+            pytest.raises(ApplicationError) as exc_info,
         ):
-            with pytest.raises(ApplicationError) as exc_info:
-                await process_message_activity(inp)
+            await process_message_activity(inp)
         assert exc_info.value.non_retryable is True
     finally:
         acts._orchestrator = original
@@ -315,6 +318,46 @@ async def test_sync_pinecone_queue_mixed_rows(async_session, make_pending_entry)
     assert mock_write.await_count == 2
     assert entry_ok.status == SyncStatus.SYNCED
     assert entry_bad.status == SyncStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_purge_rate_limit_deletes_expired_rows(async_session, make_user):
+    """Rows older than the retention window are deleted; fresh rows survive."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlmodel import select
+
+    from src.sms.constants import RATE_LIMIT_PURGE_RETENTION
+    from src.sms.models import RateLimit
+
+    user = await make_user()
+    now = datetime.now(UTC)
+    stale = RateLimit(
+        user_id=user.id,
+        created_at=now - RATE_LIMIT_PURGE_RETENTION - timedelta(minutes=1),
+    )
+    fresh = RateLimit(user_id=user.id, created_at=now)
+    async_session.add(stale)
+    async_session.add(fresh)
+    await async_session.flush()
+
+    with patch(
+        "src.temporal.activities.get_sessionmaker",
+        return_value=_sessionmaker_over(async_session),
+    ):
+        result = await purge_rate_limit_activity()
+
+    assert result == "ok"
+    remaining = (
+        (
+            await async_session.execute(
+                select(RateLimit).where(RateLimit.user_id == user.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [r.id for r in remaining] == [fresh.id]
 
 
 @pytest.mark.asyncio

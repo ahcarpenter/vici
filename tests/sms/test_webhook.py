@@ -180,3 +180,24 @@ async def test_temporal_workflow_started(
     _auto_mock_temporal_client.start_workflow.assert_called_once()
     call_kwargs = _auto_mock_temporal_client.start_workflow.call_args.kwargs
     assert call_kwargs["id"] == "process-message-SM_temporal_001"
+    # Producer and worker must agree on the queue — both read Settings.
+    assert call_kwargs["task_queue"] == get_settings().temporal.task_queue
+
+
+async def test_user_e164_captured_on_first_message(
+    client: AsyncClient,
+    mock_twilio_validator,
+    async_session,
+):
+    """The webhook stores the sender's raw E.164 so match replies can share it."""
+    from src.sms.service import hash_phone
+
+    phone = "+15005550077"
+    form = {**VALID_FORM, "MessageSid": "SM_e164_001", "From": phone}
+    await client.post("/webhook/sms", data=form, headers=HEADERS)
+
+    result = await async_session.execute(
+        select(User).where(User.phone_hash == hash_phone(phone))
+    )
+    user = result.scalar_one()
+    assert user.phone_e164 == phone

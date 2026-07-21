@@ -21,6 +21,18 @@ OPENAI_MAX_RETRIES: int = 0
 PINECONE_SYNC_BATCH_SIZE: int = 50
 
 
+class MessageType(StrEnum):
+    """Classification assigned to an inbound message by the extraction pipeline.
+
+    Single source of truth for the classification vocabulary — the extraction
+    schema, the message record, and the pipeline handlers all reference this.
+    """
+
+    JOB_POSTING = "job_posting"
+    WORK_GOAL = "work_goal"
+    UNKNOWN = "unknown"
+
+
 class SyncStatus(StrEnum):
     """States of a pinecone_sync_queue entry (outbox for the search index)."""
 
