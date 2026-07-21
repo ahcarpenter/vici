@@ -1,15 +1,11 @@
+from datetime import timedelta
 from enum import StrEnum
 
-RATE_LIMIT_WINDOW_SECONDS: int = 60
-MAX_MESSAGES_PER_WINDOW: int = 5
+EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response/>'
 
-
-class MessageType(StrEnum):
-    """Classification assigned to an inbound message by the extraction pipeline."""
-
-    JOB_POSTING = "job_posting"
-    WORK_GOAL = "work_goal"
-    UNKNOWN = "unknown"
+# How long rate_limit rows are kept before the purge cron deletes them.
+# Must comfortably exceed the largest configurable rate-limit window.
+RATE_LIMIT_PURGE_RETENTION: timedelta = timedelta(hours=1)
 
 
 class AuditEvent(StrEnum):

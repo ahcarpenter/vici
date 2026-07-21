@@ -1,3 +1,6 @@
+from typing import TYPE_CHECKING
+
+from openai import AsyncOpenAI
 from temporalio.client import Client
 from temporalio.contrib.opentelemetry import TracingInterceptor
 from temporalio.exceptions import WorkflowAlreadyStartedError
@@ -9,9 +12,22 @@ from src.config import get_settings
 from src.temporal.activities import (
     handle_process_message_failure_activity,
     process_message_activity,
+    purge_rate_limit_activity,
     sync_pinecone_queue_activity,
 )
-from src.temporal.workflows import ProcessMessageWorkflow, SyncPineconeQueueWorkflow
+from src.temporal.constants import (
+    CRON_SCHEDULE_RATE_LIMIT_PURGE,
+    WORKFLOW_PINECONE_SYNC_ID,
+    WORKFLOW_RATE_LIMIT_PURGE_ID,
+)
+from src.temporal.workflows import (
+    ProcessMessageWorkflow,
+    PurgeRateLimitWorkflow,
+    SyncPineconeQueueWorkflow,
+)
+
+if TYPE_CHECKING:
+    from src.pipeline.orchestrator import PipelineOrchestrator
 
 
 async def get_temporal_client(address: str) -> Client:
@@ -25,7 +41,26 @@ async def get_temporal_client(address: str) -> Client:
     )
 
 
-async def run_worker(client: Client, orchestrator, openai_client) -> None:
+async def start_process_message_workflow(
+    client: Client, *, message_sid: str, from_number: str, body: str
+) -> None:
+    """Fire-and-forget: start ProcessMessageWorkflow for an inbound SMS.
+
+    Reads the task queue from settings so producers and the worker can never
+    disagree about which queue is in use.
+    """
+    settings = get_settings()
+    await client.start_workflow(
+        ProcessMessageWorkflow.run,
+        args=[message_sid, from_number, body],
+        id=f"process-message-{message_sid}",
+        task_queue=settings.temporal.task_queue,
+    )
+
+
+async def run_worker(
+    client: Client, orchestrator: "PipelineOrchestrator", openai_client: AsyncOpenAI
+) -> None:
     """Long-running coroutine. Cancel to stop. Set singletons before worker.run()."""
     _acts._orchestrator = orchestrator
     _acts._openai_client = openai_client
@@ -34,25 +69,30 @@ async def run_worker(client: Client, orchestrator, openai_client) -> None:
     worker = Worker(
         client,
         task_queue=settings.temporal.task_queue,
-        workflows=[ProcessMessageWorkflow, SyncPineconeQueueWorkflow],
+        workflows=[
+            ProcessMessageWorkflow,
+            SyncPineconeQueueWorkflow,
+            PurgeRateLimitWorkflow,
+        ],
         activities=[
             process_message_activity,
             handle_process_message_failure_activity,
             sync_pinecone_queue_activity,
+            purge_rate_limit_activity,
         ],
     )
     await worker.run()
 
 
-async def start_cron_if_needed(client: Client) -> None:
-    """Register the Pinecone sync cron workflow. Idempotent on restart."""
+async def _start_cron(client: Client, run, workflow_id: str, schedule: str) -> None:
+    """Register one cron workflow. Idempotent on restart."""
     settings = get_settings()
     try:
         await client.start_workflow(
-            SyncPineconeQueueWorkflow.run,
-            id="sync-pinecone-queue-cron",
+            run,
+            id=workflow_id,
             task_queue=settings.temporal.task_queue,
-            cron_schedule=settings.temporal.cron_schedule_pinecone_sync,
+            cron_schedule=schedule,
         )
     except WorkflowAlreadyStartedError:
         pass  # cron workflow already registered
@@ -61,3 +101,20 @@ async def start_cron_if_needed(client: Client) -> None:
             pass  # cron workflow already registered
         else:
             raise
+
+
+async def start_cron_if_needed(client: Client) -> None:
+    """Register all cron workflows. Idempotent on restart."""
+    settings = get_settings()
+    await _start_cron(
+        client,
+        SyncPineconeQueueWorkflow.run,
+        WORKFLOW_PINECONE_SYNC_ID,
+        settings.temporal.cron_schedule_pinecone_sync,
+    )
+    await _start_cron(
+        client,
+        PurgeRateLimitWorkflow.run,
+        WORKFLOW_RATE_LIMIT_PURGE_ID,
+        CRON_SCHEDULE_RATE_LIMIT_PURGE,
+    )

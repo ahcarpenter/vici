@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
@@ -8,9 +7,9 @@ from sqlmodel import Field, SQLModel
 class User(SQLModel, table=True):
     __tablename__ = "user"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     phone_hash: str = Field(unique=True, index=True)
-    phone_e164: Optional[str] = Field(
+    phone_e164: str | None = Field(
         default=None,
         sa_column=sa.Column(sa.String(), nullable=True),
     )

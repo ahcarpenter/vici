@@ -6,19 +6,18 @@ from opentelemetry import trace as otel_trace
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.pipeline.constants import (
+from src.observability import (
     OTEL_ATTR_MESSAGE_ID,
     OTEL_ATTR_MESSAGING_SYSTEM,
     OTEL_ATTR_PHONE_HASH,
 )
-from src.sms import service as sms_service
 from src.sms.audit_repository import AuditLogRepository
-from src.sms.constants import AuditEvent
-from src.sms.dependencies import enforce_rate_limit
-from src.sms.exceptions import EMPTY_TWIML
+from src.sms.constants import EMPTY_TWIML, AuditEvent
+from src.sms.dependencies import enforce_rate_limit, get_audit_repo, get_message_repo
 from src.sms.repository import MessageRepository
 from src.sms.schemas import InboundSms
 from src.sms.service import hash_phone, scrub_phone_fields
+from src.temporal.worker import start_process_message_workflow
 
 router = APIRouter(prefix="/webhook", tags=["sms"])
 
@@ -28,6 +27,8 @@ async def receive_sms(
     request: Request,
     inbound: InboundSms = Depends(enforce_rate_limit),
     session: AsyncSession = Depends(get_session),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
 ):
     """Receive inbound SMS from Twilio.
 
@@ -36,6 +37,7 @@ async def receive_sms(
     and emits (per D-07).
     """
     payload = inbound.payload
+    assert inbound.sender.id is not None  # upserted by the gate chain
 
     span = otel_trace.get_current_span()
     span.set_attribute(OTEL_ATTR_MESSAGE_ID, payload.MessageSid)
@@ -43,10 +45,10 @@ async def receive_sms(
     span.set_attribute(OTEL_ATTR_MESSAGING_SYSTEM, "twilio")
 
     async with session.begin():
-        message = await MessageRepository().create(
+        message = await message_repo.create(
             session, payload.MessageSid, inbound.sender.id, payload.Body
         )
-        await AuditLogRepository().write(
+        await audit_repo.write(
             session,
             payload.MessageSid,
             AuditEvent.RECEIVED,
@@ -54,11 +56,11 @@ async def receive_sms(
             message_id=message.id,
         )
 
-    await sms_service.emit_message_received_event(
+    await start_process_message_workflow(
         request.app.state.temporal_client,
-        payload.MessageSid,
-        payload.From,
-        payload.Body,
+        message_sid=payload.MessageSid,
+        from_number=payload.From,
+        body=payload.Body,
     )
 
     return Response(content=EMPTY_TWIML, media_type="text/xml")

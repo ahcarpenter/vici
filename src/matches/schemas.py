@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from src.jobs.models import Job
 from src.work_goals.models import WorkGoal
@@ -12,7 +11,7 @@ class JobCandidate:
     job: Job
     earnings: int  # cents — pay_rate * duration (hourly) or pay_rate (flat)
     duration: float  # estimated_duration_hours; 0.0 for flat jobs with no duration
-    poster_phone: Optional[str]  # User.phone_e164, may be None for legacy users
+    poster_phone: str | None  # User.phone_e164, may be None for legacy users
 
 
 @dataclass

@@ -48,6 +48,7 @@ This guide walks a new contributor from zero to a running Vici stack. For the fu
    - `TEMPORAL_ADDRESS`
    - `WEBHOOK_BASE_URL`
    - `ENV`
+   - `PHONE_HASH_PEPPER` (only when `ENV=production` — set it anyway; it keys the phone-number pseudonymization)
 
 ## First Run
 

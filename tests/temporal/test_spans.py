@@ -95,7 +95,7 @@ async def test_process_message_emits_temporal_span(span_exporter):
     assert "temporal.process_message" in span_names
 
     temporal_span = next(s for s in spans if s.name == "temporal.process_message")
-    from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+    from src.observability import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 
     attrs = dict(temporal_span.attributes)
     assert attrs.get("temporal.event") == "message.received"
@@ -209,9 +209,9 @@ async def test_span_emitted_when_message_missing(span_exporter):
             return_value=mock_sessionmaker,
         ),
         patch("src.temporal.activities.hash_phone", return_value="hashed"),
+        pytest.raises(ApplicationError),
     ):
-        with pytest.raises(ApplicationError):
-            await process_message_activity(inp)
+        await process_message_activity(inp)
 
     spans = span_exporter.get_finished_spans()
     span_names = [s.name for s in spans]

@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
@@ -8,7 +7,7 @@ from sqlmodel import Field, SQLModel
 class Message(SQLModel, table=True):
     __tablename__ = "message"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     message_sid: str = Field(unique=True, index=True)
     user_id: int = Field(
         sa_column=sa.Column(
@@ -16,8 +15,8 @@ class Message(SQLModel, table=True):
         )
     )
     body: str
-    message_type: Optional[str] = None
-    raw_gpt_response: Optional[str] = None
+    message_type: str | None = None
+    raw_gpt_response: str | None = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),
@@ -25,8 +24,10 @@ class Message(SQLModel, table=True):
 
 
 class RateLimit(SQLModel, table=True):
+    """One row per admitted message — counted over a rolling window."""
+
     __tablename__ = "rate_limit"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(
         sa_column=sa.Column(
             sa.Integer, sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
@@ -35,22 +36,21 @@ class RateLimit(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False)
     )
-    count: int = Field(default=1)
 
 
 class AuditLog(SQLModel, table=True):
     __tablename__ = "audit_log"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     message_sid: str = Field(index=True)
-    message_id: Optional[int] = Field(
+    message_id: int | None = Field(
         default=None,
         sa_column=sa.Column(
             sa.Integer, sa.ForeignKey("message.id", ondelete="SET NULL"), nullable=True
         ),
     )
     event: str
-    detail: Optional[str] = None
+    detail: str | None = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),

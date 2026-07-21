@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.extraction.schemas import ExtractionResult
 from src.extraction.service import ExtractionService
-from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+from src.observability import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
 from src.pipeline.context import PipelineContext
 from src.pipeline.handlers.base import MessageHandler
 from src.sms.audit_repository import AuditLogRepository
@@ -28,6 +28,12 @@ class PipelineOrchestrator:
         message_repo: MessageRepository,
         handlers: list[MessageHandler],
     ):
+        if not handlers or not handlers[-1].is_terminal:
+            raise ValueError(
+                "handler chain must end with a terminal (catch-all) handler"
+            )
+        if any(h.is_terminal for h in handlers[:-1]):
+            raise ValueError("only the last handler in the chain may be terminal")
         self._extraction_service = extraction_service
         self._audit_repo = audit_repo
         self._message_repo = message_repo
@@ -71,15 +77,16 @@ class PipelineOrchestrator:
                 from_number=from_number,
             )
 
-            dispatched = next((h for h in self._handlers if h.can_handle(result)), None)
-            if dispatched is not None:
-                await dispatched.handle(ctx)
-                await self._message_repo.record_classification(
-                    session,
-                    message_id,
-                    dispatched.message_type,
-                    raw_gpt_response=result.model_dump_json(),
-                )
+            # The chain always dispatches — the constructor guarantees a
+            # terminal catch-all sits at the end.
+            dispatched = next(h for h in self._handlers if h.can_handle(result))
+            await dispatched.handle(ctx)
+            await self._message_repo.record_classification(
+                session,
+                message_id,
+                dispatched.message_type,
+                raw_gpt_response=result.model_dump_json(),
+            )
 
             # 4. Single unit of work, then deferred external side effects
             await session.commit()

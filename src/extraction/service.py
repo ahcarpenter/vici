@@ -1,13 +1,10 @@
-import os
 import time
 from datetime import date
 from typing import Any
 
 import structlog
-from braintrust import init_logger
-from openai import APIStatusError, RateLimitError
+from openai import APIStatusError, AsyncOpenAI, RateLimitError
 from opentelemetry import trace as otel_trace
-from temporalio.exceptions import ApplicationError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -15,6 +12,7 @@ from tenacity import (
     wait_random_exponential,
 )
 
+from src.config import Settings
 from src.extraction.constants import (
     GPT_CALL_TIMEOUT_SECONDS,
     GPT_RETRY_MAX_ATTEMPTS,
@@ -22,6 +20,7 @@ from src.extraction.constants import (
     GPT_RETRY_WAIT_MIN_SECONDS,
     GPT_RETRY_WAIT_MULTIPLIER,
 )
+from src.extraction.exceptions import ExtractionParseError
 from src.extraction.prompts import SYSTEM_PROMPT
 from src.extraction.schemas import ExtractionResult
 from src.metrics import (
@@ -35,31 +34,12 @@ tracer = otel_trace.get_tracer(__name__)
 
 log = structlog.get_logger()
 
-_BRAINTRUST_API_KEY_ENV: str = "BRAINTRUST_API_KEY"
-
-if os.getenv(_BRAINTRUST_API_KEY_ENV):
-    _bt_logger = init_logger(project="vici")
-else:
-    _bt_logger = None
-    log.warning(
-        "braintrust_logger_disabled",
-        reason=f"{_BRAINTRUST_API_KEY_ENV} not set — LLM call observability disabled",
-    )
-
 
 class ExtractionService:
-    def __init__(self, openai_client, settings):
+    def __init__(self, openai_client: AsyncOpenAI, settings: Settings):
         """Receives a pre-built (and optionally wrapped) AsyncOpenAI client."""
         self._client = openai_client
         self._settings = settings
-
-    @property
-    def openai_client(self):
-        return self._client
-
-    @property
-    def settings(self):
-        return self._settings
 
     async def process(self, sms_text: str, phone_hash: str) -> ExtractionResult:
         """GPT classification only — no DB, no session param."""
@@ -108,7 +88,5 @@ class ExtractionService:
         )
         parsed = completion.choices[0].message.parsed
         if parsed is None:
-            raise ApplicationError(
-                "GPT returned unparseable response", non_retryable=False
-            )
+            raise ExtractionParseError("GPT returned unparseable response")
         return parsed, completion.usage

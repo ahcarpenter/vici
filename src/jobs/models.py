@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy import CheckConstraint
@@ -23,19 +22,21 @@ class PayTerms:
     flat jobs pay their rate outright.
     """
 
-    rate: Optional[int]  # integer cents
+    rate: int | None  # integer cents
     pay_type: PayType
-    duration_hours: Optional[float]
+    duration_hours: float | None
 
-    def earnings(self) -> Optional[int]:
+    def earnings(self) -> int | None:
         """Total earnings in cents, or None when they cannot be computed."""
         if self.incomputable_reason() is not None:
             return None
+        assert self.rate is not None  # incomputable_reason covers this
         if self.pay_type is PayType.HOURLY:
+            assert self.duration_hours is not None  # ditto, for hourly
             return int(round(self.rate * self.duration_hours))
         return self.rate
 
-    def incomputable_reason(self) -> Optional[str]:
+    def incomputable_reason(self) -> str | None:
         """Why earnings cannot be computed, or None when they can."""
         if self.pay_type is PayType.UNKNOWN:
             return INCOMPUTABLE_UNKNOWN_PAY_TYPE
@@ -60,7 +61,7 @@ class Job(SQLModel, table=True):
         ),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     message_id: int = Field(
         sa_column=sa.Column(
             sa.Integer,
@@ -69,22 +70,22 @@ class Job(SQLModel, table=True):
             unique=True,
         )
     )
-    description: Optional[str] = None
-    location: Optional[str] = None
-    pay_rate: Optional[int] = Field(
+    description: str | None = None
+    location: str | None = None
+    pay_rate: int | None = Field(
         default=None,
         sa_column=sa.Column(sa.Integer, nullable=True),
     )
     pay_type: str = Field(default=PayType.UNKNOWN)
-    estimated_duration_hours: Optional[float] = None
-    raw_duration_text: Optional[str] = None
-    ideal_datetime: Optional[datetime] = Field(
+    estimated_duration_hours: float | None = None
+    raw_duration_text: str | None = None
+    ideal_datetime: datetime | None = Field(
         default=None,
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
     )
-    raw_datetime_text: Optional[str] = None
-    inferred_timezone: Optional[str] = None
-    datetime_flexible: Optional[bool] = None
+    raw_datetime_text: str | None = None
+    inferred_timezone: str | None = None
+    datetime_flexible: bool | None = None
     status: str = Field(
         default=JobStatus.AVAILABLE,
         sa_column=sa.Column(sa.String(), nullable=False, server_default="available"),

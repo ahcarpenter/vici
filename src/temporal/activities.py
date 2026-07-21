@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
@@ -12,8 +13,10 @@ from src.database import get_sessionmaker
 from src.extraction.constants import PINECONE_SYNC_BATCH_SIZE
 from src.extraction.repository import PineconeSyncQueueRepository
 from src.extraction.utils import write_job_embedding
-from src.pipeline.constants import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+from src.observability import OTEL_ATTR_MESSAGE_ID, OTEL_ATTR_PHONE_HASH
+from src.sms.constants import RATE_LIMIT_PURGE_RETENTION
 from src.sms.models import Message
+from src.sms.repository import MessageRepository
 from src.sms.service import hash_phone
 
 tracer = otel_trace.get_tracer(__name__)
@@ -21,9 +24,12 @@ tracer = otel_trace.get_tracer(__name__)
 if TYPE_CHECKING:
     from src.pipeline.orchestrator import PipelineOrchestrator
 
+if TYPE_CHECKING:
+    from openai import AsyncOpenAI
+
 # Module-level singletons set by worker.run_worker() before the worker starts
 _orchestrator: "PipelineOrchestrator | None" = None
-_openai_client = None
+_openai_client: "AsyncOpenAI | None" = None
 
 
 @dataclass
@@ -63,10 +69,16 @@ async def process_message_activity(input: ProcessMessageInput) -> str:
                     non_retryable=True,
                 )
 
+            assert message.id is not None  # DB-assigned primary key
             message_id = message.id
             user_id = message.user_id
 
             orchestrator = _orchestrator
+            if orchestrator is None:
+                raise ApplicationError(
+                    "process_message: worker not initialized (orchestrator unset)",
+                    non_retryable=True,
+                )
             await orchestrator.run(
                 session=session,
                 sms_text=body,
@@ -107,6 +119,13 @@ async def sync_pinecone_queue_activity() -> str:
     logger = structlog.get_logger()
     repo = PineconeSyncQueueRepository()
 
+    openai_client = _openai_client
+    if openai_client is None:
+        raise ApplicationError(
+            "sync_pinecone_queue: worker not initialized (openai client unset)",
+            non_retryable=True,
+        )
+
     with tracer.start_as_current_span("temporal.sync_pinecone_queue") as span:
         logger.info("sync-pinecone-queue: starting sweep")
 
@@ -119,11 +138,13 @@ async def sync_pinecone_queue_activity() -> str:
             failed = 0
             for row in pending:
                 try:
+                    if row.description is None:
+                        raise ValueError("job has no description to embed")
                     await write_job_embedding(
                         job_id=row.entry.job_id,
                         description=row.description,
                         phone_hash=row.phone_hash,
-                        openai_client=_openai_client,
+                        openai_client=openai_client,
                         settings=get_settings(),
                     )
                     await repo.mark_synced(session, row.entry)
@@ -150,4 +171,25 @@ async def sync_pinecone_queue_activity() -> str:
             )
         logger.info("sync-pinecone-queue: sweep complete", processed=len(pending))
 
+    return "ok"
+
+
+@activity.defn
+async def purge_rate_limit_activity() -> str:
+    """Deletes rate_limit rows older than the retention window.
+
+    Rolling-window rate limiting inserts one row per admitted message; without
+    this sweep the table grows without bound.
+    """
+    logger = structlog.get_logger()
+    cutoff = datetime.now(UTC) - RATE_LIMIT_PURGE_RETENTION
+
+    with tracer.start_as_current_span("temporal.purge_rate_limit"):
+        async with get_sessionmaker()() as session:
+            deleted = await MessageRepository().purge_rate_limit_entries(
+                session, older_than=cutoff
+            )
+            await session.commit()
+
+    logger.info("purge-rate-limit: purge complete", deleted=deleted)
     return "ok"

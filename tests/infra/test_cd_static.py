@@ -36,9 +36,12 @@ def _parse_module_assignments(source: str) -> dict[str, ast.expr]:
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     assignments[target.id] = node.value
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and node.value is not None:
-                assignments[node.target.id] = node.value
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.value is not None
+        ):
+            assignments[node.target.id] = node.value
     return assignments
 
 

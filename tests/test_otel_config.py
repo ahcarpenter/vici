@@ -64,8 +64,9 @@ def test_configure_otel_service_version_from_settings(mock_app):
     )
 
 
-def test_observability_settings_service_version_from_git_sha():
-    s = Settings(git_sha="abc123")
+def test_observability_settings_service_version_from_git_sha(monkeypatch):
+    monkeypatch.setenv("GIT_SHA", "abc123")
+    s = Settings()
     assert s.observability.service_version == "abc123"
 
 

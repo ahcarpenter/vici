@@ -18,12 +18,14 @@ graph TD
     Orchestrator --> Extraction["ExtractionService<br/>src/extraction/service.py"]
     Extraction --> OpenAI["OpenAI GPT"]
     Orchestrator --> JobHandler["JobPostingHandler<br/>src/pipeline/handlers/job_posting.py"]
-    Orchestrator --> GoalHandler["WorkerGoalHandler<br/>src/pipeline/handlers/worker_goal.py"]
+    Orchestrator --> GoalHandler["WorkGoalHandler<br/>src/pipeline/handlers/work_goal.py"]
     Orchestrator --> UnknownHandler["UnknownMessageHandler<br/>src/pipeline/handlers/unknown.py"]
     JobHandler --> Postgres
     JobHandler --> Pinecone["Pinecone Vector DB"]
     JobHandler -. "on upsert failure" .-> SyncQueue["pinecone_sync_queue"]
     GoalHandler --> Postgres
+    GoalHandler --> MatchSvc["MatchService<br/>src/matches/service.py"]
+    GoalHandler --> TwilioOut
     UnknownHandler --> TwilioOut["Twilio (Outbound Reply)"]
     CronWorkflow["SyncPineconeQueueWorkflow<br/>(Temporal cron, */5 min)"] --> SyncActivity["sync_pinecone_queue_activity<br/>src/temporal/activities.py"]
     SyncActivity --> SyncQueue
@@ -40,10 +42,11 @@ A typical inbound SMS follows this path:
 4. **Pipeline orchestration** — `process_message_activity` (in `src/temporal/activities.py`) opens a database session, resolves the `Message` row by `message_sid`, and calls `PipelineOrchestrator.run`. The orchestrator first calls `ExtractionService.process` to classify and extract structured data via GPT, then writes a `gpt_classified` audit entry.
 5. **Handler dispatch** — the orchestrator iterates its handler list (Chain of Responsibility) and invokes the first whose `can_handle` returns `True`:
    - `JobPostingHandler` — inserts a `Job` row, updates `message.message_type = 'job_posting'`, writes a `job_created` audit entry, commits the transaction, then attempts a direct Pinecone embedding upsert. On upsert failure the job is enqueued into the `pinecone_sync_queue` table (via a fresh session) for later retry.
-   - `WorkerGoalHandler` — inserts a `WorkGoal` row, updates `message.message_type = 'work_goal'`, writes a `work_goal_created` audit entry, and commits. (Match execution is not yet wired into the runtime pipeline; `MatchService` is currently invoked only from tests.)
+   - `WorkGoalHandler` — inserts a `WorkGoal` row, writes a `work_goal_created` audit entry, then runs `MatchService.match` inside the same unit of work (knapsack job selection plus `match` rows). After the orchestrator commits, a deferred action sends the formatted match list (`format_match_sms`) back to the sender via Twilio.
    - `UnknownMessageHandler` — catch-all terminal handler; marks the message as `unknown`, commits, and sends a clarifying reply via the Twilio REST client (offloaded with `asyncio.to_thread` since `twilio.rest.Client` is synchronous).
-6. **Pinecone sync cron** — `SyncPineconeQueueWorkflow`, registered as a Temporal cron by `start_cron_if_needed` on startup (default schedule `*/5 * * * *`, workflow id `sync-pinecone-queue-cron`), invokes `sync_pinecone_queue_activity`. The activity sweeps up to 50 pending rows from `pinecone_sync_queue`, upserts embeddings via `write_job_embedding`, and marks rows as `success` or `failed` (incrementing the `retry_count` column).
-7. **Gauge updater** — a background asyncio task started in `lifespan` polls `pinecone_sync_queue` every 15 seconds and exposes the pending-row count via the `pinecone_sync_queue_depth` Prometheus gauge.
+6. **Pinecone sync cron** — `SyncPineconeQueueWorkflow`, registered as a Temporal cron by `start_cron_if_needed` on startup (default schedule `*/5 * * * *`, workflow id `sync-pinecone-queue-cron`), invokes `sync_pinecone_queue_activity`. The activity sweeps up to 50 pending rows from `pinecone_sync_queue`, upserts embeddings via `write_job_embedding`, and marks rows as `synced` or `failed` (incrementing the `attempts` column).
+7. **Rate-limit purge cron** — `PurgeRateLimitWorkflow` (hourly, workflow id `purge-rate-limit-cron`) deletes `rate_limit` rows older than the retention window; rolling-window rate limiting inserts one row per admitted message, so the table would otherwise grow without bound.
+8. **Gauge updater** — a background asyncio task started in `lifespan` polls `pinecone_sync_queue` every 15 seconds (via `PineconeSyncQueueRepository.count_pending`) and exposes the pending-row count via the `pinecone_sync_queue_depth` Prometheus gauge.
 
 ## Key Abstractions
 
@@ -66,7 +69,6 @@ A typical inbound SMS follows this path:
 src/
 ├── config.py              # Global Settings (Pydantic BaseSettings with nested sub-models)
 ├── database.py            # Async SQLAlchemy engine, sessionmaker, and FastAPI get_session dep
-├── exceptions.py          # Global exception handlers (e.g., Twilio signature invalid)
 ├── main.py                # FastAPI app factory, lifespan DI wiring, OTel/Prometheus setup
 ├── metrics.py             # Prometheus gauge, counter, and histogram definitions
 ├── models.py              # Central model registry (imports all domain models for Alembic)
@@ -77,9 +79,9 @@ src/
 ├── jobs/                  # Job posting domain — model, repository, schemas
 ├── matches/               # Matching engine — knapsack service, repository, schemas, result formatter
 ├── pipeline/              # Message processing pipeline — orchestrator, context, and handler chain
-│   └── handlers/          # Concrete handlers: job_posting, worker_goal, unknown
+│   └── handlers/          # Concrete handlers: job_posting, work_goal, unknown
 ├── sms/                   # Twilio SMS domain — router, dependency gates, service, repository,
-│                          #   audit_repository, models (Message, AuditLog, RateLimit), exceptions
+│                          #   audit_repository, outbound sender, models, exceptions, error_handlers
 ├── temporal/              # Temporal workflows, activities, worker bootstrap, and constants
 ├── users/                 # User domain — model and repository
 └── work_goals/            # Worker goal domain — model, repository, schemas

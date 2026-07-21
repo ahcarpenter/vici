@@ -20,6 +20,20 @@ from src.sms.schemas import InboundSms, TwilioWebhookPayload
 from src.users.repository import UserRepository
 
 
+# Repositories are stateless — a fresh instance per request keeps the DI story
+# uniform with the orchestrator's constructor injection.
+def get_message_repo() -> MessageRepository:
+    return MessageRepository()
+
+
+def get_audit_repo() -> AuditLogRepository:
+    return AuditLogRepository()
+
+
+def get_user_repo() -> UserRepository:
+    return UserRepository()
+
+
 def _canonical_base_url(raw_base: str) -> str:
     # Ensure no trailing slash and preserve scheme/host/port.
     base = raw_base.rstrip("/")
@@ -51,7 +65,8 @@ async def validate_twilio_request(request: Request) -> TwilioWebhookPayload:
     """Gate 1: Parse the payload (400 on contract violation) and verify the
     Twilio signature against the raw form (403 via handler on mismatch)."""
     settings = get_settings()
-    form_data = dict(await request.form())
+    # Twilio posts urlencoded strings; drop any non-string (file upload) parts.
+    form_data = {k: v for k, v in (await request.form()).items() if isinstance(v, str)}
     try:
         payload = TwilioWebhookPayload(**form_data)
     except ValidationError as exc:
@@ -73,17 +88,17 @@ async def validate_twilio_request(request: Request) -> TwilioWebhookPayload:
 async def check_idempotency(
     payload: TwilioWebhookPayload = Depends(validate_twilio_request),
     session: AsyncSession = Depends(get_session),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
 ) -> TwilioWebhookPayload:
     """Gate 2: Raise DuplicateMessageSid (-> HTTP 200 via handler) if MessageSid seen.
     Returns the payload for downstream deps to chain."""
     try:
         async with session.begin():
-            await MessageRepository.check_idempotency(session, payload.MessageSid)
+            await message_repo.check_idempotency(session, payload.MessageSid)
     except DuplicateMessageSid:
         async with session.begin():
-            await AuditLogRepository().write(
-                session, payload.MessageSid, AuditEvent.DUPLICATE
-            )
+            await audit_repo.write(session, payload.MessageSid, AuditEvent.DUPLICATE)
         raise
     return payload
 
@@ -91,26 +106,39 @@ async def check_idempotency(
 async def get_or_create_user(
     payload: TwilioWebhookPayload = Depends(check_idempotency),
     session: AsyncSession = Depends(get_session),
+    user_repo: UserRepository = Depends(get_user_repo),
 ) -> InboundSms:
-    """Gate 3: Upsert user by phone_hash. Returns the admitted InboundSms."""
+    """Gate 3: Upsert user by phone_hash, capturing the raw E.164 number so
+    match replies can share a contact. Returns the admitted InboundSms."""
     phone_hash = sms_service.hash_phone(payload.From)
     async with session.begin():
-        user = await UserRepository.get_or_create(session, phone_hash)
+        user = await user_repo.get_or_create(
+            session, phone_hash, phone_e164=payload.From
+        )
     return InboundSms(payload=payload, sender=user)
 
 
 async def enforce_rate_limit(
     inbound: InboundSms = Depends(get_or_create_user),
     session: AsyncSession = Depends(get_session),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
 ) -> InboundSms:
     """Gate 4: Raise RateLimitExceeded (-> HTTP 200 via handler) if over limit.
     Returns the admitted InboundSms for the route to consume."""
+    settings = get_settings()
+    assert inbound.sender.id is not None  # upserted by the previous gate
     try:
         async with session.begin():
-            await MessageRepository.enforce_rate_limit(session, inbound.sender.id)
+            await message_repo.enforce_rate_limit(
+                session,
+                inbound.sender.id,
+                max_messages=settings.sms.rate_limit_max,
+                window_seconds=settings.sms.rate_limit_window_seconds,
+            )
     except RateLimitExceeded:
         async with session.begin():
-            await AuditLogRepository().write(
+            await audit_repo.write(
                 session, inbound.payload.MessageSid, AuditEvent.RATE_LIMITED
             )
         raise

@@ -184,10 +184,11 @@ class TestOBS01JaegerDeployments:
                     and func.attr == "Deployment"
                     and isinstance(func.value, ast.Attribute)
                     and func.value.attr == "v1"
-                ):
                     # Collect the resource name (first positional arg)
-                    if node.args and isinstance(node.args[0], ast.Constant):
-                        deployment_calls.append(node.args[0].value)
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                ):
+                    deployment_calls.append(node.args[0].value)
         assert "jaeger-collector" in deployment_calls, (
             f"Expected jaeger-collector Deployment, found: {deployment_calls}"
         )
@@ -346,9 +347,13 @@ class TestOBS03GrafanaStack:
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 func = node.func
-                if isinstance(func, ast.Attribute) and func.attr == "Release":
-                    if node.args and isinstance(node.args[0], ast.Constant):
-                        release_calls.append(node.args[0].value)
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "Release"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                ):
+                    release_calls.append(node.args[0].value)
         assert "kube-prometheus-stack" in release_calls, (
             f"Expected kube-prometheus-stack Helm Release, found: {release_calls}"
         )
