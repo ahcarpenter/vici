@@ -27,6 +27,10 @@ class WorkGoal(SQLModel, table=True):
         sa_column=sa.Column(sa.Integer, nullable=False),
     )
     target_timeframe: str | None = None
+    target_deadline: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=sa.Column(sa.DateTime(timezone=True), nullable=False),

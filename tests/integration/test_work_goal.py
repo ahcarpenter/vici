@@ -42,11 +42,15 @@ def _make_handler(match_result=None):
     return handler, mock_wr_repo, mock_match_service, mock_twilio
 
 
-def _make_ctx(session, message_sid="SMwgtest", user_id=42):
+def _make_ctx(session, message_sid="SMwgtest", user_id=42, target_deadline=None):
     from src.extraction.schemas import ExtractionResult, WorkGoalExtraction
     from src.pipeline.context import PipelineContext
 
-    worker = WorkGoalExtraction(target_earnings=150.0, target_timeframe="this week")
+    worker = WorkGoalExtraction(
+        target_earnings=150.0,
+        target_timeframe="this week",
+        target_deadline=target_deadline,
+    )
     result = ExtractionResult(message_type="work_goal", work_goal=worker)
     return PipelineContext(
         session=session,
@@ -111,9 +115,27 @@ async def test_work_goal_handler_matches_in_same_unit_of_work():
     args = match_service.match.await_args.args
     assert args[0] is mock_session
     assert args[1] is wr_repo.create.return_value
+    # Raw SMS text feeds semantic candidate retrieval
+    kwargs = match_service.match.await_args.kwargs
+    assert kwargs["query_text"] == "I want $150 this week"
     # Reply is deferred until after the orchestrator commits
     assert len(ctx.post_commit_actions) == 1
     mock_session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_work_goal_handler_passes_deadline_to_repo():
+    """Extracted target_deadline reaches the repository as a parsed datetime."""
+    from datetime import UTC, datetime
+
+    handler, wr_repo, _, _ = _make_handler()
+    mock_session = AsyncMock()
+    ctx = _make_ctx(mock_session, target_deadline="2026-07-25T23:59:59")
+
+    await handler.handle(ctx)
+
+    wg_create = wr_repo.create.await_args.args[1]
+    assert wg_create.target_deadline == datetime(2026, 7, 25, 23, 59, 59, tzinfo=UTC)
 
 
 @pytest.mark.asyncio

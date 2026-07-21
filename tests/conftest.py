@@ -190,6 +190,7 @@ async def make_work_goal(async_session, make_user, make_message):
             message_id=kwargs.get("message_id", message.id),
             target_earnings=dollars_to_cents(kwargs.get("target_earnings", 500.0)),
             target_timeframe=kwargs.get("target_timeframe", "this week"),
+            target_deadline=kwargs.get("target_deadline"),
         )
         async_session.add(work_goal)
         await async_session.flush()

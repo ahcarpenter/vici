@@ -159,7 +159,7 @@ def test_job_datetime_parse_failure_logs_warning():
         def error(self, *a, **kw):
             pass
 
-    with patch("src.jobs.schemas.structlog.get_logger", return_value=CapturingLogger()):
+    with patch("src.datetimes.structlog.get_logger", return_value=CapturingLogger()):
         job_create = JobCreate(
             message_id=1,
             description="Need a mover",
@@ -171,6 +171,53 @@ def test_job_datetime_parse_failure_logs_warning():
     assert any("ideal_datetime_parse_failed" in e for e, _ in logged_warnings)
     raw_values = [kw.get("raw_value") for _, kw in logged_warnings]
     assert "not-a-date" in raw_values
+
+
+def test_work_goal_deadline_parse_failure_logs_warning():
+    """WorkGoalCreate with unparseable target_deadline nulls it and logs a warning."""
+    from unittest.mock import patch
+
+    from src.work_goals.schemas import WorkGoalCreate
+
+    logged_warnings = []
+
+    class CapturingLogger:
+        def warning(self, event, **kw):
+            logged_warnings.append((event, kw))
+
+        def info(self, *a, **kw):
+            pass
+
+        def error(self, *a, **kw):
+            pass
+
+    with patch("src.datetimes.structlog.get_logger", return_value=CapturingLogger()):
+        wg_create = WorkGoalCreate(
+            message_id=1,
+            target_earnings=20000,
+            target_timeframe="by Friday",
+            target_deadline="sometime soon",
+        )
+
+    assert wg_create.target_deadline is None
+    assert any("target_deadline_parse_failed" in e for e, _ in logged_warnings)
+    raw_values = [kw.get("raw_value") for _, kw in logged_warnings]
+    assert "sometime soon" in raw_values
+
+
+def test_work_goal_deadline_naive_labeled_utc():
+    """Naive ISO deadlines are labeled UTC (matching job ideal_datetime storage)."""
+    from datetime import UTC, datetime
+
+    from src.work_goals.schemas import WorkGoalCreate
+
+    wg_create = WorkGoalCreate(
+        message_id=1,
+        target_earnings=20000,
+        target_timeframe="by Friday",
+        target_deadline="2026-07-25T23:59:59",
+    )
+    assert wg_create.target_deadline == datetime(2026, 7, 25, 23, 59, 59, tzinfo=UTC)
 
 
 @pytest.mark.asyncio

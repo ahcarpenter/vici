@@ -92,20 +92,23 @@ tests/
 │   ├── test_schemas.py
 │   ├── test_metrics.py
 │   ├── test_persistence.py
+│   ├── test_search_adapter.py
 │   └── test_extraction_service_spans.py
 ├── infra/
 │   └── test_observability_static.py
 ├── integration/
 │   ├── test_job_posting.py
-│   ├── test_worker_goal.py
+│   ├── test_work_goal.py
 │   └── test_unknown.py
 ├── matches/
-│   └── test_match_service.py
+│   ├── test_match_service.py
+│   └── test_semantic_candidates.py
 ├── sms/
 │   └── test_webhook.py
 ├── temporal/
 │   ├── test_worker.py
 │   ├── test_activities.py
+│   ├── test_stats.py
 │   └── test_spans.py
 ├── test_3nf_normalization.py
 ├── test_config.py
@@ -183,7 +186,10 @@ The workflow runs a single `test` job on `ubuntu-latest`:
 1. **Checkout** — `actions/checkout@v4`
 2. **Setup uv** — `astral-sh/setup-uv@v5` with `enable-cache: true`
 3. **Install dependencies** — `uv sync --frozen`
-4. **Lint** — `uv run ruff check src/ tests/`
-5. **Test** — `uv run pytest tests/ -x --tb=short -q`
+4. **Lint** — `uv run ruff check src/ tests/ infra/`
+5. **Format check** — `uv run ruff format --check src/ tests/ infra/`
+6. **Type check** — `uv run mypy`
+7. **CVE scan** — `uvx pip-audit` (non-blocking, `continue-on-error: true`)
+8. **Test** — `uv run pytest tests/ -x --tb=short -q`
 
-CI uses a file-based SQLite database (`DATABASE_URL=sqlite+aiosqlite:///./test.db`) and sets stub values for the required environment variables — `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`, `WEBHOOK_BASE_URL`, `OPENAI_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_HOST`, `BRAINTRUST_API_KEY`, `INNGEST_DEV`, and `INNGEST_BASE_URL` — so no external services are contacted during test runs.
+CI uses a file-based SQLite database (`DATABASE_URL=sqlite+aiosqlite:///./test.db`) and sets stub values for the required environment variables — `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`, `WEBHOOK_BASE_URL`, `OPENAI_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_HOST`, and `BRAINTRUST_API_KEY` — so no external services are contacted during test runs.

@@ -21,6 +21,7 @@ class JobExtraction(BaseModel):
 class WorkGoalExtraction(BaseModel):
     target_earnings: float = Field(gt=0)
     target_timeframe: str = Field(min_length=1, max_length=255)
+    target_deadline: str | None = Field(default=None, max_length=100)
 
 
 class UnknownMessage(BaseModel):

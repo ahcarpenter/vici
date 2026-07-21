@@ -115,6 +115,119 @@ async def test_status_filter(async_session, make_job):
 
 
 # ---------------------------------------------------------------------------
+# find_candidates_for_goal -- deadline filter (MATCH-01)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_deadline_excludes_late_job(async_session, make_job):
+    """Job scheduled after the goal deadline is excluded."""
+    deadline = datetime.now(UTC) + timedelta(days=2)
+    late_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=deadline + timedelta(days=1),
+    )
+    repo = JobRepository()
+    candidates = await repo.find_candidates_for_goal(async_session, deadline=deadline)
+    assert late_job.id not in [j.id for j in candidates]
+
+
+@pytest.mark.asyncio
+async def test_deadline_keeps_timely_and_boundary_jobs(async_session, make_job):
+    """Jobs on/before the deadline are kept; boundary equality counts."""
+    deadline = datetime.now(UTC) + timedelta(days=2)
+    timely_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=deadline - timedelta(days=1),
+    )
+    boundary_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=deadline,
+    )
+    repo = JobRepository()
+    candidates = await repo.find_candidates_for_goal(async_session, deadline=deadline)
+    ids = [j.id for j in candidates]
+    assert timely_job.id in ids
+    assert boundary_job.id in ids
+
+
+@pytest.mark.asyncio
+async def test_deadline_keeps_undated_job(async_session, make_job):
+    """NULL ideal_datetime means schedulable anytime — kept under a deadline."""
+    deadline = datetime.now(UTC) + timedelta(days=2)
+    undated_job = await make_job(
+        pay_rate=100.0, pay_type="flat", status="available", ideal_datetime=None
+    )
+    repo = JobRepository()
+    candidates = await repo.find_candidates_for_goal(async_session, deadline=deadline)
+    assert undated_job.id in [j.id for j in candidates]
+
+
+@pytest.mark.asyncio
+async def test_deadline_keeps_flexible_late_job(async_session, make_job):
+    """datetime_flexible=True keeps a job even when scheduled after the deadline."""
+    deadline = datetime.now(UTC) + timedelta(days=2)
+    flexible_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=deadline + timedelta(days=3),
+        datetime_flexible=True,
+    )
+    repo = JobRepository()
+    candidates = await repo.find_candidates_for_goal(async_session, deadline=deadline)
+    assert flexible_job.id in [j.id for j in candidates]
+
+
+@pytest.mark.asyncio
+async def test_no_deadline_keeps_far_future_job(async_session, make_job):
+    """Goals without a deadline behave as before — far-future jobs included."""
+    far_future_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=datetime.now(UTC) + timedelta(days=365),
+    )
+    repo = JobRepository()
+    candidates = await repo.find_candidates_for_goal(async_session)
+    assert far_future_job.id in [j.id for j in candidates]
+
+
+@pytest.mark.asyncio
+async def test_match_respects_goal_deadline(async_session, make_job, make_work_goal):
+    """Service-level: only jobs schedulable by the goal deadline are selected."""
+    now = datetime.now(UTC)
+    timely_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=now + timedelta(days=1),
+    )
+    late_job = await make_job(
+        pay_rate=100.0,
+        pay_type="flat",
+        status="available",
+        ideal_datetime=now + timedelta(days=10),
+    )
+    goal = await make_work_goal(
+        target_earnings=200.0, target_deadline=now + timedelta(days=2)
+    )
+
+    svc = _make_service()
+    result = await svc.match(async_session, goal)
+
+    ids = [c.job.id for c in result.jobs]
+    assert timely_job.id in ids
+    assert late_job.id not in ids
+
+
+# ---------------------------------------------------------------------------
 # MatchService.match -- DP algorithm (MATCH-01)
 # ---------------------------------------------------------------------------
 

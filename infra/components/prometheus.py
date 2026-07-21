@@ -203,7 +203,7 @@ temporal_dashboard_configmap = k8s.core.v1.ConfigMap(
 # ---------------------------------------------------------------------------
 # FastAPI ServiceMonitor — targets vici namespace /metrics endpoint (D-06, OBS-04)
 # ServiceMonitor CRD is installed by kube-prometheus-stack above.
-# App Deployment does not exist yet (Phase 5), but the scrape config is ready.
+# Scrapes the app Deployment defined in infra/components/app.py.
 # ---------------------------------------------------------------------------
 
 fastapi_service_monitor = k8s.apiextensions.CustomResource(

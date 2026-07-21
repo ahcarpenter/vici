@@ -15,6 +15,7 @@ class WorkGoalRepository(BaseRepository):
             message_id=wg_create.message_id,
             target_earnings=wg_create.target_earnings,
             target_timeframe=wg_create.target_timeframe,
+            target_deadline=wg_create.target_deadline,
             created_at=datetime.now(UTC),
         )
         return await self._persist(session, wg)

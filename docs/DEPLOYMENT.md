@@ -64,8 +64,10 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes and pull requests to
 1. Checkout code (`actions/checkout@v4`)
 2. Set up `uv` with caching (`astral-sh/setup-uv@v5`)
 3. Install dependencies: `uv sync --frozen`
-4. Lint: `uv run ruff check src/ tests/`
-5. Test: `uv run pytest tests/ -x --tb=short -q` using SQLite (`DATABASE_URL=sqlite+aiosqlite:///./test.db`) with synthetic values for required Twilio, OpenAI, Pinecone, Braintrust, Inngest, and webhook env vars (see the `env:` block of `ci.yml` for the full list)
+4. Lint and format check: `uv run ruff check src/ tests/ infra/` and `uv run ruff format --check src/ tests/ infra/`
+5. Type check: `uv run mypy`
+6. CVE scan: `uvx pip-audit` (non-blocking)
+7. Test: `uv run pytest tests/ -x --tb=short -q` using SQLite (`DATABASE_URL=sqlite+aiosqlite:///./test.db`) with synthetic values for required Twilio, OpenAI, Pinecone, Braintrust, and webhook env vars (see the `env:` block of `ci.yml` for the full list)
 
 ### CD (GitHub Actions)
 

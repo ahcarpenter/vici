@@ -1,4 +1,6 @@
+import asyncio
 from datetime import UTC, datetime
+from typing import Protocol
 
 import structlog
 from opentelemetry import trace as otel_trace
@@ -6,8 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.jobs.models import Job
 from src.jobs.repository import JobRepository
+from src.matches.constants import (
+    SEMANTIC_MIN_CANDIDATES,
+    SEMANTIC_SEARCH_TIMEOUT_SECONDS,
+    SEMANTIC_TOP_K,
+)
 from src.matches.repository import MatchRepository
 from src.matches.schemas import JobCandidate, MatchResult
+from src.observability import OTEL_ATTR_DB_OPERATION, OTEL_ATTR_DB_SYSTEM
 from src.work_goals.models import WorkGoal
 
 tracer = otel_trace.get_tracer(__name__)
@@ -18,16 +26,44 @@ SENTINEL_DATETIME = datetime.max.replace(
 )  # NULL ideal_datetime sorts last (D-12)
 
 
+class JobEmbeddingSearcher(Protocol):
+    """Port for semantic retrieval from the job vector index.
+
+    MatchService owns this contract; composition (main.py) binds the OpenAI
+    client and settings so the service never touches either.
+    """
+
+    async def __call__(
+        self, *, query_text: str, top_k: int
+    ) -> list[tuple[int, float]]: ...
+
+
 class MatchService:
-    def __init__(self, job_repo: JobRepository, match_repo: MatchRepository):
+    def __init__(
+        self,
+        job_repo: JobRepository,
+        match_repo: MatchRepository,
+        embedding_searcher: JobEmbeddingSearcher | None = None,
+    ):
         self._job_repo = job_repo
         self._match_repo = match_repo
+        self._embedding_searcher = embedding_searcher
 
-    async def match(self, session: AsyncSession, work_goal: WorkGoal) -> MatchResult:
+    async def match(
+        self,
+        session: AsyncSession,
+        work_goal: WorkGoal,
+        query_text: str | None = None,
+    ) -> MatchResult:
         with tracer.start_as_current_span("pipeline.match_jobs") as span:
             span.set_attribute("work_goal_id", str(work_goal.id))
+            if work_goal.target_deadline is not None:
+                span.set_attribute(
+                    "work_goal.deadline", work_goal.target_deadline.isoformat()
+                )
 
-            raw_jobs = await self._job_repo.find_candidates_for_goal(session)
+            raw_jobs = await self._retrieve_candidates(session, work_goal, query_text)
+            span.set_attribute("match.candidate_count", len(raw_jobs))
 
             if not raw_jobs:
                 return MatchResult(
@@ -53,6 +89,55 @@ class MatchService:
                 total_earnings=total,
                 is_partial=is_partial,
             )
+
+    async def _retrieve_candidates(
+        self, session: AsyncSession, work_goal: WorkGoal, query_text: str | None
+    ) -> list[Job]:
+        """
+        Semantic top-K when possible; full scan otherwise.
+
+        Pinecone ranks relevance; Postgres remains the eligibility authority
+        (status/pay/deadline — index metadata has no status and is never
+        pruned). Thin or failed semantic results fall back to the full scan,
+        which is a superset of the semantic hits — no merge needed.
+        Degrade-don't-crash: a Pinecone/OpenAI outage must never break
+        matching.
+        """
+        deadline = work_goal.target_deadline
+        if self._embedding_searcher is not None and query_text:
+            ranked = await self._semantic_ids(query_text)
+            if ranked:
+                ids = [job_id for job_id, _score in ranked]
+                jobs = await self._job_repo.find_candidates_by_ids(
+                    session, ids, deadline=deadline
+                )
+                if len(jobs) >= SEMANTIC_MIN_CANDIDATES:
+                    return jobs
+                log.info(
+                    "match.semantic_fallback",
+                    reason="thin_results",
+                    semantic_count=len(jobs),
+                )
+        return await self._job_repo.find_candidates_for_goal(session, deadline=deadline)
+
+    async def _semantic_ids(self, query_text: str) -> list[tuple[int, float]]:
+        """Query the searcher port; [] on any failure or timeout (logged)."""
+        assert self._embedding_searcher is not None  # guarded by caller
+        try:
+            with tracer.start_as_current_span("pinecone.query") as span:
+                span.set_attribute(OTEL_ATTR_DB_SYSTEM, "pinecone")
+                span.set_attribute(OTEL_ATTR_DB_OPERATION, "query")
+                ranked = await asyncio.wait_for(
+                    self._embedding_searcher(
+                        query_text=query_text, top_k=SEMANTIC_TOP_K
+                    ),
+                    timeout=SEMANTIC_SEARCH_TIMEOUT_SECONDS,
+                )
+                span.set_attribute("db.vector.results", len(ranked))
+                return ranked
+        except Exception as exc:
+            log.warning("match.semantic_search_failed", error=str(exc))
+            return []
 
     async def _build_candidates(
         self, session: AsyncSession, jobs: list[Job]
